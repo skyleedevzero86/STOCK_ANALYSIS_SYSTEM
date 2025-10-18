@@ -12,6 +12,8 @@
 
 ## 시스템 아키텍처
 
+<img width="1020" height="678" alt="image" src="https://github.com/user-attachments/assets/3b0ad1f1-06a1-4fe5-923c-99ccfd521419" />
+
 ## 주요 기능
 
 1. **실시간 데이터 수집**: Yahoo Finance, Alpha Vantage API 활용
@@ -33,3 +35,4 @@ Python/
 ├── config/             # 설정 파일
 └── requirements.txt    # 의존성
 ```
+

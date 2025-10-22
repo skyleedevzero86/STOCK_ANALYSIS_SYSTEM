@@ -111,6 +111,9 @@ def analyze_technical_indicators(**context):
     return analysis_results
 
 def send_notifications(**context):
+    import pymysql
+    import json
+    
     logging.info("알림 발송 시작")
     
     analysis_results = context['task_instance'].xcom_pull(key='analysis_results')
@@ -120,43 +123,134 @@ def send_notifications(**context):
         logging.warning("알림할 분석 결과가 없습니다")
         return
     
-    email_config = {
-        'smtp_server': settings.EMAIL_SMTP_SERVER,
-        'smtp_port': settings.EMAIL_SMTP_PORT,
-        'user': settings.EMAIL_USER,
-        'password': settings.EMAIL_PASSWORD
-    }
-    
-    notification_service = NotificationService(
-        email_config=email_config,
-        slack_webhook=settings.SLACK_WEBHOOK_URL
-    )
-    
-    alert_manager = AlertManager(notification_service)
-    
-    recipients = ['analyst@company.com', 'trader@company.com']
-    
-    all_anomalies = []
-    for result in analysis_results:
-        all_anomalies.extend(result.get('anomalies', []))
-    
-    if all_anomalies:
-        anomaly_result = alert_manager.process_anomaly_alerts(all_anomalies, recipients)
-        logging.info(f"이상 패턴 알림 발송: {anomaly_result['alerts_sent']}개")
-    
-    report_result = alert_manager.process_analysis_reports(analysis_results, recipients)
-    logging.info(f"분석 리포트 발송: {report_result['reports_sent']}개")
-    
-    alert_summary = alert_manager.get_alert_summary(hours=1)
-    logging.info(f"알림 요약: {alert_summary}")
+    try:
+        conn = pymysql.connect(
+            host=settings.MYSQL_HOST,
+            user=settings.MYSQL_USER,
+            password=settings.MYSQL_PASSWORD,
+            database=settings.MYSQL_DATABASE,
+            port=settings.MYSQL_PORT
+        )
+        cursor = conn.cursor()
+        
+        email_config = {
+            'smtp_server': settings.EMAIL_SMTP_SERVER,
+            'smtp_port': settings.EMAIL_SMTP_PORT,
+            'user': settings.EMAIL_USER,
+            'password': settings.EMAIL_PASSWORD
+        }
+        
+        notification_service = NotificationService(
+            email_config=email_config,
+            slack_webhook=settings.SLACK_WEBHOOK_URL
+        )
+        
+        alert_manager = AlertManager(notification_service)
+        
+        cursor.execute("""
+            SELECT user_email, symbol, notification_types, rsi_threshold, 
+                   volume_spike_threshold, price_change_threshold 
+            FROM notification_settings 
+            WHERE is_active = TRUE
+        """)
+        
+        notification_settings = cursor.fetchall()
+        
+        if not notification_settings:
+            logging.warning("활성화된 알림 설정이 없습니다")
+            return
+        
+        all_anomalies = []
+        for result in analysis_results:
+            all_anomalies.extend(result.get('anomalies', []))
+        
+        total_alerts_sent = 0
+        total_reports_sent = 0
+        
+        for setting in notification_settings:
+            user_email, symbol_filter, notification_types, rsi_threshold, volume_threshold, price_threshold = setting
+            
+            notification_types_dict = json.loads(notification_types) if notification_types else {}
+            
+            filtered_anomalies = []
+            filtered_analyses = []
+            
+            for anomaly in all_anomalies:
+                if symbol_filter is None or anomaly.get('symbol') == symbol_filter:
+                    if anomaly.get('type') == 'volume_spike' and anomaly.get('current_value', 0) > volume_threshold:
+                        filtered_anomalies.append(anomaly)
+                    elif anomaly.get('type') == 'rsi_extreme' and anomaly.get('current_value', 0) > rsi_threshold:
+                        filtered_anomalies.append(anomaly)
+                    elif anomaly.get('type') == 'price_spike' and abs(anomaly.get('current_value', 0)) > price_threshold:
+                        filtered_anomalies.append(anomaly)
+            
+            for analysis in analysis_results:
+                if symbol_filter is None or analysis.get('symbol') == symbol_filter:
+                    if analysis.get('signals', {}).get('confidence', 0) > 0.7:
+                        filtered_analyses.append(analysis)
+            
+            if filtered_anomalies and notification_types_dict.get('anomaly_alerts', True):
+                anomaly_result = alert_manager.process_anomaly_alerts(filtered_anomalies, [user_email])
+                total_alerts_sent += anomaly_result['alerts_sent']
+                
+                for anomaly in filtered_anomalies:
+                    alert_message = alert_manager.notification_service.create_anomaly_alert(anomaly)
+                    cursor.execute("""
+                        INSERT INTO notification_logs 
+                        (user_email, symbol, notification_type, message, status, sent_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        user_email,
+                        anomaly.get('symbol'),
+                        'email',
+                        alert_message,
+                        'sent' if anomaly_result['alerts_sent'] > 0 else 'failed',
+                        datetime.now()
+                    ))
+                    logging.info(f"이상 패턴 알림 로그 저장: {user_email} -> {anomaly.get('symbol')}")
+            
+            if filtered_analyses and notification_types_dict.get('analysis_reports', True):
+                report_result = alert_manager.process_analysis_reports(filtered_analyses, [user_email])
+                total_reports_sent += report_result['reports_sent']
+                
+                for analysis in filtered_analyses:
+                    report_message = alert_manager.notification_service.create_analysis_report(analysis)
+                    cursor.execute("""
+                        INSERT INTO notification_logs 
+                        (user_email, symbol, notification_type, message, status, sent_at)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        user_email,
+                        analysis.get('symbol'),
+                        'email',
+                        report_message,
+                        'sent' if report_result['reports_sent'] > 0 else 'failed',
+                        datetime.now()
+                    ))
+                    logging.info(f"분석 리포트 알림 로그 저장: {user_email} -> {analysis.get('symbol')}")
+        
+        conn.commit()
+        logging.info(f"이상 패턴 알림 발송: {total_alerts_sent}개")
+        logging.info(f"분석 리포트 발송: {total_reports_sent}개")
+        
+    except Exception as e:
+        logging.error(f"알림 발송 실패: {str(e)}")
+        if 'conn' in locals():
+            conn.rollback()
+    finally:
+        if 'conn' in locals():
+            conn.close()
     
     return {
-        'anomaly_alerts': len(all_anomalies),
-        'reports_sent': report_result['reports_sent'],
+        'anomaly_alerts': total_alerts_sent,
+        'reports_sent': total_reports_sent,
         'timestamp': datetime.now()
     }
 
 def save_analysis_results(**context):
+    import pymysql
+    from datetime import datetime
+    
     logging.info("분석 결과 저장 시작")
     
     analysis_results = context['task_instance'].xcom_pull(key='analysis_results')
@@ -165,16 +259,66 @@ def save_analysis_results(**context):
         logging.warning("저장할 분석 결과가 없습니다")
         return
     
-    for result in analysis_results:
-        symbol = result['symbol']
-        trend = result['trend']
-        signal = result['signals']['signal']
-        confidence = result['signals']['confidence']
+    try:
+        conn = pymysql.connect(
+            host=settings.MYSQL_HOST,
+            user=settings.MYSQL_USER,
+            password=settings.MYSQL_PASSWORD,
+            database=settings.MYSQL_DATABASE,
+            port=settings.MYSQL_PORT
+        )
+        cursor = conn.cursor()
         
-        logging.info(f"저장: {symbol} - {trend} ({signal}, 신뢰도: {confidence:.2f})")
+        saved_count = 0
+        for result in analysis_results:
+            symbol = result['symbol']
+            trend = result['trend']
+            signal = result['signals']['signal']
+            confidence = result['signals']['confidence']
+            current_price = result.get('current_price', 0)
+            volume = result.get('volume', 0)
+            change_percent = result.get('change_percent', 0)
+            
+            insert_query = """
+            INSERT INTO daily_analysis_summary 
+            (symbol, analysis_date, overall_sentiment, key_signals, risk_score, recommendation, confidence_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+            overall_sentiment = VALUES(overall_sentiment),
+            key_signals = VALUES(key_signals),
+            risk_score = VALUES(risk_score),
+            recommendation = VALUES(recommendation),
+            confidence_score = VALUES(confidence_score)
+            """
+            
+            key_signals = result.get('signals', {}).get('signals', [])
+            risk_score = 1.0 - confidence
+            
+            cursor.execute(insert_query, (
+                symbol,
+                datetime.now().date(),
+                trend,
+                str(key_signals),
+                risk_score,
+                signal,
+                confidence
+            ))
+            
+            logging.info(f"DB 저장 완료: {symbol} - {trend} ({signal}, 신뢰도: {confidence:.2f})")
+            saved_count += 1
+        
+        conn.commit()
+        logging.info(f"분석 결과 저장 완료: {saved_count}개 종목")
+        
+    except Exception as e:
+        logging.error(f"DB 저장 실패: {str(e)}")
+        if 'conn' in locals():
+            conn.rollback()
+    finally:
+        if 'conn' in locals():
+            conn.close()
     
-    logging.info(f"분석 결과 저장 완료: {len(analysis_results)}개 종목")
-    return len(analysis_results)
+    return saved_count
 
 start_task = DummyOperator(
     task_id='start',

@@ -240,8 +240,24 @@ def main():
             
         elif choice == '4':
             print("\n웹 대시보드 실행")
-            print("다음 명령어로 대시보드를 실행하세요:")
-            print("streamlit run web_dashboard/dashboard.py")
+            print("브라우저에서 http://localhost:8501 을 열어주세요")
+            print("종료하려면 Ctrl+C를 누르세요")
+            print("-" * 50)
+            
+            import subprocess
+            import sys
+            
+            try:
+                subprocess.run([
+                    sys.executable, "-m", "streamlit", "run", 
+                    "web_dashboard/dashboard.py",
+                    "--server.port", "8501",
+                    "--server.address", "0.0.0.0"
+                ])
+            except KeyboardInterrupt:
+                print("\n대시보드가 종료되었습니다.")
+            except Exception as e:
+                print(f"대시보드 실행 중 오류: {str(e)}")
             
         else:
             print("잘못된 선택입니다.")

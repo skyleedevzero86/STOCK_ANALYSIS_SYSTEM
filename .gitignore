@@ -3,10 +3,14 @@
 __pycache__/
 *.py[codz]
 *$py.class
-
+config/settings.py
 # C extensions
 *.so
-
+*.md
+TTT/*.md
+TTT
+config/settings.py
+spring-stock-dashboard/
 # Distribution / packaging
 .Python
 build/

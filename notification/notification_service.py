@@ -91,14 +91,21 @@ class NotificationService:
         anomaly_type = anomaly_data.get('type', 'unknown')
         message = anomaly_data.get('message', '')
         severity = anomaly_data.get('severity', 'medium')
+        current_value = anomaly_data.get('current_value', 0)
+        threshold = anomaly_data.get('threshold', 0)
         
         alert_message = f"""
-{symbol} 이상 패턴 감지
+주식 이상 패턴 감지 알림
 
-유형: {anomaly_type}
+종목: {symbol}
+감지 유형: {anomaly_type}
 심각도: {severity.upper()}
-내용: {message}
-시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+현재 값: {current_value}
+임계값: {threshold}
+상세 내용: {message}
+감지 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+이 알림은 자동으로 생성되었습니다.
         """.strip()
         
         return alert_message
@@ -106,21 +113,30 @@ class NotificationService:
     def create_analysis_report(self, analysis_data: Dict) -> str:
         symbol = analysis_data.get('symbol', 'Unknown')
         trend = analysis_data.get('trend', 'unknown')
-        signals = analysis_data.get('signals', [])
-        confidence = analysis_data.get('confidence', 0)
+        signals = analysis_data.get('signals', {})
+        confidence = signals.get('confidence', 0)
+        signal_list = signals.get('signals', [])
+        current_price = analysis_data.get('current_price', 0)
+        trend_strength = analysis_data.get('trend_strength', 0)
         
         report = f"""
-{symbol} 분석 리포트
+주식 기술적 분석 리포트
 
+종목: {symbol}
+현재가: ${current_price:.2f}
 트렌드: {trend.upper()}
+트렌드 강도: {trend_strength:.2f}
 신뢰도: {confidence:.1%}
+매매 신호: {signals.get('signal', 'hold').upper()}
+
 주요 신호:
         """.strip()
         
-        for signal in signals[:5]:
+        for signal in signal_list[:5]:
             report += f"\n  • {signal}"
         
         report += f"\n\n분석 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        report += f"\n\n이 리포트는 자동으로 생성되었습니다."
         
         return report
     

@@ -16,28 +16,29 @@ from notification.notification_service import NotificationService, AlertManager
 from config.settings import settings
 
 class StockDataResponse(BaseModel):
-    symbol: str = Field(..., example="AAPL")
-    price: float = Field(..., example=150.25)
-    volume: int = Field(..., example=1000000)
-    change_percent: float = Field(..., example=2.5)
-    timestamp: datetime
+    symbol: str = Field(..., description="주식 심볼", example="AAPL")
+    price: float = Field(..., description="현재 가격", example=150.25)
+    volume: int = Field(..., description="거래량", example=1000000)
+    change_percent: float = Field(..., description="변동률 (%)", example=2.5)
+    timestamp: datetime = Field(..., description="데이터 수집 시간")
 
 class TechnicalAnalysisResponse(BaseModel):
-    symbol: str
-    current_price: float
-    trend: str
-    trend_strength: float
-    signals: Dict
-    anomalies: List[Dict]
-    timestamp: datetime
+    symbol: str = Field(..., description="주식 심볼")
+    current_price: float = Field(..., description="현재 가격")
+    trend: str = Field(..., description="트렌드 (bullish/bearish/neutral)")
+    trend_strength: float = Field(..., description="트렌드 강도 (0-1)")
+    signals: Dict = Field(..., description="매매 신호")
+    anomalies: List[Dict] = Field(..., description="이상 패턴 목록")
+    timestamp: datetime = Field(..., description="분석 시간")
 
 class ErrorResponse(BaseModel):
-    error: str
-    detail: str
+    error: str = Field(..., description="오류 메시지")
+    detail: str = Field(..., description="상세 오류 정보")
 
 app = FastAPI(
     title="Stock Analysis API",
     version="1.0.0",
+    description="실시간 주식 데이터 수집 및 기술적 분석 API",
     contact={
         "name": "Stock Analysis Team",
         "email": "contact@stockanalysis.com"
@@ -198,85 +199,103 @@ class StockAnalysisAPI:
 
 stock_api = StockAnalysisAPI()
 
-@app.get("/")
+@app.get("/", 
+         summary="API 서버 정보",
+         description="Stock Analysis API 서버의 기본 정보를 반환합니다.")
 async def root():
     return {"message": "Stock Analysis API Server", "version": "1.0.0"}
 
 @app.get("/api/health",
+         summary="헬스 체크",
+         description="API 서버의 상태를 확인합니다.",
          response_model=Dict[str, str])
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.get("/api/symbols",
+         summary="분석 가능한 종목 목록",
+         description="현재 분석 중인 주식 종목들의 목록을 반환합니다.",
          response_model=Dict[str, List[str]])
 async def get_symbols():
     return {"symbols": settings.ANALYSIS_SYMBOLS}
 
 @app.get("/api/realtime/{symbol}",
+         summary="실시간 주가 데이터",
+         description="특정 종목의 실시간 주가 정보를 조회합니다.",
          response_model=StockDataResponse,
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_realtime_data(
-    symbol: str = Path(..., example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
     return await stock_api.get_realtime_data(symbol)
 
 @app.get("/api/analysis/{symbol}",
+         summary="기술적 분석 결과",
+         description="특정 종목의 기술적 분석 결과를 조회합니다.",
          response_model=TechnicalAnalysisResponse,
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 분석 결과를 조회했습니다."},
+             404: {"description": "해당 종목의 분석 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_analysis(
-    symbol: str = Path(..., example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
     return await stock_api.get_analysis(symbol)
 
 @app.get("/api/historical/{symbol}",
+         summary="과거 데이터",
+         description="특정 종목의 과거 주가 데이터를 조회합니다.",
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 과거 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 과거 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_historical_data(
-    symbol: str = Path(..., example="AAPL"),
-    days: int = Query(30, ge=1, le=365)
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    days: int = Query(30, description="조회할 일수", ge=1, le=365)
 ):
     return await stock_api.get_historical_data(symbol, days)
 
 @app.get("/api/analysis/all",
+         summary="전체 종목 분석 결과",
+         description="모든 분석 중인 종목의 기술적 분석 결과를 조회합니다.",
          response_model=List[TechnicalAnalysisResponse],
          responses={
-             200: {"description": "Success"},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 모든 분석 결과를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_all_analysis():
     return await stock_api.get_all_symbols_analysis()
 
 @app.get("/api/alpha-vantage/search/{keywords}",
+         summary="Alpha Vantage 종목 검색",
+         description="Alpha Vantage API를 사용하여 종목을 검색합니다.",
          responses={
-             200: {"description": "Success"},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 종목을 검색했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def search_symbols(
-    keywords: str = Path(..., example="Apple")
+    keywords: str = Path(..., description="검색 키워드", example="Apple")
 ):
     return stock_api.collector.search_alpha_vantage_symbols(keywords)
 
 @app.get("/api/alpha-vantage/intraday/{symbol}",
+         summary="Alpha Vantage 분별 데이터",
+         description="Alpha Vantage API를 사용하여 분별 주가 데이터를 조회합니다.",
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 분별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_intraday(
-    symbol: str = Path(..., example="AAPL"),
-    interval: str = Query("5min", example="5min"),
-    outputsize: str = Query("compact", example="compact")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    interval: str = Query("5min", description="시간 간격", example="5min"),
+    outputsize: str = Query("compact", description="출력 크기", example="compact")
 ):
     data = stock_api.collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
     if data.empty:
@@ -284,13 +303,15 @@ async def get_alpha_vantage_intraday(
     return data.to_dict('records')
 
 @app.get("/api/alpha-vantage/weekly/{symbol}",
+         summary="Alpha Vantage 주별 데이터",
+         description="Alpha Vantage API를 사용하여 주별 주가 데이터를 조회합니다.",
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 주별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_weekly(
-    symbol: str = Path(..., example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
     data = stock_api.collector.get_alpha_vantage_weekly_data(symbol)
     if data.empty:
@@ -298,13 +319,15 @@ async def get_alpha_vantage_weekly(
     return data.to_dict('records')
 
 @app.get("/api/alpha-vantage/monthly/{symbol}",
+         summary="Alpha Vantage 월별 데이터",
+         description="Alpha Vantage API를 사용하여 월별 주가 데이터를 조회합니다.",
          responses={
-             200: {"description": "Success"},
-             404: {"description": "Not found", "model": ErrorResponse},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "성공적으로 월별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_monthly(
-    symbol: str = Path(..., example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
     data = stock_api.collector.get_alpha_vantage_monthly_data(symbol)
     if data.empty:
@@ -334,14 +357,16 @@ async def websocket_realtime(websocket: WebSocket):
         manager.disconnect(websocket)
 
 @app.post("/api/notifications/email",
+         summary="이메일 발송",
+         description="AI 분석 결과를 포함한 이메일을 발송합니다.",
          responses={
-             200: {"description": "Success"},
-             500: {"description": "Server error", "model": ErrorResponse}
+             200: {"description": "이메일이 성공적으로 발송되었습니다."},
+             500: {"description": "이메일 발송 중 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def send_email_notification(
-    to_email: str = Query(...),
-    subject: str = Query(...),
-    body: str = Query(...)
+    to_email: str = Query(..., description="수신자 이메일"),
+    subject: str = Query(..., description="이메일 제목"),
+    body: str = Query(..., description="이메일 내용")
 ):
     try:
         success = stock_api.notification_service.send_email(
@@ -351,9 +376,9 @@ async def send_email_notification(
         )
         
         if success:
-            return {"success": True, "message": "Email sent successfully"}
+            return {"success": True, "message": "이메일이 성공적으로 발송되었습니다."}
         else:
-            return {"success": False, "message": "Email sending failed"}
+            return {"success": False, "message": "이메일 발송에 실패했습니다."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

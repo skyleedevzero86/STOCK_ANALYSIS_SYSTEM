@@ -222,7 +222,7 @@ def main():
     print("1. 단일 분석 실행")
     print("2. 연속 분석 실행 (15분 간격)")
     print("3. 연속 분석 실행 (5분 간격)")
-    print("4. 웹 대시보드 실행")
+    print("4. 웹 대시보드 실행 (스프링에서 구현됨)")
     
     try:
         choice = input("선택 (1-4): ").strip()
@@ -241,25 +241,12 @@ def main():
             system.run_continuous_analysis(5)
             
         elif choice == '4':
-            print("\n웹 대시보드 실행")
-            print("브라우저에서 http://localhost:8501 을 열어주세요")
-            print("종료하려면 Ctrl+C를 누르세요")
+            print("\n웹 대시보드는 스프링에서 구현되었습니다.")
+            print("스프링 서버를 실행하려면:")
+            print("  - Linux/Mac: ./start_spring_boot.sh")
+            print("  - Windows: start_spring_boot.bat")
+            print("브라우저에서 http://localhost:8080 을 열어주세요")
             print("-" * 50)
-            
-            import subprocess
-            import sys
-            
-            try:
-                subprocess.run([
-                    sys.executable, "-m", "streamlit", "run", 
-                    "web_dashboard/dashboard.py",
-                    "--server.port", "8501",
-                    "--server.address", "0.0.0.0"
-                ])
-            except KeyboardInterrupt:
-                print("\n대시보드가 종료되었습니다.")
-            except Exception as e:
-                print(f"대시보드 실행 중 오류: {str(e)}")
             
         else:
             print("잘못된 선택입니다.")

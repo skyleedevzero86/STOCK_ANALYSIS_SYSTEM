@@ -119,6 +119,30 @@ CREATE TABLE IF NOT EXISTS daily_analysis_summary (
     UNIQUE KEY unique_symbol_date (symbol, analysis_date)
 );
 
+-- 이메일 구독 테이블
+CREATE TABLE IF NOT EXISTS email_subscriptions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone VARCHAR(20),
+    is_email_consent BOOLEAN NOT NULL DEFAULT FALSE,
+    is_phone_consent BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    INDEX idx_email (email),
+    INDEX idx_active (is_active)
+);
+
+-- 관리자 사용자 테이블
+CREATE TABLE IF NOT EXISTS admin_users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    INDEX idx_email (email)
+);
+
 -- 초기 주식 데이터 삽입 (주요 기술주)
 INSERT INTO stocks (symbol, name, sector) VALUES
 ('AAPL', 'Apple Inc.', 'Technology'),
@@ -130,3 +154,8 @@ INSERT INTO stocks (symbol, name, sector) VALUES
 ('META', 'Meta Platforms Inc.', 'Technology'),
 ('NFLX', 'Netflix Inc.', 'Communication Services')
 ON DUPLICATE KEY UPDATE name = VALUES(name), sector = VALUES(sector);
+
+-- 기본 관리자 계정 생성 (비밀번호: 1234)
+INSERT INTO admin_users (email, password_hash) VALUES
+('admin@admin.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDi')
+ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash);

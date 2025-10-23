@@ -155,7 +155,74 @@ INSERT INTO stocks (symbol, name, sector) VALUES
 ('NFLX', 'Netflix Inc.', 'Communication Services')
 ON DUPLICATE KEY UPDATE name = VALUES(name), sector = VALUES(sector);
 
+-- 이메일 템플릿 테이블
+CREATE TABLE IF NOT EXISTS email_templates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    subject VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_active (is_active)
+);
+
+-- AI 분석 결과 테이블
+CREATE TABLE IF NOT EXISTS ai_analysis_results (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(10) NOT NULL,
+    analysis_type VARCHAR(50) NOT NULL,
+    ai_summary TEXT NOT NULL,
+    technical_analysis JSON,
+    market_sentiment VARCHAR(20),
+    risk_level VARCHAR(20),
+    recommendation VARCHAR(20),
+    confidence_score DECIMAL(3,2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_symbol (symbol),
+    INDEX idx_analysis_type (analysis_type),
+    INDEX idx_created_at (created_at)
+);
+
 -- 기본 관리자 계정 생성 (비밀번호: 1234)
 INSERT INTO admin_users (email, password_hash) VALUES
 ('admin@admin.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDi')
 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash);
+
+-- 기본 이메일 템플릿 생성
+INSERT INTO email_templates (name, subject, content) VALUES
+('기본 분석 리포트', '주식 분석 리포트 - {date}', 
+'안녕하세요, {name}님!
+
+다음은 {symbol} 종목에 대한 분석 결과입니다:
+
+{ai_analysis}
+
+기술적 분석:
+- 현재가: {current_price}
+- 변동률: {change_percent}%
+- RSI: {rsi}
+- MACD: {macd}
+- 트렌드: {trend}
+
+시장 심리: {market_sentiment}
+리스크 레벨: {risk_level}
+투자 추천: {recommendation}
+신뢰도: {confidence_score}%
+
+더 자세한 분석은 대시보드에서 <a href="http://localhost:8080">확인</a>하세요
+
+주식 분석 시스템'),
+('간단 분석 리포트', '간단 분석 - {symbol}', 
+'안녕하세요, {name}님!
+
+다음은 {symbol} 종목에 대한 분석 결과입니다:
+{ai_analysis}
+
+현재가: {current_price} ({change_percent}%)
+추천: {recommendation}
+
+더 자세한 분석은 대시보드에서 <a href="http://localhost:8080">확인</a>하세요
+
+주식 분석 시스템')
+ON DUPLICATE KEY UPDATE content = VALUES(content);

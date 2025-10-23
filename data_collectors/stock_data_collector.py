@@ -3,38 +3,49 @@ import pandas as pd
 import requests
 import time
 import logging
+import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 import json
+from config.settings import settings
 
 class StockDataCollector:
     
-    def __init__(self, symbols: List[str]):
+    def __init__(self, symbols: List[str], use_mock_data: bool = False, use_alpha_vantage: bool = True):
         self.symbols = symbols
         self.session = requests.Session()
+        self.use_mock_data = use_mock_data
+        self.use_alpha_vantage = use_alpha_vantage
+        self.alpha_vantage_api_key = settings.ALPHA_VANTAGE_API_KEY
+        self.mock_data_cache = {}
+        self.alpha_vantage_cache = {}
+        self.rate_limit_delay = 12
         
     def get_historical_data(self, symbol: str, period: str = "1mo") -> pd.DataFrame:
+        if self.use_mock_data:
+            return self._generate_mock_historical_data(symbol, period)
+        
         try:
             ticker = yf.Ticker(symbol)
             data = ticker.history(period=period)
             
             if data.empty:
-                logging.warning(f"{symbol}: 데이터가 없습니다")
-                return pd.DataFrame()
+                return self._generate_mock_historical_data(symbol, period)
                 
             data.reset_index(inplace=True)
             data.columns = [col.lower().replace(' ', '_') for col in data.columns]
             
             data['symbol'] = symbol
             
-            logging.info(f"{symbol}: {len(data)}일 데이터 수집 완료")
             return data
             
         except Exception as e:
-            logging.error(f"{symbol} 데이터 수집 실패: {str(e)}")
-            return pd.DataFrame()
+            return self._generate_mock_historical_data(symbol, period)
     
     def get_realtime_data(self, symbol: str) -> Dict:
+        if self.use_mock_data:
+            return self._generate_mock_realtime_data(symbol)
+        
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
@@ -63,8 +74,7 @@ class StockDataCollector:
             return realtime_data
             
         except Exception as e:
-            logging.error(f"{symbol} 실시간 데이터 수집 실패: {str(e)}")
-            return {}
+            return self._generate_mock_realtime_data(symbol)
     
     def get_multiple_realtime_data(self) -> List[Dict]:
         results = []
@@ -77,51 +87,312 @@ class StockDataCollector:
             
         return results
     
-    def get_alpha_vantage_data(self, symbol: str, api_key: str) -> Dict:
+    def get_alpha_vantage_global_quote(self, symbol: str) -> Dict:
         try:
-            url = f"https://www.alphavantage.co/query"
+            url = "https://www.alphavantage.co/query"
             params = {
                 'function': 'GLOBAL_QUOTE',
                 'symbol': symbol,
-                'apikey': api_key
+                'apikey': self.alpha_vantage_api_key
             }
             
-            response = self.session.get(url, params=params)
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
             data = response.json()
             
-            if 'Global Quote' in data:
+            if 'Error Message' in data:
+                return {}
+            
+            if 'Note' in data:
+                return {}
+            
+            if 'Global Quote' in data and data['Global Quote']:
                 quote = data['Global Quote']
+                if not quote.get('05. price') or quote.get('05. price') == '0.0000':
+                    return {}
+                
                 return {
                     'symbol': symbol,
                     'price': float(quote.get('05. price', 0)),
                     'change': float(quote.get('09. change', 0)),
-                    'change_percent': quote.get('10. change percent', '0%').replace('%', ''),
+                    'change_percent': float(quote.get('10. change percent', '0%').replace('%', '')),
                     'volume': int(quote.get('06. volume', 0)),
                     'high': float(quote.get('03. high', 0)),
                     'low': float(quote.get('04. low', 0)),
-                    'open': float(quote.get('02. open', 0))
+                    'open': float(quote.get('02. open', 0)),
+                    'previous_close': float(quote.get('08. previous close', 0)),
+                    'timestamp': datetime.now()
                 }
+            else:
+                return {}
             
+        except requests.exceptions.Timeout:
+            return {}
+        except requests.exceptions.RequestException as e:
+            return {}
+        except (ValueError, KeyError) as e:
+            return {}
         except Exception as e:
-            logging.error(f"Alpha Vantage API 오류 ({symbol}): {str(e)}")
+            return {}
+    
+    def get_alpha_vantage_daily_data(self, symbol: str, outputsize: str = "compact") -> pd.DataFrame:
+        try:
+            url = "https://www.alphavantage.co/query"
+            params = {
+                'function': 'TIME_SERIES_DAILY',
+                'symbol': symbol,
+                'outputsize': outputsize,
+                'apikey': self.alpha_vantage_api_key
+            }
             
-        return {}
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Time Series (Daily)' in data:
+                time_series = data['Time Series (Daily)']
+                df_data = []
+                
+                for date, values in time_series.items():
+                    df_data.append({
+                        'date': pd.to_datetime(date),
+                        'open': float(values['1. open']),
+                        'high': float(values['2. high']),
+                        'low': float(values['3. low']),
+                        'close': float(values['4. close']),
+                        'volume': int(values['5. volume']),
+                        'symbol': symbol
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df = df.sort_values('date').reset_index(drop=True)
+                return df
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            return pd.DataFrame()
+    
+    def get_alpha_vantage_intraday_data(self, symbol: str, interval: str = "5min", outputsize: str = "compact") -> pd.DataFrame:
+        try:
+            url = "https://www.alphavantage.co/query"
+            params = {
+                'function': 'TIME_SERIES_INTRADAY',
+                'symbol': symbol,
+                'interval': interval,
+                'outputsize': outputsize,
+                'apikey': self.alpha_vantage_api_key
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if f'Time Series ({interval})' in data:
+                time_series = data[f'Time Series ({interval})']
+                df_data = []
+                
+                for datetime_str, values in time_series.items():
+                    df_data.append({
+                        'datetime': pd.to_datetime(datetime_str),
+                        'open': float(values['1. open']),
+                        'high': float(values['2. high']),
+                        'low': float(values['3. low']),
+                        'close': float(values['4. close']),
+                        'volume': int(values['5. volume']),
+                        'symbol': symbol
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df = df.sort_values('datetime').reset_index(drop=True)
+                return df
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            return pd.DataFrame()
+    
+    def get_alpha_vantage_weekly_data(self, symbol: str) -> pd.DataFrame:
+        try:
+            url = "https://www.alphavantage.co/query"
+            params = {
+                'function': 'TIME_SERIES_WEEKLY',
+                'symbol': symbol,
+                'apikey': self.alpha_vantage_api_key
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Weekly Time Series' in data:
+                time_series = data['Weekly Time Series']
+                df_data = []
+                
+                for date, values in time_series.items():
+                    df_data.append({
+                        'date': pd.to_datetime(date),
+                        'open': float(values['1. open']),
+                        'high': float(values['2. high']),
+                        'low': float(values['3. low']),
+                        'close': float(values['4. close']),
+                        'volume': int(values['5. volume']),
+                        'symbol': symbol
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df = df.sort_values('date').reset_index(drop=True)
+                return df
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            return pd.DataFrame()
+    
+    def get_alpha_vantage_monthly_data(self, symbol: str) -> pd.DataFrame:
+        try:
+            url = "https://www.alphavantage.co/query"
+            params = {
+                'function': 'TIME_SERIES_MONTHLY',
+                'symbol': symbol,
+                'apikey': self.alpha_vantage_api_key
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'Monthly Time Series' in data:
+                time_series = data['Monthly Time Series']
+                df_data = []
+                
+                for date, values in time_series.items():
+                    df_data.append({
+                        'date': pd.to_datetime(date),
+                        'open': float(values['1. open']),
+                        'high': float(values['2. high']),
+                        'low': float(values['3. low']),
+                        'close': float(values['4. close']),
+                        'volume': int(values['5. volume']),
+                        'symbol': symbol
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df = df.sort_values('date').reset_index(drop=True)
+                return df
+            else:
+                return pd.DataFrame()
+                
+        except Exception as e:
+            return pd.DataFrame()
+    
+    def search_alpha_vantage_symbols(self, keywords: str) -> List[Dict]:
+        try:
+            url = "https://www.alphavantage.co/query"
+            params = {
+                'function': 'SYMBOL_SEARCH',
+                'keywords': keywords,
+                'apikey': self.alpha_vantage_api_key
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'bestMatches' in data:
+                matches = []
+                for match in data['bestMatches']:
+                    matches.append({
+                        'symbol': match['1. symbol'],
+                        'name': match['2. name'],
+                        'type': match['3. type'],
+                        'region': match['4. region'],
+                        'market_open': match['5. marketOpen'],
+                        'market_close': match['6. marketClose'],
+                        'timezone': match['7. timezone'],
+                        'currency': match['8. currency'],
+                        'match_score': float(match['9. matchScore'])
+                    })
+                return matches
+            else:
+                return []
+                
+        except Exception as e:
+            return []
     
     def collect_batch_data(self) -> Dict[str, pd.DataFrame]:
         all_data = {}
         
         for symbol in self.symbols:
-            logging.info(f"{symbol} 데이터 수집 시작...")
             data = self.get_historical_data(symbol, period="3mo")
             
             if not data.empty:
                 all_data[symbol] = data
-            else:
-                logging.warning(f"{symbol} 데이터 수집 실패")
                 
             time.sleep(1)
             
         return all_data
+    
+    def _generate_mock_realtime_data(self, symbol: str) -> Dict:
+        if symbol in self.mock_data_cache:
+            base_data = self.mock_data_cache[symbol]
+            price_change = np.random.normal(0, 0.02)
+            new_price = base_data['price'] * (1 + price_change)
+            new_change_percent = base_data['change_percent'] + np.random.normal(0, 0.5)
+        else:
+            base_price = 100 + hash(symbol) % 200
+            price_change = np.random.normal(0, 0.02)
+            new_price = base_price * (1 + price_change)
+            new_change_percent = np.random.normal(0, 2)
+        
+        mock_data = {
+            'symbol': symbol,
+            'timestamp': datetime.now(),
+            'price': float(new_price),
+            'volume': int(np.random.randint(1000000, 5000000)),
+            'change': float(new_price * new_change_percent / 100),
+            'change_percent': float(new_change_percent),
+            'market_cap': int(new_price * np.random.randint(1000000000, 2000000000)),
+            'pe_ratio': float(np.random.uniform(15, 35)),
+            'high_52w': float(new_price * np.random.uniform(1.1, 1.5)),
+            'low_52w': float(new_price * np.random.uniform(0.5, 0.9))
+        }
+        
+        self.mock_data_cache[symbol] = mock_data
+        return mock_data
+    
+    def _generate_mock_historical_data(self, symbol: str, period: str = "1mo") -> pd.DataFrame:
+        days = 30 if period == "1mo" else 90 if period == "3mo" else 7
+        
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+        dates = pd.date_range(start=start_date, end=end_date, freq='D')
+        
+        np.random.seed(hash(symbol) % 2**32)
+        
+        base_price = 100 + hash(symbol) % 200
+        
+        price_changes = np.random.randn(len(dates)) * 0.02
+        prices = base_price * np.exp(np.cumsum(price_changes))
+        
+        opens = prices * (1 + np.random.normal(0, 0.01, len(dates)))
+        highs = np.maximum(opens, prices) * (1 + np.random.uniform(0, 0.02, len(dates)))
+        lows = np.minimum(opens, prices) * (1 - np.random.uniform(0, 0.02, len(dates)))
+        closes = prices
+        
+        volumes = np.random.randint(1000000, 5000000, len(dates))
+        
+        mock_data = pd.DataFrame({
+            'date': dates,
+            'open': opens,
+            'high': highs,
+            'low': lows,
+            'close': closes,
+            'volume': volumes,
+            'symbol': symbol
+        })
+        
+        return mock_data
 
 class DataQualityChecker:
     

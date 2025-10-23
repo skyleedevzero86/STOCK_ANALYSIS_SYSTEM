@@ -14,7 +14,7 @@ class Settings:
     REDIS_PORT = int(os.getenv('REDIS_PORT', 9379))
     REDIS_DB = int(os.getenv('REDIS_DB', 0))
     
-    ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', '')
+    ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY', 'Q4MST90E7TUV44G5')
     
     EMAIL_SMTP_SERVER = os.getenv('EMAIL_SMTP_SERVER', 'smtp.gmail.com')
     EMAIL_SMTP_PORT = int(os.getenv('EMAIL_SMTP_PORT', 587))
@@ -27,6 +27,9 @@ class Settings:
     RSI_OVERSOLD = 30
     RSI_OVERBOUGHT = 70
     VOLUME_SPIKE_THRESHOLD = 2.0
+    
+    USE_MOCK_DATA = os.getenv('USE_MOCK_DATA', 'false').lower() == 'true'
+    FALLBACK_TO_MOCK = os.getenv('FALLBACK_TO_MOCK', 'true').lower() == 'true'
     
     WEB_HOST = os.getenv('WEB_HOST', '0.0.0.0')
     WEB_PORT = int(os.getenv('WEB_PORT', 8000))

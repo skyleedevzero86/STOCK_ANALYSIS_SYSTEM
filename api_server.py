@@ -84,7 +84,11 @@ manager = ConnectionManager()
 class StockAnalysisAPI:
     def __init__(self):
         self.symbols = settings.ANALYSIS_SYMBOLS
-        self.collector = StockDataCollector(self.symbols)
+        self.collector = StockDataCollector(
+            self.symbols, 
+            use_mock_data=settings.USE_MOCK_DATA,
+            use_alpha_vantage=True
+        )
         self.analyzer = TechnicalAnalyzer()
         
         email_config = {
@@ -269,9 +273,69 @@ async def get_historical_data(
 async def get_all_analysis():
     return await stock_api.get_all_symbols_analysis()
 
-@app.websocket("/ws",
-               summary="WebSocket 연결",
-               description="WebSocket을 통한 실시간 통신을 위한 엔드포인트입니다.")
+@app.get("/api/alpha-vantage/search/{keywords}",
+         summary="Alpha Vantage 종목 검색",
+         description="Alpha Vantage API를 사용하여 종목을 검색합니다.",
+         responses={
+             200: {"description": "성공적으로 종목을 검색했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def search_symbols(
+    keywords: str = Path(..., description="검색 키워드", example="Apple")
+):
+    return stock_api.collector.search_alpha_vantage_symbols(keywords)
+
+@app.get("/api/alpha-vantage/intraday/{symbol}",
+         summary="Alpha Vantage 분별 데이터",
+         description="Alpha Vantage API를 사용하여 분별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 분별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_intraday(
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    interval: str = Query("5min", description="시간 간격", example="5min"),
+    outputsize: str = Query("compact", description="출력 크기", example="compact")
+):
+    data = stock_api.collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
+    if data.empty:
+        raise HTTPException(status_code=404, detail=f"Intraday data not found for symbol: {symbol}")
+    return data.to_dict('records')
+
+@app.get("/api/alpha-vantage/weekly/{symbol}",
+         summary="Alpha Vantage 주별 데이터",
+         description="Alpha Vantage API를 사용하여 주별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 주별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_weekly(
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+):
+    data = stock_api.collector.get_alpha_vantage_weekly_data(symbol)
+    if data.empty:
+        raise HTTPException(status_code=404, detail=f"Weekly data not found for symbol: {symbol}")
+    return data.to_dict('records')
+
+@app.get("/api/alpha-vantage/monthly/{symbol}",
+         summary="Alpha Vantage 월별 데이터",
+         description="Alpha Vantage API를 사용하여 월별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 월별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_monthly(
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+):
+    data = stock_api.collector.get_alpha_vantage_monthly_data(symbol)
+    if data.empty:
+        raise HTTPException(status_code=404, detail=f"Monthly data not found for symbol: {symbol}")
+    return data.to_dict('records')
+
+@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
@@ -282,9 +346,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-@app.websocket("/ws/realtime",
-               summary="실시간 데이터 스트림",
-               description="5초마다 모든 종목의 분석 결과를 실시간으로 전송합니다.")
+@app.websocket("/ws/realtime")
 async def websocket_realtime(websocket: WebSocket):
     await manager.connect(websocket)
     try:
@@ -296,4 +358,4 @@ async def websocket_realtime(websocket: WebSocket):
         manager.disconnect(websocket)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

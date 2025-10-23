@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import asyncio
 import logging
 import sys
@@ -27,7 +25,11 @@ class StockAnalysisSystem:
     
     def __init__(self):
         self.symbols = settings.ANALYSIS_SYMBOLS
-        self.collector = StockDataCollector(self.symbols)
+        self.collector = StockDataCollector(
+            self.symbols, 
+            use_mock_data=settings.USE_MOCK_DATA,
+            use_alpha_vantage=True
+        )
         self.analyzer = TechnicalAnalyzer()
         
         email_config = {

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>실시간 주식 분석 대시보드</title>
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>실시간 주식 분석 대시보드</h1>
+        <p>Python API와 Spring Boot를 통한 실시간 주식 데이터 시각화</p>
+    </div>
+
+    <div class="navigation">
+        <a href="/" class="nav-link active">메인</a>
+        <a href="/email-subscription.html" class="nav-link">구독 신청</a>
+        <a href="/admin-login.html" class="nav-link">로그인</a>
+        <a href="/template-management.html" class="nav-link">템플릿 보기</a>
+        <a href="/api-view.html" class="nav-link">API 보기</a>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <h3>실시간 주가</h3>
+            <div id="stockList">
+                <div class="status">
+                    <div class="loading"></div>
+                    <p>데이터를 불러오는 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>기술적 분석</h3>
+            <div id="analysisList">
+                <div class="status">
+                    <div class="loading"></div>
+                    <p>분석 데이터를 불러오는 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>가격 차트</h3>
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>연결 상태</h3>
+            <div id="connectionStatus">
+                <p>WebSocket 연결 중...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/auth-menu.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

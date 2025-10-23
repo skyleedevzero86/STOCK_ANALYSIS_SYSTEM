@@ -17,18 +17,33 @@ from config.settings import settings
 
 class StockDataResponse(BaseModel):
     symbol: str = Field(..., description="주식 심볼", example="AAPL")
-    price: float = Field(..., description="현재 가격", example=150.25)
+    currentPrice: float = Field(..., description="현재 가격", example=150.25, alias="price")
     volume: int = Field(..., description="거래량", example=1000000)
-    change_percent: float = Field(..., description="변동률 (%)", example=2.5)
+    changePercent: float = Field(..., description="변동률 (%)", example=2.5, alias="change_percent")
     timestamp: datetime = Field(..., description="데이터 수집 시간")
+
+class TradingSignalsResponse(BaseModel):
+    signal: str = Field(..., description="매매 신호")
+    confidence: float = Field(..., description="신뢰도")
+    rsi: Optional[float] = Field(None, description="RSI 값")
+    macd: Optional[float] = Field(None, description="MACD 값")
+    macdSignal: Optional[float] = Field(None, description="MACD 시그널", alias="macd_signal")
+
+class AnomalyResponse(BaseModel):
+    type: str = Field(..., description="이상 패턴 타입")
+    severity: str = Field(..., description="심각도")
+    message: str = Field(..., description="메시지")
+    timestamp: datetime = Field(..., description="발생 시간")
 
 class TechnicalAnalysisResponse(BaseModel):
     symbol: str = Field(..., description="주식 심볼")
-    current_price: float = Field(..., description="현재 가격")
+    currentPrice: float = Field(..., description="현재 가격", alias="current_price")
+    volume: int = Field(..., description="거래량")
+    changePercent: float = Field(..., description="변동률", alias="change_percent")
     trend: str = Field(..., description="트렌드 (bullish/bearish/neutral)")
-    trend_strength: float = Field(..., description="트렌드 강도 (0-1)")
-    signals: Dict = Field(..., description="매매 신호")
-    anomalies: List[Dict] = Field(..., description="이상 패턴 목록")
+    trendStrength: float = Field(..., description="트렌드 강도 (0-1)", alias="trend_strength")
+    signals: TradingSignalsResponse = Field(..., description="매매 신호")
+    anomalies: List[AnomalyResponse] = Field(..., description="이상 패턴 목록")
     timestamp: datetime = Field(..., description="분석 시간")
 
 class ErrorResponse(BaseModel):
@@ -126,7 +141,14 @@ class StockAnalysisAPI:
             data = self.collector.get_realtime_data(symbol)
             if not data:
                 raise HTTPException(status_code=404, detail=f"Data not found for symbol: {symbol}")
-            return data
+            return {
+                'symbol': data['symbol'],
+                'currentPrice': data['price'],
+                'volume': data.get('volume', 0),
+                'changePercent': data.get('change_percent', 0),
+                'timestamp': data.get('timestamp', datetime.now().isoformat()),
+                'confidenceScore': data.get('confidence_score', 0.95)
+            }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -145,13 +167,26 @@ class StockAnalysisAPI:
             
             return {
                 'symbol': symbol,
-                'current_price': realtime_data['price'],
+                'currentPrice': realtime_data['price'],
                 'volume': realtime_data.get('volume', 0),
-                'change_percent': realtime_data.get('change_percent', 0),
+                'changePercent': realtime_data.get('change_percent', 0),
                 'trend': trend_analysis['trend'],
-                'trend_strength': trend_analysis['strength'],
-                'signals': signals,
-                'anomalies': anomalies,
+                'trendStrength': trend_analysis['strength'],
+                'signals': {
+                    'signal': signals['signal'],
+                    'confidence': signals['confidence'],
+                    'rsi': analyzed_data['rsi_14'].iloc[-1] if 'rsi_14' in analyzed_data.columns and not analyzed_data['rsi_14'].isna().iloc[-1] else None,
+                    'macd': analyzed_data['macd'].iloc[-1] if 'macd' in analyzed_data.columns and not analyzed_data['macd'].isna().iloc[-1] else None,
+                    'macdSignal': analyzed_data['macd_signal'].iloc[-1] if 'macd_signal' in analyzed_data.columns and not analyzed_data['macd_signal'].isna().iloc[-1] else None
+                },
+                'anomalies': [
+                    {
+                        'type': anomaly['type'],
+                        'severity': anomaly['severity'],
+                        'message': anomaly['message'],
+                        'timestamp': datetime.now().isoformat()
+                    } for anomaly in anomalies
+                ],
                 'timestamp': datetime.now().isoformat()
             }
         except Exception as e:

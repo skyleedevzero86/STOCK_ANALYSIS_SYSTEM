@@ -1,7 +1,7 @@
 class StockDashboard {
     constructor() {
         this.apiBaseUrl = "http://localhost:8080";
-        this.pythonApiUrl = "http://localhost:8000";
+        this.pythonApiUrl = "http://localhost:9000";
         this.wsUrl = "ws://localhost:8080/ws/stocks";
         this.charts = {};
         this.currentSymbol = "AAPL";

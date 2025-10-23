@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import subprocess
 import sys
 import os
@@ -7,7 +5,7 @@ import time
 
 def start_python_api():
     print("Python API 서버를 시작합니다...")
-    print("포트: 8000")
+    print("포트: 9000")
     print("종료하려면 Ctrl+C를 누르세요")
     print("-" * 50)
     

@@ -40,7 +40,7 @@ def get_subscribers():
 
 def get_stock_analysis():
     try:
-        response = requests.get('http://localhost:8000/api/analysis/all')
+        response = requests.get('http://localhost:9000/api/analysis/all')
         if response.status_code == 200:
             return response.json()
         return []
@@ -50,7 +50,7 @@ def get_stock_analysis():
 
 def send_email_notification(to_email, subject, body):
     try:
-        response = requests.post('http://localhost:8000/api/notifications/email', 
+        response = requests.post('http://localhost:9000/api/notifications/email', 
                                params={
                                    'to_email': to_email,
                                    'subject': subject,

@@ -12,7 +12,6 @@ import uvicorn
 
 from data_collectors.stock_data_collector import StockDataCollector
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
-from notification.notification_service import NotificationService, AlertManager
 from config.settings import settings
 
 class StockDataResponse(BaseModel):
@@ -104,20 +103,6 @@ class StockAnalysisAPI:
             use_alpha_vantage=True
         )
         self.analyzer = TechnicalAnalyzer()
-        
-        email_config = {
-            'smtp_server': settings.EMAIL_SMTP_SERVER,
-            'smtp_port': settings.EMAIL_SMTP_PORT,
-            'user': settings.EMAIL_USER,
-            'password': settings.EMAIL_PASSWORD
-        }
-        
-        self.notification_service = NotificationService(
-            email_config=email_config,
-            slack_webhook=settings.SLACK_WEBHOOK_URL
-        )
-        
-        self.alert_manager = AlertManager(self.notification_service)
 
     def _load_historical_data(self, symbol: str):
         import pandas as pd
@@ -391,31 +376,6 @@ async def websocket_realtime(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
-@app.post("/api/notifications/email",
-         summary="이메일 발송",
-         description="AI 분석 결과를 포함한 이메일을 발송합니다.",
-         responses={
-             200: {"description": "이메일이 성공적으로 발송되었습니다."},
-             500: {"description": "이메일 발송 중 오류가 발생했습니다.", "model": ErrorResponse}
-         })
-async def send_email_notification(
-    to_email: str = Query(..., description="수신자 이메일"),
-    subject: str = Query(..., description="이메일 제목"),
-    body: str = Query(..., description="이메일 내용")
-):
-    try:
-        success = stock_api.notification_service.send_email(
-            to_email=to_email,
-            subject=subject,
-            body=body
-        )
-        
-        if success:
-            return {"success": True, "message": "이메일이 성공적으로 발송되었습니다."}
-        else:
-            return {"success": False, "message": "이메일 발송에 실패했습니다."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=9000)

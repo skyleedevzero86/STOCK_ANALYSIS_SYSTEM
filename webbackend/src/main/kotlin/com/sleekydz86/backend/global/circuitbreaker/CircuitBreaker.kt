@@ -24,7 +24,7 @@ class CircuitBreaker(
     fun <T> execute(operation: () -> Mono<T>): Mono<T> =
         when (state.get()) {
             CircuitState.CLOSED -> executeOperation(operation)
-            CircuitState.OPEN -> handleOpenState()
+            CircuitState.OPEN -> handleOpenState<T>()
             CircuitState.HALF_OPEN -> executeOperation(operation)
         }
 
@@ -74,15 +74,15 @@ class CircuitBreaker(
         }
     }
 
-    private fun handleOpenState(): Mono<Nothing> {
+    private fun <T> handleOpenState(): Mono<T> {
         val currentTime = System.currentTimeMillis()
         val timeSinceLastFailure = currentTime - lastFailureTime.get()
 
         return if (timeSinceLastFailure >= retryDuration.toMillis()) {
             state.set(CircuitState.HALF_OPEN)
-            Mono.error(CircuitBreakerOpenException("Circuit breaker transitioning to half-open"))
+            Mono.error<T>(CircuitBreakerOpenException("Circuit breaker transitioning to half-open"))
         } else {
-            Mono.error(CircuitBreakerOpenException("Circuit breaker is open"))
+            Mono.error<T>(CircuitBreakerOpenException("Circuit breaker is open"))
         }
     }
 

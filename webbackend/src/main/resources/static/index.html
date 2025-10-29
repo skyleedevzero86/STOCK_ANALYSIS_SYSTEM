@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>실시간 주식 분석 대시보드</title>
@@ -8,158 +8,158 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-</head>
-<body>
-<div class="container">
-    <div class="header">
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
         <h1>실시간 주식 분석 대시보드</h1>
         <p>Python API와 Spring Boot를 통한 실시간 주식 데이터 시각화</p>
-    </div>
+      </div>
 
-    <div class="navigation">
+      <div class="navigation">
         <a href="/" class="nav-link active">메인</a>
         <a href="/email-subscription.html" class="nav-link">구독 신청</a>
         <a href="/admin-login.html" class="nav-link">로그인</a>
         <a href="/template-management.html" class="nav-link">템플릿 보기</a>
         <a href="/api-view.html" class="nav-link">API 보기</a>
-    </div>
+      </div>
 
-    <div class="dashboard-grid">
+      <div class="dashboard-grid">
         <div class="card">
-            <h3>종목 선택</h3>
-            <select id="symbolSelect">
-                <option value="AAPL">Apple (AAPL)</option>
-                <option value="GOOGL">Google (GOOGL)</option>
-                <option value="MSFT">Microsoft (MSFT)</option>
-                <option value="AMZN">Amazon (AMZN)</option>
-                <option value="TSLA">Tesla (TSLA)</option>
-            </select>
+          <h3>종목 선택</h3>
+          <select id="symbolSelect">
+            <option value="AAPL">Apple (AAPL)</option>
+            <option value="GOOGL">Google (GOOGL)</option>
+            <option value="MSFT">Microsoft (MSFT)</option>
+            <option value="AMZN">Amazon (AMZN)</option>
+            <option value="TSLA">Tesla (TSLA)</option>
+          </select>
 
-            <div class="controls">
-                <div class="control-group">
-                    <label for="daysSlider">기간 (일):</label>
-                    <input
-                            type="range"
-                            id="daysSlider"
-                            min="7"
-                            max="365"
-                            value="30"
-                    />
-                    <span id="daysValue">30</span>
-                </div>
-
-                <div class="control-group">
-                    <button id="refreshBtn">새로고침</button>
-                    <label>
-                        <input type="checkbox" id="autoRefresh" /> 자동 새로고침
-                    </label>
-                </div>
+          <div class="controls">
+            <div class="control-group">
+              <label for="daysSlider">기간 (일):</label>
+              <input
+                type="range"
+                id="daysSlider"
+                min="7"
+                max="365"
+                value="30"
+              />
+              <span id="daysValue">30</span>
             </div>
+
+            <div class="control-group">
+              <button id="refreshBtn">새로고침</button>
+              <label>
+                <input type="checkbox" id="autoRefresh" /> 자동 새로고침
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="card">
-            <h3>실시간 주가</h3>
-            <div class="metrics">
-                <div class="metric">
-                    <span class="metric-label">현재가:</span>
-                    <span id="currentPrice" class="metric-value">$0.00</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">변동률:</span>
-                    <span id="priceChange" class="metric-change">+0.00%</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">거래량:</span>
-                    <span id="volume" class="metric-value">0</span>
-                </div>
-                <div class="metric">
-                    <span class="metric-label">거래량 변화:</span>
-                    <span id="volumeChange" class="metric-value">+0</span>
-                </div>
+          <h3>실시간 주가</h3>
+          <div class="metrics">
+            <div class="metric">
+              <span class="metric-label">현재가:</span>
+              <span id="currentPrice" class="metric-value">$0.00</span>
             </div>
+            <div class="metric">
+              <span class="metric-label">변동률:</span>
+              <span id="priceChange" class="metric-change">+0.00%</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">거래량:</span>
+              <span id="volume" class="metric-value">0</span>
+            </div>
+            <div class="metric">
+              <span class="metric-label">거래량 변화:</span>
+              <span id="volumeChange" class="metric-value">+0</span>
+            </div>
+          </div>
         </div>
 
         <div class="card">
-            <h3>기술적 지표</h3>
-            <div class="indicators">
-                <div class="indicator">
-                    <span class="indicator-label">RSI:</span>
-                    <span id="rsi" class="indicator-value">0.0</span>
-                    <span id="rsiStatus" class="indicator-status">정상</span>
-                </div>
-                <div class="indicator">
-                    <span class="indicator-label">MACD:</span>
-                    <span id="macd" class="indicator-value">0.000</span>
-                    <span id="macdStatus" class="indicator-status">상승</span>
-                </div>
+          <h3>기술적 지표</h3>
+          <div class="indicators">
+            <div class="indicator">
+              <span class="indicator-label">RSI:</span>
+              <span id="rsi" class="indicator-value">0.0</span>
+              <span id="rsiStatus" class="indicator-status">정상</span>
             </div>
+            <div class="indicator">
+              <span class="indicator-label">MACD:</span>
+              <span id="macd" class="indicator-value">0.000</span>
+              <span id="macdStatus" class="indicator-status">상승</span>
+            </div>
+          </div>
         </div>
 
         <div class="card chart-card">
-            <h3>가격 차트</h3>
-            <div id="priceChart" class="chart-container"></div>
+          <h3>가격 차트</h3>
+          <div id="priceChart" class="chart-container"></div>
         </div>
 
         <div class="card chart-card">
-            <h3>거래량</h3>
-            <div id="volumeChart" class="chart-container"></div>
+          <h3>거래량</h3>
+          <div id="volumeChart" class="chart-container"></div>
         </div>
 
         <div class="card chart-card">
-            <h3>기술적 지표</h3>
-            <div id="indicatorsChart" class="chart-container"></div>
+          <h3>기술적 지표</h3>
+          <div id="indicatorsChart" class="chart-container"></div>
         </div>
 
         <div class="card">
-            <h3>기술적 분석 상세</h3>
-            <div id="technicalIndicators" class="analysis-details">
-                <div class="loading"></div>
-                <p>분석 데이터를 불러오는 중...</p>
-            </div>
+          <h3>기술적 분석 상세</h3>
+          <div id="technicalIndicators" class="analysis-details">
+            <div class="loading"></div>
+            <p>분석 데이터를 불러오는 중...</p>
+          </div>
         </div>
 
         <div class="card">
-            <h3>거래 통계</h3>
-            <div id="tradingStats" class="analysis-details">
-                <div class="loading"></div>
-                <p>통계 데이터를 불러오는 중...</p>
-            </div>
+          <h3>거래 통계</h3>
+          <div id="tradingStats" class="analysis-details">
+            <div class="loading"></div>
+            <p>통계 데이터를 불러오는 중...</p>
+          </div>
         </div>
 
         <div class="card table-card">
-            <h3>최근 거래 데이터</h3>
-            <div class="table-container">
-                <table id="dataTable">
-                    <thead>
-                    <tr>
-                        <th>날짜</th>
-                        <th>종가</th>
-                        <th>거래량</th>
-                        <th>RSI</th>
-                        <th>MACD</th>
-                        <th>BB 상단</th>
-                        <th>BB 하단</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td colspan="7" class="loading">데이터를 불러오는 중...</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
+          <h3>최근 거래 데이터</h3>
+          <div class="table-container">
+            <table id="dataTable">
+              <thead>
+                <tr>
+                  <th>날짜</th>
+                  <th>종가</th>
+                  <th>거래량</th>
+                  <th>RSI</th>
+                  <th>MACD</th>
+                  <th>BB 상단</th>
+                  <th>BB 하단</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="7" class="loading">데이터를 불러오는 중...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card">
-            <h3>연결 상태</h3>
-            <div id="connectionStatus">
-                <p>WebSocket 연결 중...</p>
-            </div>
+          <h3>연결 상태</h3>
+          <div id="connectionStatus">
+            <p>WebSocket 연결 중...</p>
+          </div>
         </div>
+      </div>
     </div>
-</div>
 
-<script src="js/auth-menu.js"></script>
-<script src="js/dashboard.js"></script>
-</body>
+    <script src="js/auth-menu.js"></script>
+    <script src="js/dashboard.js"></script>
+  </body>
 </html>

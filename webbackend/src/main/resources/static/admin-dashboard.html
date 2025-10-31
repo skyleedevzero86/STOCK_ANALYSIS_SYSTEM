@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>관리자 대시보드 - 주식 분석 시스템</title>
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/admin-dashboard.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>관리자 대시보드</h1>
+        <p>구독자 관리 및 이메일 발송</p>
+      </div>
+
+      <div class="navigation">
+        <a href="/" class="nav-link">메인</a>
+        <a href="/api-view.html" class="nav-link">API 보기</a>
+        <a href="/email-subscription.html" class="nav-link">이메일 구독</a>
+        <a href="/admin-login.html" class="nav-link">관리자</a>
+      </div>
+
+      <div class="admin-dashboard">
+        <div class="dashboard-header">
+          <h2>구독자 관리</h2>
+          <button class="btn-logout" onclick="logout()">로그아웃</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="totalSubscriptions">-</div>
+            <div class="stat-label">전체 구독자</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="emailConsentSubscriptions">-</div>
+            <div class="stat-label">이메일 동의</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="phoneConsentSubscriptions">-</div>
+            <div class="stat-label">전화 동의</div>
+          </div>
+        </div>
+
+        <div class="subscriptions-table">
+          <div class="table-header">
+            <h3>구독자 목록</h3>
+            <button
+              onclick="loadSubscriptions()"
+              style="
+                padding: 8px 16px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              "
+            >
+              새로고침
+            </button>
+          </div>
+          <div class="table-content">
+            <div id="subscriptionsContent">
+              <div class="loading">데이터를 불러오는 중...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/auth-menu.js"></script>
+    <script src="js/admin-dashboard.js"></script>
+  </body>
+</html>

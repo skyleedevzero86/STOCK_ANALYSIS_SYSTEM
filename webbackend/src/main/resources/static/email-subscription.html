@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>이메일 구독 - 주식 분석 시스템</title>
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/email-subscription.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>이메일 구독</h1>
+        <p>주식 분석 알림을 받으려면 구독해주세요</p>
+      </div>
+
+      <div class="navigation">
+        <a href="/" class="nav-link">메인</a>
+        <a href="/api-view.html" class="nav-link">API 보기</a>
+        <a href="/email-subscription.html" class="nav-link active"
+          >이메일 구독</a
+        >
+        <a href="/admin-login.html" class="nav-link">관리자</a>
+      </div>
+
+      <div class="subscription-form">
+        <h2>이메일 구독 신청</h2>
+        <form id="subscriptionForm">
+          <div class="form-group">
+            <label for="name">이름 *</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              required
+              placeholder="홍길동"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="email">이메일 *</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              required
+              placeholder="user@example.com"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="phone">전화번호 (선택사항)</label>
+            <input
+              type="tel"
+              id="phone"
+              name="phone"
+              placeholder="010-1234-5678"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>동의 사항</label>
+            <div class="checkbox-group">
+              <input
+                type="checkbox"
+                id="emailConsent"
+                name="emailConsent"
+                required
+              />
+              <label for="emailConsent">이메일 알림 수신에 동의합니다 *</label>
+            </div>
+            <div class="checkbox-group">
+              <input type="checkbox" id="phoneConsent" name="phoneConsent" />
+              <label for="phoneConsent"
+                >전화번호를 통한 알림 수신에 동의합니다</label
+              >
+            </div>
+          </div>
+
+          <button type="submit" class="btn-submit">구독 신청</button>
+        </form>
+
+        <div
+          id="statusMessage"
+          class="status-message"
+          style="display: none"
+        ></div>
+      </div>
+    </div>
+
+    <script src="js/auth-menu.js"></script>
+    <script src="js/email-subscription.js"></script>
+  </body>
+</html>

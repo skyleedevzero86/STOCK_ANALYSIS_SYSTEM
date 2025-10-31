@@ -1,6 +1,7 @@
 package com.sleekydz86.backend.global.query
 
-import com.mysql.cj.QueryResult
+import com.sleekydz86.backend.domain.cqrs.query.QueryResult
+import com.sleekydz86.backend.domain.cqrs.query.StockQuery
 import reactor.core.publisher.Mono
 
 interface QueryHandler<T : StockQuery, R> {

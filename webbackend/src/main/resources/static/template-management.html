@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 이메일 템플릿 관리</title>
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/template-management.css" />
+</head>
+<body>
+<div class="template-container">
+    <h1>AI 이메일 템플릿 관리</h1>
+
+    <div class="ai-email-section">
+        <h3>AI 분석 이메일 발송</h3>
+        <div class="symbol-input">
+            <input
+                    type="text"
+                    id="symbolInput"
+                    placeholder="종목 심볼 (예: AAPL, GOOGL)"
+                    value="AAPL"
+            />
+            <button class="btn btn-success" onclick="sendAIEmail()">
+                AI 분석 이메일 발송
+            </button>
+        </div>
+        <div class="symbol-input">
+            <input
+                    type="text"
+                    id="bulkSymbolsInput"
+                    placeholder="여러 종목 (쉼표로 구분, 예: AAPL,GOOGL,MSFT)"
+                    value="AAPL,GOOGL,MSFT"
+            />
+            <button class="btn btn-success" onclick="sendBulkAIEmail()">
+                대량 AI 분석 이메일 발송
+            </button>
+        </div>
+        <div id="emailResult" class="result-area" style="display: none"></div>
+    </div>
+
+    <div class="template-form">
+        <h3>새 템플릿 생성</h3>
+        <form id="templateForm">
+            <div class="form-group">
+                <label for="templateName">템플릿 이름</label>
+                <input type="text" id="templateName" required />
+            </div>
+
+            <div class="form-group">
+                <label for="templateSubject">이메일 제목</label>
+                <input
+                        type="text"
+                        id="templateSubject"
+                        placeholder="예: 주식 분석 리포트 - {date}"
+                        required
+                />
+            </div>
+
+            <div class="form-group">
+                <label for="templateContent">이메일 내용</label>
+                <textarea
+                        id="templateContent"
+                        placeholder="예시:
+안녕하세요, {name}님!
+
+다음은 {symbol} 종목에 대한 분석 결과입니다:
+
+{ai_analysis}
+
+기술적 분석:
+- 현재가: {current_price}
+- 변동률: {change_percent}%
+- RSI: {rsi}
+- MACD: {macd}
+- 트렌드: {trend}
+
+시장 심리: {market_sentiment}
+리스크 레벨: {risk_level}
+투자 추천: {recommendation}
+신뢰도: {confidence_score}%
+
+더 자세한 분석은 대시보드에서 <a href=\"http://localhost:8080\">확인</a>하세요
+
+                주식 분석 시스템
+
+                사용 가능한 변수: {name}, {email}, {symbol}, {date}, {ai_analysis}, {current_price}, {change_percent}, {rsi}, {macd}, {trend}, {market_sentiment}, {risk_level}, {recommendation}, {confidence_score}"
+                required
+                ></textarea>
+            </div>
+
+            <button type="submit" class="btn">템플릿 생성</button>
+        </form>
+    </div>
+
+    <div class="template-list">
+        <h3>기존 템플릿</h3>
+        <div id="templateList">
+        </div>
+    </div>
+</div>
+
+<script src="js/auth-menu.js"></script>
+<script src="js/template-management.js"></script>
+</body>
+</html>

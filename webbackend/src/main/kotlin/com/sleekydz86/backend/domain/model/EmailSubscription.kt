@@ -16,7 +16,7 @@ data class EmailSubscription(
 data class AdminUser(
     val id: Long? = null,
     val email: String,
-    val password: String, // 암호화된 비밀번호
+    val password: String,
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val isActive: Boolean = true
 )

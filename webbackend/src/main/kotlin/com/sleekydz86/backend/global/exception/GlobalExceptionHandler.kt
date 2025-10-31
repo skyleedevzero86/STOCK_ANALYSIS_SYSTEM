@@ -4,9 +4,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
-import org.springframework.web.reactive.function.server.ServerRequest
-import org.springframework.web.reactive.function.server.ServerResponse
-import reactor.core.publisher.Mono
 import java.time.LocalDateTime
 
 @RestControllerAdvice
@@ -84,11 +81,3 @@ class GlobalExceptionHandler {
             ))
     }
 }
-
-data class ErrorResponse(
-    val timestamp: LocalDateTime,
-    val status: Int,
-    val error: String,
-    val message: String,
-    val path: String
-)

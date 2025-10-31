@@ -1,0 +1,98 @@
+.subscription-form {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 10px;
+}
+
+.btn-submit {
+    width: 100%;
+    padding: 12px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.btn-submit:hover {
+    background: #2980b9;
+}
+
+.status-message {
+    margin-top: 20px;
+    padding: 10px;
+    border-radius: 4px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.status-success {
+    background: #d5f4e6;
+    color: #27ae60;
+    border: 1px solid #27ae60;
+}
+
+.status-error {
+    background: #fadbd8;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+}
+
+.navigation {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.nav-link {
+    display: inline-block;
+    margin: 0 10px;
+    padding: 10px 20px;
+    background: #f8f9fa;
+    color: #2c3e50;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.nav-link:hover {
+    background: #e9ecef;
+}
+
+.nav-link.active {
+    background: #3498db;
+    color: white;
+}

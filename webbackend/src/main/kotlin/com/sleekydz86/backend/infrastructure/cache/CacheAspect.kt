@@ -1,11 +1,14 @@
 package com.sleekydz86.backend.infrastructure.cache
 
+import com.sleekydz86.backend.domain.model.HistoricalData
+import com.sleekydz86.backend.domain.model.StockData
+import com.sleekydz86.backend.domain.model.TechnicalAnalysis
 import org.aspectj.lang.ProceedingJoinPoint
 import org.aspectj.lang.annotation.Around
 import org.aspectj.lang.annotation.Aspect
 import org.springframework.stereotype.Component
-import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 import java.time.Duration
 
 @Aspect
@@ -25,7 +28,7 @@ class CacheAspect(
                 stockCacheService.getStockData(symbol)
                     .switchIfEmpty(
                         (joinPoint.proceed() as Mono<*>)
-                            .cast(com.stockanalysis.domain.model.StockData::class.java)
+                            .cast(StockData::class.java)
                             .flatMap { stockData ->
                                 stockCacheService.setStockData(symbol, stockData, Duration.ofMinutes(cacheable.ttl))
                                     .then(Mono.just(stockData))
@@ -37,7 +40,7 @@ class CacheAspect(
                 stockCacheService.getStockAnalysis(symbol)
                     .switchIfEmpty(
                         (joinPoint.proceed() as Mono<*>)
-                            .cast(com.stockanalysis.domain.model.TechnicalAnalysis::class.java)
+                            .cast(TechnicalAnalysis::class.java)
                             .flatMap { analysis ->
                                 stockCacheService.setStockAnalysis(symbol, analysis, Duration.ofMinutes(cacheable.ttl))
                                     .then(Mono.just(analysis))
@@ -50,7 +53,7 @@ class CacheAspect(
                 stockCacheService.getHistoricalData(symbol, days)
                     .switchIfEmpty(
                         (joinPoint.proceed() as Mono<*>)
-                            .cast(com.stockanalysis.domain.model.HistoricalData::class.java)
+                            .cast(HistoricalData::class.java)
                             .flatMap { historicalData ->
                                 stockCacheService.setHistoricalData(symbol, days, historicalData, Duration.ofMinutes(cacheable.ttl))
                                     .then(Mono.just(historicalData))
@@ -72,7 +75,7 @@ class CacheAspect(
                 stockCacheService.getAllStockData()
                     .switchIfEmpty(
                         (joinPoint.proceed() as Flux<*>)
-                            .cast(com.stockanalysis.domain.model.StockData::class.java)
+                            .cast(StockData::class.java)
                             .collectList()
                             .flatMap { stockDataList ->
                                 stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(cacheable.ttl))
@@ -84,7 +87,7 @@ class CacheAspect(
                 stockCacheService.getAllStockAnalysis()
                     .switchIfEmpty(
                         (joinPoint.proceed() as Flux<*>)
-                            .cast(com.stockanalysis.domain.model.TechnicalAnalysis::class.java)
+                            .cast(TechnicalAnalysis::class.java)
                             .collectList()
                             .flatMap { analysisList ->
                                 stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(cacheable.ttl))
@@ -94,20 +97,4 @@ class CacheAspect(
             }
         }
     }
-}
-
-@Target(AnnotationTarget.FUNCTION)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class Cacheable(
-    val type: CacheType,
-    val ttl: Int = 30
-)
-
-enum class CacheType {
-    STOCK_DATA,
-    STOCK_ANALYSIS,
-    HISTORICAL_DATA,
-    SYMBOLS,
-    ALL_STOCK_DATA,
-    ALL_STOCK_ANALYSIS
 }

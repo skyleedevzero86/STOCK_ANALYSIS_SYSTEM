@@ -1,22 +1,32 @@
 package com.sleekydz86.backend.global.config
 
+import com.sleekydz86.backend.application.command.AnalyzeStockCommandHandler
+import com.sleekydz86.backend.application.command.CommandBus
+import com.sleekydz86.backend.application.command.CommandBusImpl
+import com.sleekydz86.backend.application.command.GenerateTradingSignalCommandHandler
+import com.sleekydz86.backend.application.command.UpdateStockPriceCommandHandler
+import com.sleekydz86.backend.global.query.QueryBus
+import com.sleekydz86.backend.global.query.QueryBusImpl
+import com.sleekydz86.backend.global.query.StockAnalysisQueryHandler
+import com.sleekydz86.backend.global.query.StockHistoricalQueryHandler
+import com.sleekydz86.backend.global.query.StockRealtimeQueryHandler
+import com.sleekydz86.backend.global.query.StockSymbolsQueryHandler
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import javax.annotation.PostConstruct
 
 @Configuration
 class CQRSConfig {
 
     @Bean
     fun commandBus(
-        stockCommandHandler: StockCommandHandler,
-        stockPriceCommandHandler: StockPriceCommandHandler,
-        tradingSignalCommandHandler: TradingSignalCommandHandler
+        analyzeStockCommandHandler: AnalyzeStockCommandHandler,
+        updateStockPriceCommandHandler: UpdateStockPriceCommandHandler,
+        generateTradingSignalCommandHandler: GenerateTradingSignalCommandHandler
     ): CommandBus {
         val commandBus = CommandBusImpl()
-        commandBus.register(stockCommandHandler)
-        commandBus.register(stockPriceCommandHandler)
-        commandBus.register(tradingSignalCommandHandler)
+        commandBus.register(analyzeStockCommandHandler)
+        commandBus.register(updateStockPriceCommandHandler)
+        commandBus.register(generateTradingSignalCommandHandler)
         return commandBus
     }
 

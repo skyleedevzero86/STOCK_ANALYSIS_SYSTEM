@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.infrastructure.entity
 
+import com.sleekydz86.backend.domain.model.EmailTemplate
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -18,8 +19,8 @@ data class EmailTemplateEntity(
     @Column(name = "updated_at")
     val updatedAt: LocalDateTime = LocalDateTime.now()
 ) {
-    fun toDomain(): com.stockanalysis.domain.model.EmailTemplate {
-        return com.stockanalysis.domain.model.EmailTemplate(
+    fun toDomain(): EmailTemplate {
+        return EmailTemplate(
             id = this.id,
             name = this.name,
             subject = this.subject,
@@ -31,7 +32,7 @@ data class EmailTemplateEntity(
     }
 
     companion object {
-        fun fromDomain(domain: com.stockanalysis.domain.model.EmailTemplate): EmailTemplateEntity {
+        fun fromDomain(domain: EmailTemplate): EmailTemplateEntity {
             return EmailTemplateEntity(
                 id = domain.id ?: 0,
                 name = domain.name,

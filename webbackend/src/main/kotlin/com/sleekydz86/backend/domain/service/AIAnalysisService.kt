@@ -41,7 +41,7 @@ class AIAnalysisService(
             }
     }
 
-    private fun generateAISummary(analysis: com.stockanalysis.domain.model.TechnicalAnalysis): String {
+    private fun generateAISummary(analysis: TechnicalAnalysis): String {
         val trend = analysis.trend
         val signal = analysis.signals.signal
         val confidence = analysis.signals.confidence
@@ -51,26 +51,26 @@ class AIAnalysisService(
         return when {
             trend == "bullish" && signal == "buy" -> {
                 "현재 상승 추세가 강하게 나타나고 있으며, 매수 신호가 확인되었습니다. " +
-                        "RSI 지표가 ${rsi?.let { "%.1f".format(it) } ?: "N/A"}로 과매수 구간에 있지만 " +
-                        "MACD가 ${macd?.let { "%.4f".format(it) } ?: "N/A"}로 상승 모멘텀을 보이고 있습니다. " +
+                        "RSI 지표가 ${rsi?.let { r -> "%.1f".format(r) } ?: "N/A"}로 과매수 구간에 있지만 " +
+                        "MACD가 ${macd?.let { m -> "%.4f".format(m) } ?: "N/A"}로 상승 모멘텀을 보이고 있습니다. " +
                         "단기적으로는 조정 가능성이 있지만 중장기적으로는 긍정적인 전망입니다."
             }
             trend == "bearish" && signal == "sell" -> {
                 "현재 하락 추세가 지속되고 있으며, 매도 신호가 강하게 나타나고 있습니다. " +
-                        "RSI 지표가 ${rsi?.let { "%.1f".format(it) } ?: "N/A"}로 과매도 구간에 접근하고 있으며 " +
-                        "MACD가 ${macd?.let { "%.4f".format(it) } ?: "N/A"}로 하락 모멘텀을 보이고 있습니다. " +
+                        "RSI 지표가 ${rsi?.let { r -> "%.1f".format(r) } ?: "N/A"}로 과매도 구간에 접근하고 있으며 " +
+                        "MACD가 ${macd?.let { m -> "%.4f".format(m) } ?: "N/A"}로 하락 모멘텀을 보이고 있습니다. " +
                         "추가적인 하락 가능성이 높아 보이며 신중한 접근이 필요합니다."
             }
             else -> {
                 "현재 중립적인 상황으로 명확한 방향성이 보이지 않습니다. " +
-                        "RSI 지표가 ${rsi?.let { "%.1f".format(it) } ?: "N/A"}로 중립 구간에 있으며 " +
-                        "MACD가 ${macd?.let { "%.4f".format(it) } ?: "N/A"}로 횡보 상태를 보이고 있습니다. " +
+                        "RSI 지표가 ${rsi?.let { r -> "%.1f".format(r) } ?: "N/A"}로 중립 구간에 있으며 " +
+                        "MACD가 ${macd?.let { m -> "%.4f".format(m) } ?: "N/A"}로 횡보 상태를 보이고 있습니다. " +
                         "추가적인 신호를 기다리거나 포지션 조정을 고려해볼 수 있습니다."
             }
         }
     }
 
-    private fun determineMarketSentiment(analysis: com.stockanalysis.domain.model.TechnicalAnalysis): String {
+    private fun determineMarketSentiment(analysis: TechnicalAnalysis): String {
         val trend = analysis.trend
         val trendStrength = analysis.trendStrength
         val confidence = analysis.signals.confidence
@@ -84,13 +84,13 @@ class AIAnalysisService(
         }
     }
 
-    private fun calculateRiskLevel(analysis: com.stockanalysis.domain.model.TechnicalAnalysis): String {
+    private fun calculateRiskLevel(analysis: TechnicalAnalysis): String {
         val anomalies = analysis.anomalies
         val trendStrength = analysis.trendStrength
         val confidence = analysis.signals.confidence
 
-        val highRiskAnomalies = anomalies.count { it.severity == "high" }
-        val mediumRiskAnomalies = anomalies.count { it.severity == "medium" }
+        val highRiskAnomalies = anomalies.count { anomaly -> anomaly.severity == "high" }
+        val mediumRiskAnomalies = anomalies.count { anomaly -> anomaly.severity == "medium" }
 
         return when {
             highRiskAnomalies > 0 || (trendStrength > 0.8 && confidence < 0.6) -> "높음"
@@ -99,7 +99,7 @@ class AIAnalysisService(
         }
     }
 
-    private fun generateRecommendation(analysis: com.stockanalysis.domain.model.TechnicalAnalysis): String {
+    private fun generateRecommendation(analysis: TechnicalAnalysis): String {
         val signal = analysis.signals.signal
         val confidence = analysis.signals.confidence
         val trend = analysis.trend
@@ -114,7 +114,7 @@ class AIAnalysisService(
         }
     }
 
-    private fun calculateConfidenceScore(analysis: com.stockanalysis.domain.model.TechnicalAnalysis): Double {
+    private fun calculateConfidenceScore(analysis: TechnicalAnalysis): Double {
         val baseConfidence = analysis.signals.confidence
         val trendStrength = analysis.trendStrength
         val anomalyPenalty = analysis.anomalies.size * 0.05

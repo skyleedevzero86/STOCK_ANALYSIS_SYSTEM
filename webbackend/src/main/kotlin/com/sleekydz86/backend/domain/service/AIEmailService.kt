@@ -3,6 +3,7 @@ package com.sleekydz86.backend.domain.service
 import com.sleekydz86.backend.domain.model.AIAnalysisRequest
 import com.sleekydz86.backend.domain.model.AIAnalysisResult
 import com.sleekydz86.backend.domain.model.EmailSubscription
+import com.sleekydz86.backend.domain.model.EmailTemplate
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
@@ -19,21 +20,21 @@ class AIEmailService(
 
     fun sendAIEmailToSubscribers(templateId: Long, symbol: String): Mono<Map<String, Any>> {
         return emailTemplateService.getTemplateById(templateId)
-            .flatMap { template ->
+            .flatMap { template: EmailTemplate ->
                 emailSubscriptionService.getAllActiveSubscriptions()
-                    .flatMap { subscribers ->
+                    .flatMap { subscribers: List<EmailSubscription> ->
                         aiAnalysisService.generateAIAnalysis(
                             AIAnalysisRequest(symbol = symbol)
-                        ).flatMap { aiResult ->
-                            val emailSubscribers = subscribers.filter { it.isEmailConsent }
+                        ).flatMap { aiResult: AIAnalysisResult ->
+                            val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
                             val emailResults = mutableListOf<String>()
 
-                            emailSubscribers.forEach { subscriber ->
+                            emailSubscribers.forEach { subscriber: EmailSubscription ->
                                 val variables = createEmailVariables(subscriber, aiResult, symbol)
                                 val renderedContent = emailTemplateService.renderTemplate(template, variables)
 
                                 sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                    .subscribe { success ->
+                                    .subscribe { success: Boolean ->
                                         if (success) {
                                             emailResults.add("O ${subscriber.email}")
                                         } else {
@@ -76,7 +77,7 @@ class AIEmailService(
             "market_sentiment" to (aiResult.marketSentiment ?: "N/A"),
             "risk_level" to (aiResult.riskLevel ?: "N/A"),
             "recommendation" to (aiResult.recommendation ?: "N/A"),
-            "confidence_score" to (aiResult.confidenceScore?.let { "%.1f".format(it * 100) } ?: "N/A")
+            "confidence_score" to (aiResult.confidenceScore?.let { score: Double -> "%.1f".format(score * 100) } ?: "N/A")
         )
     }
 
@@ -86,22 +87,22 @@ class AIEmailService(
 
     fun sendBulkAIEmails(templateId: Long, symbols: List<String>): Mono<Map<String, Any>> {
         return emailTemplateService.getTemplateById(templateId)
-            .flatMap { template ->
+            .flatMap { template: EmailTemplate ->
                 emailSubscriptionService.getAllActiveSubscriptions()
-                    .flatMap { subscribers ->
-                        val emailSubscribers = subscribers.filter { it.isEmailConsent }
+                    .flatMap { subscribers: List<EmailSubscription> ->
+                        val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
                         val allResults = mutableListOf<Map<String, Any>>()
 
-                        symbols.forEach { symbol ->
+                        symbols.forEach { symbol: String ->
                             aiAnalysisService.generateAIAnalysis(
                                 AIAnalysisRequest(symbol = symbol)
-                            ).subscribe { aiResult ->
-                                emailSubscribers.forEach { subscriber ->
+                            ).subscribe { aiResult: AIAnalysisResult ->
+                                emailSubscribers.forEach { subscriber: EmailSubscription ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
                                     val renderedContent = emailTemplateService.renderTemplate(template, variables)
 
                                     sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                        .subscribe { success ->
+                                        .subscribe { success: Boolean ->
                                             allResults.add(mapOf(
                                                 "symbol" to symbol,
                                                 "subscriber" to subscriber.email,

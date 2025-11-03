@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.infrastructure.entity
 
+import com.sleekydz86.backend.domain.model.EmailSubscription
 import jakarta.persistence.*
 import java.time.LocalDateTime
 

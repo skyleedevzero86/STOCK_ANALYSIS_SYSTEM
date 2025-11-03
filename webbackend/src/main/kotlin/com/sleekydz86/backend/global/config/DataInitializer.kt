@@ -42,7 +42,7 @@ class DataInitializer(
             Permission(name = "TEMPLATE_WRITE", resource = "template", action = "write", description = "Write template data")
         )
 
-        permissions.forEach { permission ->
+        permissions.forEach { permission: Permission ->
             if (!permissionRepository.existsByName(permission.name)) {
                 permissionRepository.save(permission)
             }

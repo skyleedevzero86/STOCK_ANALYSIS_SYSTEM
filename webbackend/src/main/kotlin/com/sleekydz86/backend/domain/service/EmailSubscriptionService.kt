@@ -41,14 +41,14 @@ class EmailSubscriptionService(
     fun getAllActiveSubscriptions(): Mono<List<EmailSubscription>> {
         return Mono.fromCallable {
             emailSubscriptionRepository.findAllActive()
-                .map { it.toDomain() }
+                .map { entity: EmailSubscriptionEntity -> entity.toDomain() }
         }
     }
 
     fun getActiveSubscriptionsWithEmailConsent(): Mono<List<EmailSubscription>> {
         return Mono.fromCallable {
             emailSubscriptionRepository.findAllActiveWithEmailConsent()
-                .map { it.toDomain() }
+                .map { entity: EmailSubscriptionEntity -> entity.toDomain() }
         }
     }
 

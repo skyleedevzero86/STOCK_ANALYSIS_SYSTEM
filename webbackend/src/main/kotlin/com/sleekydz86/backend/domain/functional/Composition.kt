@@ -17,7 +17,7 @@ object Composition {
     ): (A) -> D = { a -> h(g(f(a))) }
 
     fun <T> pipe(vararg functions: (T) -> T): (T) -> T =
-        functions.reduce { acc, func -> acc.andThen(func) }
+        functions.reduce { acc, func -> { t -> func(acc(t)) } }
 
     fun <A, B> lift(f: (A) -> B): (Mono<A>) -> Mono<B> = { mono ->
         mono.map(f)
@@ -36,7 +36,7 @@ object Composition {
     fun <A, B, C, D> lift3(
         f: (A, B, C) -> D
     ): (Mono<A>, Mono<B>, Mono<C>) -> Mono<D> = { monoA, monoB, monoC ->
-        monoA.zipWith(monoB).zipWith(monoC) { (a, b), c -> f(a, b, c) }
+        monoA.zipWith(monoB).zipWith(monoC) { tuple, c -> f(tuple.t1, tuple.t2, c) }
     }
 
     fun <T> memoize(f: (T) -> T): (T) -> T {

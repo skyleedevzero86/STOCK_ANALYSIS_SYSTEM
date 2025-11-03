@@ -27,10 +27,11 @@ class RedisClusterConfig {
     @Bean
     fun redisClusterConfiguration(): RedisClusterConfiguration {
         val clusterConfig = RedisClusterConfiguration()
-        clusterConfig.clusterNodes = clusterNodes.split(",").map { node ->
+        val nodes = clusterNodes.split(",").map { node: String ->
             val parts = node.trim().split(":")
             org.springframework.data.redis.connection.RedisClusterNode(parts[0], parts[1].toInt())
         }
+        clusterConfig.clusterNodes = nodes
         clusterConfig.maxRedirects = maxRedirects
         return clusterConfig
     }
@@ -43,7 +44,7 @@ class RedisClusterConfig {
     @Bean
     fun redisTemplate(connectionFactory: RedisConnectionFactory): RedisTemplate<String, Any> {
         val template = RedisTemplate<String, Any>()
-        template.connectionFactory = connectionFactory
+        template.setConnectionFactory(connectionFactory)
         template.keySerializer = StringRedisSerializer()
         template.valueSerializer = GenericJackson2JsonRedisSerializer()
         template.hashKeySerializer = StringRedisSerializer()

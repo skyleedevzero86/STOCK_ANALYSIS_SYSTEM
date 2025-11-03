@@ -14,8 +14,9 @@ class WebSocketRouter(
     @Bean
     fun webSocketRoutes(): RouterFunction<ServerResponse> = router {
         GET("/ws/stocks") { request ->
-            ServerResponse.ok()
-                .body(stockWebSocketHandler.handle(request.exchange().request))
+            // WebSocket upgrade should be handled by WebSocketHandlerAdapter
+            // This route serves as a placeholder for WebSocket connections
+            ServerResponse.ok().build()
         }
     }
 }

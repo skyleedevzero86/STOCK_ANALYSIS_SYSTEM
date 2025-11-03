@@ -17,7 +17,7 @@ object FunctionalUtils {
     fun <T> Flux<T>.withRetry(
         maxAttempts: Long = 3,
         delay: Duration = Duration.ofSeconds(1)
-    ): Flux<T> = this.retryWhen { errors ->
+    ): Flux<T> = this.retryWhen { errors: Flux<Throwable> ->
         errors.take(maxAttempts)
             .delayElements(delay)
     }
@@ -25,7 +25,7 @@ object FunctionalUtils {
     fun <T> Mono<T>.withRetry(
         maxAttempts: Long = 3,
         delay: Duration = Duration.ofSeconds(1)
-    ): Mono<T> = this.retryWhen { errors ->
+    ): Mono<T> = this.retryWhen { errors: Flux<Throwable> ->
         errors.take(maxAttempts)
             .delayElements(delay)
     }

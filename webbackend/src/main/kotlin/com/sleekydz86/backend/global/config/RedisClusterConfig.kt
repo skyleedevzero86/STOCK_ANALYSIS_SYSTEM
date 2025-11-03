@@ -7,12 +7,16 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.connection.RedisClusterConfiguration
 import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.RedisTemplate
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer
 import org.springframework.data.redis.serializer.StringRedisSerializer
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.slf4j.LoggerFactory
+import io.lettuce.core.cluster.ClusterClientOptions
+import io.lettuce.core.cluster.ClusterTopologyRefreshOptions
+import java.time.Duration
 
 @Configuration
 @EnableScheduling
@@ -47,7 +51,25 @@ class RedisClusterConfig {
                 val nodes = clusterNodes.split(",").map { it.trim() }
                 val clusterConfig = RedisClusterConfiguration(nodes)
                 clusterConfig.setMaxRedirects(maxRedirects)
-                LettuceConnectionFactory(clusterConfig)
+                
+                val topologyRefreshOptions = ClusterTopologyRefreshOptions.builder()
+                    .enableAdaptiveRefreshTrigger(
+                        ClusterTopologyRefreshOptions.RefreshTrigger.MOVED_REDIRECT,
+                        ClusterTopologyRefreshOptions.RefreshTrigger.PERSISTENT_RECONNECTS
+                    )
+                    .enablePeriodicRefresh(Duration.ofSeconds(30))
+                    .build()
+                
+                val clientOptions = ClusterClientOptions.builder()
+                    .topologyRefreshOptions(topologyRefreshOptions)
+                    .validateClusterNodeMembership(true)
+                    .build()
+                
+                val clientConfig = LettuceClientConfiguration.builder()
+                    .clientOptions(clientOptions)
+                    .build()
+                
+                LettuceConnectionFactory(clusterConfig, clientConfig)
             } else {
                 logger.info("Initializing Redis standalone mode with host: $redisHost, port: $redisPort")
                 val standaloneConfig = RedisStandaloneConfiguration(redisHost, redisPort)

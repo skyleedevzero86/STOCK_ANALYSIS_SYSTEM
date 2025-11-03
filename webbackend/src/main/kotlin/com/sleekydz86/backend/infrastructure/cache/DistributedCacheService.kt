@@ -28,7 +28,11 @@ class DistributedCacheService(
                 }
             }
             .onErrorResume { error ->
-                logger.warn("Redis get operation failed for key: $key, falling back to null", error)
+                if (error.message?.contains("MOVED") == true) {
+                    logger.debug("Redis cluster MOVED response for key: $key, will be handled by topology refresh", error)
+                } else {
+                    logger.warn("Redis get operation failed for key: $key, falling back to null", error)
+                }
                 Mono.empty()
             }
     }
@@ -39,7 +43,11 @@ class DistributedCacheService(
             true
         }
             .onErrorResume { error ->
-                logger.warn("Redis set operation failed for key: $key, continuing without cache", error)
+                if (error.message?.contains("MOVED") == true) {
+                    logger.debug("Redis cluster MOVED response for key: $key, will be handled by topology refresh", error)
+                } else {
+                    logger.warn("Redis set operation failed for key: $key, continuing without cache", error)
+                }
                 Mono.just(false)
             }
     }

@@ -18,11 +18,13 @@ import org.springframework.web.reactive.function.server.ServerResponse
 import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux
 import java.time.Duration
+import org.slf4j.LoggerFactory
 
 @Component
 class StockHandler(
     private val stockAnalysisService: StockAnalysisService
 ) {
+    private val logger = LoggerFactory.getLogger(StockHandler::class.java)
 
     fun getAvailableSymbols(request: ServerRequest): Mono<ServerResponse> =
         stockAnalysisService.getAvailableSymbols()
@@ -47,16 +49,20 @@ class StockHandler(
     fun getRealtimeData(request: ServerRequest): Mono<ServerResponse> =
         try {
             val symbol = request.pathVariable("symbol")
+            logger.debug("Getting realtime data for symbol: $symbol")
+            
             if (symbol.isBlank() || !symbol.matches(Regex("[A-Z]{1,5}"))) {
                 throw InvalidSymbolException("Invalid stock symbol format")
             }
 
             stockAnalysisService.getRealtimeStockData(symbol)
                 .flatMap { data ->
+                    logger.debug("Successfully retrieved data for symbol: $symbol")
                     ServerResponse.ok().bodyValue(data)
                 }
                 .timeout(Duration.ofSeconds(15))
                 .onErrorResume { error ->
+                    logger.error("Error getting realtime data for symbol: $symbol", error)
                     when (error) {
                         is StockNotFoundException ->
                             ReactiveExceptionHandler.handleStockNotFound(request, error)
@@ -68,11 +74,14 @@ class StockHandler(
                             ReactiveExceptionHandler.handleExternalApiError(request, error)
                         is DataProcessingException ->
                             ReactiveExceptionHandler.handleDataProcessingError(request, error)
-                        else ->
+                        else -> {
+                            logger.error("Unexpected error type: ${error.javaClass.name}, message: ${error.message}", error)
                             ReactiveExceptionHandler.handleGenericError(request, error)
+                        }
                     }
                 }
         } catch (e: Exception) {
+            logger.error("Exception in getRealtimeData handler", e)
             ReactiveExceptionHandler.handleInvalidSymbol(request, e)
         }
 

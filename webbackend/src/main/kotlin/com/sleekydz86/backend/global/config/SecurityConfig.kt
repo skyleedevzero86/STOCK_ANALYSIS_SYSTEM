@@ -54,14 +54,18 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { authz ->
                 authz
+
+                    .requestMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
+                                   "/email-subscription", "/template-management").permitAll()
+                    .requestMatchers("/css/**", "/js/**", "/*.html", "/**/*.css", "/**/*.js",
+                                   "/**/*.png", "/**/*.jpg", "/**/*.gif", "/**/*.ico",
+                                   "/**/*.svg").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/ws/**").permitAll()
                     .requestMatchers("/actuator/health").permitAll()
-                    .requestMatchers("/api/stocks/symbols").permitAll()
-                    .requestMatchers("/api/stocks/realtime/**").hasAnyRole("USER", "ADMIN")
-                    .requestMatchers("/api/stocks/analysis/**").hasAnyRole("USER", "ADMIN")
-                    .requestMatchers("/api/stocks/historical/**").hasAnyRole("USER", "ADMIN")
+                    .requestMatchers("/api/stocks/**").permitAll()
+                    .requestMatchers("/api/cqrs/stocks/**").permitAll()
                     .requestMatchers("/api/admin/**").hasRole("ADMIN")
                     .requestMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
                     .requestMatchers("/api/templates/**").hasRole("ADMIN")

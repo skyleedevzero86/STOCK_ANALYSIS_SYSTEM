@@ -103,7 +103,7 @@ object ReactiveExceptionHandler {
                 timestamp = LocalDateTime.now(),
                 status = 500,
                 error = "Internal Server Error",
-                message = "An unexpected error occurred",
+                message = ex.message ?: ex.javaClass.simpleName ?: "An unexpected error occurred",
                 path = request.path()
             ))
 }

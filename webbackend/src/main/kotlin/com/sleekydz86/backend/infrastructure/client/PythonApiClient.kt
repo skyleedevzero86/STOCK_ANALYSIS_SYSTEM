@@ -35,6 +35,26 @@ class PythonApiClient(
             .retrieve()
             .bodyToMono(Map::class.java)
             .map(mapToStockData)
+            .timeout(java.time.Duration.ofSeconds(10))
+            .onErrorMap { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            error
+                        )
+                    is org.springframework.web.reactive.function.client.WebClientException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            error
+                        )
+                    else ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류: ${error.message}",
+                            error
+                        )
+                }
+            }
     }
 
     private val mapToTradingSignals: (Map<*, *>) -> TradingSignals = { signalsData ->
@@ -117,6 +137,26 @@ class PythonApiClient(
             .retrieve()
             .bodyToMono(Map::class.java)
             .map(mapToTechnicalAnalysis)
+            .timeout(java.time.Duration.ofSeconds(15))
+            .onErrorMap { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            error
+                        )
+                    is org.springframework.web.reactive.function.client.WebClientException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            error
+                        )
+                    else ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류: ${error.message}",
+                            error
+                        )
+                }
+            }
     }
 
     val getAllAnalysis: () -> Flux<TechnicalAnalysis> = {
@@ -125,6 +165,26 @@ class PythonApiClient(
             .retrieve()
             .bodyToFlux(Map::class.java)
             .map(mapToTechnicalAnalysis)
+            .timeout(java.time.Duration.ofSeconds(20))
+            .onErrorMap { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            error
+                        )
+                    is org.springframework.web.reactive.function.client.WebClientException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            error
+                        )
+                    else ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류: ${error.message}",
+                            error
+                        )
+                }
+            }
     }
 
     private val mapToChartDataPoint: (Map<*, *>) -> ChartDataPoint = { pointMap ->
@@ -158,6 +218,26 @@ class PythonApiClient(
             .retrieve()
             .bodyToMono(Map::class.java)
             .map(mapToHistoricalData)
+            .timeout(java.time.Duration.ofSeconds(15))
+            .onErrorMap { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            error
+                        )
+                    is org.springframework.web.reactive.function.client.WebClientException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            error
+                        )
+                    else ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류: ${error.message}",
+                            error
+                        )
+                }
+            }
     }
 
     val getSymbols: () -> Mono<List<String>> = {
@@ -166,6 +246,26 @@ class PythonApiClient(
             .retrieve()
             .bodyToMono(Map::class.java)
             .map { data -> data["symbols"] as List<String> }
+            .timeout(java.time.Duration.ofSeconds(10))
+            .onErrorMap { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            error
+                        )
+                    is org.springframework.web.reactive.function.client.WebClientException ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            error
+                        )
+                    else ->
+                        com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류: ${error.message}",
+                            error
+                        )
+                }
+            }
     }
 
     fun sendEmail(toEmail: String, subject: String, content: String): Mono<Boolean> {

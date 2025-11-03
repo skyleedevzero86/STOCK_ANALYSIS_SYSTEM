@@ -1,46 +1,73 @@
 package com.sleekydz86.backend.application.controller
 
 import org.springframework.core.io.ClassPathResource
-import org.springframework.stereotype.Controller
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.ResponseBody
+import org.springframework.web.bind.annotation.RestController
+import org.slf4j.LoggerFactory
 
-@Controller
+@RestController
 class WebController {
 
+    private val logger = LoggerFactory.getLogger(WebController::class.java)
     private val staticResourcePath = "static/"
-    private val fallbackHtml = "<html><body><h1>Welcome to Stock Analysis System</h1><p>Static files are not accessible</p></body></html>"
+    private val fallbackHtml = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Error</title>
+        </head>
+        <body>
+            <h1>Welcome to Stock Analysis System</h1>
+            <p>Static files are not accessible. Please check the file path.</p>
+        </body>
+        </html>
+    """.trimIndent()
 
     @GetMapping("/")
-    @ResponseBody
-    fun index(): String = loadHtmlFile("index.html")
+    fun index(): ResponseEntity<String> = loadHtmlFile("index.html")
 
     @GetMapping("/admin-dashboard")
-    @ResponseBody
-    fun adminDashboard(): String = loadHtmlFile("admin-dashboard.html")
+    fun adminDashboard(): ResponseEntity<String> = loadHtmlFile("admin-dashboard.html")
 
     @GetMapping("/admin-login")
-    @ResponseBody
-    fun adminLogin(): String = loadHtmlFile("admin-login.html")
+    fun adminLogin(): ResponseEntity<String> = loadHtmlFile("admin-login.html")
 
     @GetMapping("/api-view")
-    @ResponseBody
-    fun apiView(): String = loadHtmlFile("api-view.html")
+    fun apiView(): ResponseEntity<String> = loadHtmlFile("api-view.html")
 
     @GetMapping("/email-subscription")
-    @ResponseBody
-    fun emailSubscription(): String = loadHtmlFile("email-subscription.html")
+    fun emailSubscription(): ResponseEntity<String> = loadHtmlFile("email-subscription.html")
 
     @GetMapping("/template-management")
-    @ResponseBody
-    fun templateManagement(): String = loadHtmlFile("template-management.html")
+    fun templateManagement(): ResponseEntity<String> = loadHtmlFile("template-management.html")
 
-    private fun loadHtmlFile(filename: String): String {
+    private fun loadHtmlFile(filename: String): ResponseEntity<String> {
         return try {
             val resource = ClassPathResource("$staticResourcePath$filename")
-            resource.inputStream.bufferedReader().use { it.readText() }
+            
+            if (!resource.exists()) {
+                logger.warn("File not found: $staticResourcePath$filename")
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
+                    .body(fallbackHtml)
+            }
+
+            val content = resource.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            
+            logger.debug("Successfully loaded file: $filename")
+            ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE + "; charset=UTF-8")
+                .body(content)
         } catch (e: Exception) {
-            fallbackHtml
+            logger.error("Error loading file: $staticResourcePath$filename", e)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
+                .body(fallbackHtml)
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.sleekydz86.backend.global.security
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.context.ReactiveSecurityContextHolder
 import org.springframework.security.core.context.SecurityContext
 import org.springframework.security.core.context.SecurityContextImpl
 import org.springframework.security.core.userdetails.UserDetailsService
@@ -44,12 +43,9 @@ class JwtAuthenticationFilter(
                                 userDetails.authorities
                             )
                             
-                            val securityContext: SecurityContext = SecurityContextImpl().apply {
-                                authentication = authToken
-                            }
-                            
+                            val securityContext: SecurityContext = SecurityContextImpl(authToken)
+                            exchange.attributes[SecurityContext::class.java.name] = securityContext
                             chain.filter(exchange)
-                                .contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(securityContext)))
                         } else {
                             chain.filter(exchange)
                         }

@@ -80,7 +80,7 @@ class StockDashboard {
                 console.error("서버 응답 없음:", error.request);
                 this.showError("서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.");
             } else {
-
+               
                 console.error("요청 설정 오류:", error.message);
                 this.showError(`데이터를 불러올 수 없습니다: ${error.message}`);
             }

@@ -26,15 +26,20 @@ class SecurityConfig(
 ) {
 
     @Bean
-    fun passwordEncoder(): PasswordEncoder {
+    fun bCryptPasswordEncoder(): BCryptPasswordEncoder {
         return BCryptPasswordEncoder()
     }
 
     @Bean
-    fun authenticationProvider(): DaoAuthenticationProvider {
+    fun passwordEncoder(bCryptPasswordEncoder: BCryptPasswordEncoder): PasswordEncoder {
+        return bCryptPasswordEncoder
+    }
+
+    @Bean
+    fun authenticationProvider(passwordEncoder: PasswordEncoder): DaoAuthenticationProvider {
         val authProvider = DaoAuthenticationProvider()
         authProvider.setUserDetailsService(userDetailsService)
-        authProvider.setPasswordEncoder(passwordEncoder())
+        authProvider.setPasswordEncoder(passwordEncoder)
         return authProvider
     }
 

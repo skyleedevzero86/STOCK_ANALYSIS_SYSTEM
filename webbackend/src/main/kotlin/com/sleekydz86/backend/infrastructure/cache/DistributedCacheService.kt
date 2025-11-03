@@ -28,8 +28,10 @@ class DistributedCacheService(
                 }
             }
             .onErrorResume { error ->
-                if (error.message?.contains("MOVED") == true) {
-                    logger.debug("Redis cluster MOVED response for key: $key, will be handled by topology refresh", error)
+                val isMovedError = error.message?.contains("MOVED") == true || 
+                                  error.cause?.message?.contains("MOVED") == true
+                if (isMovedError) {
+                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)", error)
                 } else {
                     logger.warn("Redis get operation failed for key: $key, falling back to null", error)
                 }
@@ -43,12 +45,15 @@ class DistributedCacheService(
             true
         }
             .onErrorResume { error ->
-                if (error.message?.contains("MOVED") == true) {
-                    logger.debug("Redis cluster MOVED response for key: $key, will be handled by topology refresh", error)
+                val isMovedError = error.message?.contains("MOVED") == true || 
+                                  error.cause?.message?.contains("MOVED") == true
+                if (isMovedError) {
+                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)", error)
+                    Mono.just(false)
                 } else {
                     logger.warn("Redis set operation failed for key: $key, continuing without cache", error)
+                    Mono.just(false)
                 }
-                Mono.just(false)
             }
     }
 

@@ -53,16 +53,17 @@ class RedisClusterConfig {
                 clusterConfig.setMaxRedirects(maxRedirects)
                 
                 val topologyRefreshOptions = ClusterTopologyRefreshOptions.builder()
-                    .enableAdaptiveRefreshTrigger(
-                        ClusterTopologyRefreshOptions.RefreshTrigger.MOVED_REDIRECT,
-                        ClusterTopologyRefreshOptions.RefreshTrigger.PERSISTENT_RECONNECTS
-                    )
+                    .enableAllRefreshTriggers()
                     .enablePeriodicRefresh(Duration.ofSeconds(30))
+                    .adaptiveRefreshTriggersTimeout(Duration.ofSeconds(30))
+                    .refreshTriggersReconnectAttempts(5)
                     .build()
                 
                 val clientOptions = ClusterClientOptions.builder()
                     .topologyRefreshOptions(topologyRefreshOptions)
-                    .validateClusterNodeMembership(true)
+                    .validateClusterNodeMembership(false)
+                    .autoReconnect(true)
+                    .maxRedirects(maxRedirects)
                     .build()
                 
                 val clientConfig = LettuceClientConfiguration.builder()

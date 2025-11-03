@@ -13,6 +13,7 @@ class PythonApiClient(
     @Value("\${python.api.base-url:http://localhost:8000}")
     private val baseUrl: String
 ) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
 
     private val webClient = WebClient.builder()
         .baseUrl(baseUrl)
@@ -30,29 +31,39 @@ class PythonApiClient(
     }
 
     val getRealtimeData: (String) -> Mono<StockData> = { symbol ->
+        logger.debug("Requesting realtime data for symbol: $symbol from $baseUrl")
         webClient.get()
             .uri("/api/realtime/{symbol}", symbol)
             .retrieve()
             .bodyToMono(Map::class.java)
             .map(mapToStockData)
             .timeout(java.time.Duration.ofSeconds(10))
+            .doOnError { error ->
+                logger.error("Failed to get realtime data for symbol: $symbol from $baseUrl", error)
+            }
             .onErrorMap { error ->
                 when (error) {
-                    is java.util.concurrent.TimeoutException ->
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.error("Python API 서버 연결 시간 초과: $baseUrl (symbol: $symbol)")
                         com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 서버 연결 시간 초과: ${baseUrl}",
+                            "Python API 서버 연결 시간 초과: ${baseUrl}. 서버가 실행 중인지 확인하세요.",
                             error
                         )
-                    is org.springframework.web.reactive.function.client.WebClientException ->
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientException -> {
+                        logger.error("Python API 서버 연결 실패: $baseUrl (symbol: $symbol). 서버가 실행 중인지 확인하세요.")
                         com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 서버 연결 실패. 서버가 실행 중인지 확인하세요: ${baseUrl}",
+                            "Python API 서버 연결 실패: ${baseUrl}. 서버가 실행 중인지 확인하세요. (서버 시작: python start_python_api.py 또는 uvicorn api_server:app --port 9000)",
                             error
                         )
-                    else ->
+                    }
+                    else -> {
+                        logger.error("Python API 서버 오류: ${error.message} (symbol: $symbol)")
                         com.sleekydz86.backend.global.exception.ExternalApiException(
                             "Python API 서버 오류: ${error.message}",
                             error
                         )
+                    }
                 }
             }
     }

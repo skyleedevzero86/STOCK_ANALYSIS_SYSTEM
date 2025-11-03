@@ -3,6 +3,7 @@ package com.sleekydz86.backend.infrastructure.cache
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.LocalDateTime
 
@@ -12,46 +13,83 @@ class RedisClusterMonitor(
     private val cacheManager: CacheManager,
     private val redisClusterHealthIndicator: RedisClusterHealthIndicator
 ) {
+    private val logger = LoggerFactory.getLogger(RedisClusterMonitor::class.java)
 
     @Scheduled(fixedRate = 30000)
     fun monitorClusterHealth() {
-        redisClusterHealthIndicator.health()
-            .let { health ->
-                val healthInfo = mapOf(
-                    "status" to health.status.code,
-                    "details" to health.details,
-                    "timestamp" to LocalDateTime.now().toString()
-                )
+        try {
+            redisClusterHealthIndicator.health()
+                .let { health ->
+                    val healthInfo = mapOf(
+                        "status" to health.status.code,
+                        "details" to health.details,
+                        "timestamp" to LocalDateTime.now().toString()
+                    )
 
-                redisClusterHealthIndicator.updateClusterInfo(healthInfo)
-                    .subscribe()
-            }
+                    redisClusterHealthIndicator.updateClusterInfo(healthInfo)
+                        .onErrorResume { error ->
+                            logger.warn("Redis cluster health monitoring failed, continuing without cache", error)
+                            Mono.just(false)
+                        }
+                        .subscribe()
+                }
+        } catch (e: Exception) {
+            logger.warn("Error in cluster health monitoring: ${e.message}", e)
+        }
     }
 
     @Scheduled(fixedRate = 60000)
     fun monitorCacheMetrics() {
-        cacheManager.getCacheMetrics()
-            .flatMap { metrics ->
-                val updatedMetrics = metrics.toMutableMap()
-                updatedMetrics["monitor_timestamp"] = LocalDateTime.now().toString()
-                updatedMetrics["cluster_health"] = redisClusterHealthIndicator.health().status.code
+        try {
+            cacheManager.getCacheMetrics()
+                .flatMap { metrics ->
+                    val updatedMetrics = metrics.toMutableMap()
+                    updatedMetrics["monitor_timestamp"] = LocalDateTime.now().toString()
+                    try {
+                        updatedMetrics["cluster_health"] = redisClusterHealthIndicator.health().status.code
+                    } catch (e: Exception) {
+                        updatedMetrics["cluster_health"] = "DOWN"
+                    }
 
-                cacheManager.updateCacheMetrics("monitor", System.currentTimeMillis())
-                    .then(Mono.just(updatedMetrics))
-            }
-            .subscribe()
+                    cacheManager.updateCacheMetrics("monitor", System.currentTimeMillis())
+                        .then(Mono.just(updatedMetrics))
+                }
+                .onErrorResume { error ->
+                    logger.warn("Cache metrics monitoring failed, continuing without cache", error)
+                    Mono.just(mutableMapOf<String, Any>())
+                }
+                .subscribe()
+        } catch (e: Exception) {
+            logger.warn("Error in cache metrics monitoring: ${e.message}", e)
+        }
     }
 
     @Scheduled(fixedRate = 300000)
     fun optimizeCache() {
-        cacheManager.optimizeCache()
-            .subscribe()
+        try {
+            cacheManager.optimizeCache()
+                .onErrorResume { error ->
+                    logger.warn("Cache optimization failed, continuing without cache", error)
+                    Mono.just(false)
+                }
+                .subscribe()
+        } catch (e: Exception) {
+            logger.warn("Error in cache optimization: ${e.message}", e)
+        }
     }
 
     @Scheduled(fixedRate = 600000)
     fun cleanupExpiredCache() {
-        cacheManager.clearExpiredCache()
-            .subscribe()
+        try {
+            cacheManager.clearExpiredCache()
+                .onErrorResume { error ->
+                    logger.warn("Cache cleanup failed, continuing without cache", error)
+                    Mono.just(0L)
+                }
+                .subscribe()
+        } catch (e: Exception) {
+            logger.warn("Error in cache cleanup: ${e.message}", e)
+        }
     }
 
     fun getClusterStatus(): Mono<Map<String, Any>> {

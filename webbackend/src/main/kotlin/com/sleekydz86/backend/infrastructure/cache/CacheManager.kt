@@ -42,6 +42,11 @@ class CacheManager(
 
     fun clearExpiredCache(): Mono<Long> {
         return distributedCacheService.deletePattern("stock:*:expired")
+            .onErrorResume { error ->
+                org.slf4j.LoggerFactory.getLogger(CacheManager::class.java)
+                    .warn("Failed to clear expired cache, continuing without cache", error)
+                Mono.just(0L)
+            }
     }
 
     fun getCacheMetrics(): Mono<Map<String, Any>> {
@@ -135,6 +140,11 @@ class CacheManager(
         return clearExpiredCache()
             .then(updateCacheMetrics("optimization", System.currentTimeMillis()))
             .then(Mono.just(true))
+            .onErrorResume { error ->
+                org.slf4j.LoggerFactory.getLogger(CacheManager::class.java)
+                    .warn("Cache optimization failed, continuing without cache", error)
+                Mono.just(false)
+            }
     }
 
     fun getCacheHealth(): Mono<Map<String, Any>> {

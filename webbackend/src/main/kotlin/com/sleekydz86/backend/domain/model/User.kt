@@ -14,12 +14,14 @@ data class User(
     val id: Long = 0,
 
     @Column(unique = true, nullable = false)
+    @get:JvmName("getUsernameProperty")
     val username: String,
 
     @Column(unique = true, nullable = false)
     val email: String,
 
     @Column(nullable = false)
+    @get:JvmName("getPasswordProperty")
     val password: String,
 
     @Column(name = "first_name")

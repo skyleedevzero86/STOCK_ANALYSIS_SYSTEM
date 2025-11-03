@@ -35,6 +35,16 @@ class PythonApiClient(
         webClient.get()
             .uri("/api/realtime/{symbol}", symbol)
             .retrieve()
+            .onStatus({ status -> status.is5xxServerError || status.is4xxClientError }, { response ->
+                logger.error("Python API 서버 HTTP 오류: ${response.statusCode()} (symbol: $symbol, url: $baseUrl/api/realtime/$symbol)")
+                response.bodyToMono(String::class.java)
+                    .defaultIfEmpty("")
+                    .flatMap { body ->
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류 (${response.statusCode()}): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}. Python API 서버 로그를 확인하세요."
+                        ))
+                    }
+            })
             .bodyToMono(Map::class.java)
             .map(mapToStockData)
             .timeout(java.time.Duration.ofSeconds(10))
@@ -58,11 +68,16 @@ class PythonApiClient(
                         )
                     }
                     else -> {
-                        logger.error("Python API 서버 오류: ${error.message} (symbol: $symbol)")
-                        com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 서버 오류: ${error.message}",
+                        // 이미 ExternalApiException으로 변환된 경우 그대로 반환
+                        if (error is com.sleekydz86.backend.global.exception.ExternalApiException) {
                             error
-                        )
+                        } else {
+                            logger.error("Python API 서버 오류: ${error.message} (symbol: $symbol)")
+                            com.sleekydz86.backend.global.exception.ExternalApiException(
+                                "Python API 서버 오류: ${error.message}",
+                                error
+                            )
+                        }
                     }
                 }
             }

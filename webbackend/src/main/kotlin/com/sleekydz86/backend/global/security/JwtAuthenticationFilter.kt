@@ -48,8 +48,8 @@ class JwtAuthenticationFilter(
                                 authentication = authToken
                             }
                             
-                            ReactiveSecurityContextHolder.withContext(Mono.just(securityContext))
-                                .then(chain.filter(exchange))
+                            chain.filter(exchange)
+                                .contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(securityContext)))
                         } else {
                             chain.filter(exchange)
                         }

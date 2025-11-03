@@ -63,7 +63,7 @@ class AIEmailService(
         val now = LocalDateTime.now()
         val formatter = DateTimeFormatter.ofPattern("yyyy년 MM월 dd일")
 
-        return mapOf(
+        return mapOf<String, String>(
             "name" to subscriber.name,
             "email" to subscriber.email,
             "symbol" to symbol,
@@ -71,9 +71,9 @@ class AIEmailService(
             "ai_analysis" to aiResult.aiSummary,
             "current_price" to "N/A",
             "change_percent" to "N/A",
-            "rsi" to aiResult.technicalAnalysis?.get("rsi")?.toString() ?: "N/A",
-            "macd" to aiResult.technicalAnalysis?.get("macd")?.toString() ?: "N/A",
-            "trend" to aiResult.technicalAnalysis?.get("trend")?.toString() ?: "N/A",
+            "rsi" to (aiResult.technicalAnalysis?.get("rsi")?.toString() ?: "N/A"),
+            "macd" to (aiResult.technicalAnalysis?.get("macd")?.toString() ?: "N/A"),
+            "trend" to (aiResult.technicalAnalysis?.get("trend")?.toString() ?: "N/A"),
             "market_sentiment" to (aiResult.marketSentiment ?: "N/A"),
             "risk_level" to (aiResult.riskLevel ?: "N/A"),
             "recommendation" to (aiResult.recommendation ?: "N/A"),

@@ -2,6 +2,7 @@ package com.sleekydz86.backend.domain.functional
 
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.util.retry.Retry
 import java.time.Duration
 
 object FunctionalUtils {
@@ -17,18 +18,16 @@ object FunctionalUtils {
     fun <T> Flux<T>.withRetry(
         maxAttempts: Long = 3,
         delay: Duration = Duration.ofSeconds(1)
-    ): Flux<T> = this.retryWhen { errors: Flux<Throwable> ->
-        errors.take(maxAttempts)
-            .delayElements(delay)
-    }
+    ): Flux<T> = this.retryWhen(
+        Retry.fixedDelay(maxAttempts, delay)
+    )
 
     fun <T> Mono<T>.withRetry(
         maxAttempts: Long = 3,
         delay: Duration = Duration.ofSeconds(1)
-    ): Mono<T> = this.retryWhen { errors: Flux<Throwable> ->
-        errors.take(maxAttempts)
-            .delayElements(delay)
-    }
+    ): Mono<T> = this.retryWhen(
+        Retry.fixedDelay(maxAttempts, delay)
+    )
 
     fun <T> Flux<T>.withTimeout(
         timeout: Duration = Duration.ofSeconds(30)

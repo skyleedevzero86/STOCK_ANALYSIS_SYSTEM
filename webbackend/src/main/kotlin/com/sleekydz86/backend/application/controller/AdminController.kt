@@ -24,9 +24,9 @@ class AdminController(
             .map { response ->
                 ApiResponseBuilder.success(
                     "로그인이 성공했습니다.",
-                    mapOf(
+                    mapOf<String, Any>(
                         "token" to response.token,
-                        "expiresAt" to response.expiresAt
+                        "expiresAt" to response.expiresAt.toString()
                     )
                 )
             }
@@ -45,8 +45,8 @@ class AdminController(
                             val maskedSubscriptions = subscriptions.map { subscription ->
                                 EmailSubscriptionMapper.toMaskedSubscriptionMap(
                                     subscription,
-                                    emailSubscriptionService::maskEmail,
-                                    emailSubscriptionService::maskPhone
+                                    { email: String -> emailSubscriptionService.maskEmail(email) },
+                                    { phone: String? -> emailSubscriptionService.maskPhone(phone) ?: "" }
                                 )
                             }
 
@@ -74,7 +74,7 @@ class AdminController(
                             val maskedSubscriptions = subscriptions.map { subscription ->
                                 EmailSubscriptionMapper.toEmailConsentSubscriptionMap(
                                     subscription,
-                                    emailSubscriptionService::maskPhone
+                                    { phone: String? -> emailSubscriptionService.maskPhone(phone) ?: "" }
                                 )
                             }
 

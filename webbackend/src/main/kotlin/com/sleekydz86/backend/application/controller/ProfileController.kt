@@ -49,7 +49,7 @@ class ProfileController(
             userService.updatePassword(username, request.newPassword)
             return ResponseEntity.ok(mapOf("message" to "Password changed successfully"))
         } catch (e: Exception) {
-            return ResponseEntity.badRequest().body(mapOf("error" to e.message ?: "Failed to change password"))
+            return ResponseEntity.badRequest().body(mapOf<String, String>("error" to (e.message ?: "Failed to change password")))
         }
     }
 }

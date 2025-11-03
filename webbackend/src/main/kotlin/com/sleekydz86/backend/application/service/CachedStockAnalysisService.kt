@@ -4,7 +4,7 @@ import com.sleekydz86.backend.domain.model.HistoricalData
 import com.sleekydz86.backend.domain.model.StockData
 import com.sleekydz86.backend.domain.model.TechnicalAnalysis
 import com.sleekydz86.backend.domain.service.StockAnalysisService
-import com.sleekydz86.backend.infrastructure.cache.CacheAnnotation
+import com.sleekydz86.backend.infrastructure.cache.Cacheable
 import com.sleekydz86.backend.infrastructure.cache.CacheManager
 import com.sleekydz86.backend.infrastructure.cache.CacheType
 import com.sleekydz86.backend.infrastructure.cache.StockCacheService
@@ -96,18 +96,21 @@ class CachedStockAnalysisService(
     fun getAllRealtimeStockData(): Flux<StockData> {
         return stockCacheService.getAllStockData()
             .switchIfEmpty(
-                stockAnalysisService.getAllRealtimeStockData()
-                    .collectList()
-                    .flatMap { stockDataList: List<StockData> ->
-                        stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(5))
-                            .then(cacheManager.updateCacheHitRate(false))
-                            .then(Flux.fromIterable(stockDataList))
-                    }
+                Flux.defer {
+                    stockAnalysisService.getAllRealtimeStockData()
+                        .collectList()
+                        .flatMap { stockDataList: List<StockData> ->
+                            stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(5))
+                                .then(cacheManager.updateCacheHitRate(false))
+                                .then(Mono.just(stockDataList))
+                        }
+                        .flatMapMany { Flux.fromIterable(it) }
+                }
             )
-            .flatMap { stockData: StockData ->
+            .doOnNext { stockData: StockData ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_all_realtime_data"))
-                    .then(Mono.just(stockData))
+                    .subscribe()
             }
     }
 
@@ -115,18 +118,21 @@ class CachedStockAnalysisService(
     fun getAllStockAnalysis(): Flux<TechnicalAnalysis> {
         return stockCacheService.getAllStockAnalysis()
             .switchIfEmpty(
-                stockAnalysisService.getAllStockAnalysis()
-                    .collectList()
-                    .flatMap { analysisList: List<TechnicalAnalysis> ->
-                        stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(15))
-                            .then(cacheManager.updateCacheHitRate(false))
-                            .then(Flux.fromIterable(analysisList))
-                    }
+                Flux.defer {
+                    stockAnalysisService.getAllStockAnalysis()
+                        .collectList()
+                        .flatMap { analysisList: List<TechnicalAnalysis> ->
+                            stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(15))
+                                .then(cacheManager.updateCacheHitRate(false))
+                                .then(Mono.just(analysisList))
+                        }
+                        .flatMapMany { Flux.fromIterable(it) }
+                }
             )
-            .flatMap { analysis: TechnicalAnalysis ->
+            .doOnNext { analysis: TechnicalAnalysis ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_all_analysis"))
-                    .then(Mono.just(analysis))
+                    .subscribe()
             }
     }
 

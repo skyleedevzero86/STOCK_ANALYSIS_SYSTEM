@@ -26,12 +26,11 @@ class RedisClusterConfig {
 
     @Bean
     fun redisClusterConfiguration(): RedisClusterConfiguration {
-        val clusterConfig = RedisClusterConfiguration()
         val nodes = clusterNodes.split(",").map { node: String ->
             val parts = node.trim().split(":")
             org.springframework.data.redis.connection.RedisClusterNode(parts[0], parts[1].toInt())
-        }
-        clusterConfig.clusterNodes = nodes
+        }.toSet()
+        val clusterConfig = RedisClusterConfiguration(nodes)
         clusterConfig.maxRedirects = maxRedirects
         return clusterConfig
     }

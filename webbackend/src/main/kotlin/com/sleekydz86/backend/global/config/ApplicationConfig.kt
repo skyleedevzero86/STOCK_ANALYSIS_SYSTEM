@@ -30,5 +30,5 @@ class ApplicationConfig(
 
     @Bean
     fun allRoutes(): RouterFunction<ServerResponse> =
-        stockRoutes().andOther(webSocketRoutes())
+        stockRoutes().and(webSocketRoutes())
 }

@@ -26,10 +26,10 @@ class AIAnalysisService(
                     symbol = request.symbol,
                     analysisType = request.analysisType,
                     aiSummary = aiSummary,
-                    technicalAnalysis = mapOf(
-                        "rsi" to analysis.signals.rsi,
-                        "macd" to analysis.signals.macd,
-                        "macdSignal" to analysis.signals.macdSignal,
+                    technicalAnalysis = mapOf<String, Any>(
+                        "rsi" to (analysis.signals.rsi ?: 0.0),
+                        "macd" to (analysis.signals.macd ?: 0.0),
+                        "macdSignal" to (analysis.signals.macdSignal ?: 0.0),
                         "trend" to analysis.trend,
                         "trendStrength" to analysis.trendStrength
                     ),

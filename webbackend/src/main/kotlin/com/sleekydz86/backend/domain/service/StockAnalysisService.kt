@@ -13,45 +13,47 @@ class StockAnalysisService(
     private val stockRepository: StockRepository
 ) {
 
-    private val withErrorHandling = Composition.lift(FunctionalUtils::withErrorHandling)
-    private val withLogging = Composition.lift(FunctionalUtils::withLogging)
-    private val withTimeout = Composition.lift(FunctionalUtils::withTimeout)
+    val getRealtimeStockData: (String) -> Mono<StockData> = { symbol ->
+        stockRepository.getRealtimeData(symbol)
+            .withErrorHandling()
+            .withLogging()
+            .withTimeout()
+    }
 
-    val getRealtimeStockData: (String) -> Mono<StockData> =
-        stockRepository::getRealtimeData
-            .andThen(withErrorHandling)
-            .andThen(withLogging)
-            .andThen(withTimeout)
+    val getAllRealtimeStockData: () -> Flux<StockData> = {
+        stockRepository.getAllRealtimeData()
+            .withErrorHandling()
+            .withLogging("RealtimeData")
+            .withTimeout()
+    }
 
-    val getAllRealtimeStockData: () -> Flux<StockData> =
-        stockRepository::getAllRealtimeData
-            .andThen { flux -> flux.withErrorHandling() }
-            .andThen { flux -> flux.withLogging("RealtimeData") }
-            .andThen { flux -> flux.withTimeout() }
+    val getStockAnalysis: (String) -> Mono<TechnicalAnalysis> = { symbol ->
+        stockRepository.getAnalysis(symbol)
+            .withErrorHandling()
+            .withLogging()
+            .withTimeout()
+    }
 
-    val getStockAnalysis: (String) -> Mono<TechnicalAnalysis> =
-        stockRepository::getAnalysis
-            .andThen(withErrorHandling)
-            .andThen(withLogging)
-            .andThen(withTimeout)
+    val getAllStockAnalysis: () -> Flux<TechnicalAnalysis> = {
+        stockRepository.getAllAnalysis()
+            .withErrorHandling()
+            .withLogging("Analysis")
+            .withTimeout()
+    }
 
-    val getAllStockAnalysis: () -> Flux<TechnicalAnalysis> =
-        stockRepository::getAllAnalysis
-            .andThen { flux -> flux.withErrorHandling() }
-            .andThen { flux -> flux.withLogging("Analysis") }
-            .andThen { flux -> flux.withTimeout() }
+    val getStockHistoricalData: (String, Int) -> Mono<HistoricalData> = { symbol, days ->
+        stockRepository.getHistoricalData(symbol, days)
+            .withErrorHandling()
+            .withLogging()
+            .withTimeout()
+    }
 
-    val getStockHistoricalData: (String, Int) -> Mono<HistoricalData> =
-        stockRepository::getHistoricalData
-            .andThen(withErrorHandling)
-            .andThen(withLogging)
-            .andThen(withTimeout)
-
-    val getAvailableSymbols: () -> Mono<List<String>> =
-        stockRepository::getAvailableSymbols
-            .andThen(withErrorHandling)
-            .andThen(withLogging)
-            .andThen(withTimeout)
+    val getAvailableSymbols: () -> Mono<List<String>> = {
+        stockRepository.getAvailableSymbols()
+            .withErrorHandling()
+            .withLogging()
+            .withTimeout()
+    }
 
     val getRealtimeAnalysisStream: () -> Flux<TechnicalAnalysis> = {
         Flux.interval(Duration.ofSeconds(5))

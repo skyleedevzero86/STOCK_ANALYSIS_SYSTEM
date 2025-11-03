@@ -21,8 +21,8 @@ class EmailSubscriptionController(
             .map { subscription: EmailSubscription ->
                 ApiResponseBuilder.success<Map<String, Any>>(
                     "구독이 성공적으로 등록되었습니다.",
-                    mapOf(
-                        "id" to subscription.id,
+                    mapOf<String, Any>(
+                        "id" to (subscription.id ?: 0L),
                         "name" to subscription.name,
                         "email" to subscription.email,
                         "isEmailConsent" to subscription.isEmailConsent,

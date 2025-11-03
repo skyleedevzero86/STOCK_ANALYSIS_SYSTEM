@@ -1,31 +1,41 @@
 package com.sleekydz86.backend.global.security
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.security.core.AuthenticationException
-import org.springframework.security.web.AuthenticationEntryPoint
+import org.springframework.security.web.server.ServerAuthenticationEntryPoint
 import org.springframework.stereotype.Component
+import org.springframework.web.server.ServerWebExchange
+import reactor.core.publisher.Mono
+import java.time.LocalDateTime
 
 @Component
-class JwtAuthenticationEntryPoint : AuthenticationEntryPoint {
+class JwtAuthenticationEntryPoint(
+    private val objectMapper: ObjectMapper
+) : ServerAuthenticationEntryPoint {
 
     override fun commence(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        authException: AuthenticationException
-    ) {
-        response.contentType = MediaType.APPLICATION_JSON_VALUE
-        response.status = HttpServletResponse.SC_UNAUTHORIZED
+        exchange: ServerWebExchange,
+        ex: AuthenticationException
+    ): Mono<Void> {
+        val response: ServerHttpResponse = exchange.response
+        response.statusCode = HttpStatus.UNAUTHORIZED
+        response.headers.contentType = MediaType.APPLICATION_JSON
 
         val body = mapOf(
-            "status" to HttpServletResponse.SC_UNAUTHORIZED,
+            "timestamp" to LocalDateTime.now().toString(),
+            "status" to HttpStatus.UNAUTHORIZED.value(),
             "error" to "Unauthorized",
             "message" to "Authentication required",
-            "path" to request.servletPath
+            "path" to (exchange.request.path.toString())
         )
 
-        ObjectMapper().writeValue(response.outputStream, body)
+        val buffer = response.bufferFactory().wrap(
+            objectMapper.writeValueAsBytes(body)
+        )
+
+        return response.writeWith(Mono.just(buffer))
     }
 }

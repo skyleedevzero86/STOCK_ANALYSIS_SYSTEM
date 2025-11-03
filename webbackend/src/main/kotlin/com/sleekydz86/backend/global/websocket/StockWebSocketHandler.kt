@@ -22,58 +22,110 @@ class StockWebSocketHandler(
     private val logger = LoggerFactory.getLogger(StockWebSocketHandler::class.java)
 
     override fun handle(session: WebSocketSession): Mono<Void> {
-        return try {
-            stockAnalysisService.getRealtimeAnalysisStream()
-                .onErrorResume { error ->
-                    
-                    handleWebSocketError(session, error).thenMany(Flux.empty())
-                }
-                .map { analysis ->
-                    try {
-                        analysis.toJsonMessage()
-                    } catch (e: Exception) {
-                        throw WebSocketException("Failed to serialize analysis data", e)
-                    }
-                }
-                .onErrorResume { error ->
-                    
-                    Flux.just(createErrorMessage(error.message ?: "Serialization error"))
-                }
-                .map { json -> session.textMessage(json) }
-                .let { messages ->
-                    session.send(messages)
-                        .onErrorResume { error ->
-                            
-                            logger.error("WebSocket send error", error)
-                            Mono.empty()
+        logger.info("WebSocket connection attempt from session: ${session.id}")
+        
+        return Mono.defer {
+            logger.debug("Starting WebSocket handler for session: ${session.id}")
+
+            val welcomeMessage = createWelcomeMessage()
+
+            val analysisStreamJson: Flux<String> = try {
+                stockAnalysisService.getRealtimeAnalysisStream()
+                    .map { analysis ->
+                        try {
+                            analysis.toJsonMessage()
+                        } catch (e: Exception) {
+                            logger.error("Failed to serialize analysis data for session ${session.id}", e)
+                            createErrorMessage("Serialization error: ${e.message ?: "Unknown error"}")
                         }
+                    }
+                    .onErrorResume { error ->
+                        logger.error("Error in stock analysis stream for session ${session.id}", error)
+
+                        Flux.interval(Duration.ofSeconds(5))
+                            .map { createErrorMessage("Analysis stream error: ${error.message ?: error.javaClass.simpleName}") }
+                    }
+            } catch (e: Exception) {
+                logger.error("Failed to create analysis stream for session ${session.id}", e)
+
+                Flux.interval(Duration.ofSeconds(10))
+                    .map { createErrorMessage("Analysis service unavailable: ${e.message ?: e.javaClass.simpleName}") }
+            }
+
+            val messageStream = Flux.concat(
+                Flux.just(welcomeMessage),
+                analysisStreamJson
+            )
+            .map { json -> session.textMessage(json) }
+            .doOnError { error ->
+                logger.error("Error in WebSocket message stream for session ${session.id}", error)
+            }
+            
+            session.send(messageStream)
+                .doOnSubscribe { 
+                    logger.info("WebSocket session started: ${session.id}")
+                }
+                .doOnSuccess {
+                    logger.debug("WebSocket session successfully established: ${session.id}")
+                }
+                .doOnError { error ->
+                    logger.error("WebSocket send error for session ${session.id}", error)
+                }
+                .doOnTerminate {
+                    logger.info("WebSocket session terminated: ${session.id}")
                 }
                 .timeout(Duration.ofMinutes(30))
                 .onErrorResume { error ->
-                    
-                    logger.warn("WebSocket timeout", error)
+                    logger.warn("WebSocket timeout for session ${session.id}", error)
+
                     Mono.empty()
                 }
-                .doOnSubscribe { 
-                    logger.debug("WebSocket session started: ${session.id}")
-                }
-                .doOnTerminate {
-                    logger.debug("WebSocket session terminated: ${session.id}")
-                }
-        } catch (e: Exception) {
-            logger.error("WebSocket handler initialization error", e)
-            handleWebSocketError(session, e)
+        }
+        .onErrorResume { error ->
+            logger.error("WebSocket handler error for session ${session.id}", error)
+
+            try {
+                val errorMessage = createErrorMessage("WebSocket handler error: ${error.message ?: error.javaClass.simpleName}")
+                session.send(Mono.just(session.textMessage(errorMessage)))
+                    .timeout(Duration.ofSeconds(5))
+                    .onErrorResume {
+                        Mono.empty()
+                    }
+            } catch (e: Exception) {
+                logger.error("Failed to send error message for session ${session.id}", e)
+                Mono.empty()
+            }
         }
     }
     
     private fun createErrorMessage(message: String): String {
-        return objectMapper.writeValueAsString(
-            mapOf(
-                "type" to "error",
-                "message" to message,
-                "timestamp" to System.currentTimeMillis()
+        return try {
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "type" to "error",
+                    "message" to message,
+                    "timestamp" to System.currentTimeMillis()
+                )
             )
-        )
+        } catch (e: Exception) {
+            logger.error("Failed to create error message JSON", e)
+            """{"type":"error","message":"$message","timestamp":${System.currentTimeMillis()}}"""
+        }
+    }
+    
+    private fun createWelcomeMessage(): String {
+        return try {
+            objectMapper.writeValueAsString(
+                mapOf(
+                    "type" to "welcome",
+                    "message" to "WebSocket connection established",
+                    "timestamp" to System.currentTimeMillis()
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("Failed to create welcome message JSON", e)
+            """{"type":"welcome","message":"WebSocket connected","timestamp":${System.currentTimeMillis()}}"""
+        }
     }
 
     private fun TechnicalAnalysis.toJsonMessage(): String =

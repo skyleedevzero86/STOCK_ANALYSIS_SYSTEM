@@ -25,7 +25,18 @@ class WebFluxExceptionHandler(
         val response = exchange.response
         val bufferFactory = response.bufferFactory()
 
-        logger.error("Global error handler caught exception for path: ${exchange.request.path}", ex)
+        val path = try {
+            exchange.request.path.toString().takeIf { it.isNotBlank() } ?: exchange.request.uri.path
+        } catch (e: Exception) {
+            logger.warn("Error extracting path from request: ${e.message}")
+            exchange.request.uri?.path ?: "unknown"
+        }
+        
+        logger.error("Global error handler caught exception for path: $path", ex)
+        logger.error("Exception type: ${ex.javaClass.name}, message: ${ex.message}", ex)
+        if (ex.cause != null) {
+            logger.error("Exception cause: ${ex.cause?.javaClass?.name}, message: ${ex.cause?.message}", ex.cause)
+        }
 
         val errorResponse = when (ex) {
             is ResponseStatusException -> {
@@ -34,7 +45,7 @@ class WebFluxExceptionHandler(
                     status = ex.statusCode.value(),
                     error = ex.statusCode.toString(),
                     message = ex.reason ?: ex.message ?: "Error occurred",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
             is ExternalApiException -> {
@@ -43,7 +54,7 @@ class WebFluxExceptionHandler(
                     status = 503,
                     error = "External API Error",
                     message = ex.message ?: "External service unavailable",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
             is DataProcessingException -> {
@@ -52,7 +63,7 @@ class WebFluxExceptionHandler(
                     status = 500,
                     error = "Data Processing Error",
                     message = ex.message ?: "Error processing data",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
             is InvalidSymbolException -> {
@@ -61,7 +72,7 @@ class WebFluxExceptionHandler(
                     status = 400,
                     error = "Invalid Symbol",
                     message = ex.message ?: "Invalid stock symbol",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
             is StockNotFoundException -> {
@@ -70,7 +81,7 @@ class WebFluxExceptionHandler(
                     status = 404,
                     error = "Stock Not Found",
                     message = ex.message ?: "Stock not found",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
             else -> {
@@ -79,7 +90,7 @@ class WebFluxExceptionHandler(
                     status = 500,
                     error = "Internal Server Error",
                     message = ex.message ?: ex.javaClass.simpleName ?: "An unexpected error occurred",
-                    path = exchange.request.path.toString()
+                    path = path
                 )
             }
         }

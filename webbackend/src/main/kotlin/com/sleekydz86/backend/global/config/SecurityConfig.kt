@@ -1,30 +1,26 @@
 package com.sleekydz86.backend.global.config
 
 import com.sleekydz86.backend.global.security.JwtAuthenticationEntryPoint
-import com.sleekydz86.backend.global.security.JwtAuthenticationFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
-import org.springframework.security.config.annotation.web.builders.HttpSecurity
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
-import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity
+import org.springframework.security.config.web.server.ServerHttpSecurity
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
-import org.springframework.security.web.SecurityFilterChain
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
-import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.security.web.server.SecurityWebFilterChain
+import org.springframework.web.cors.reactive.CorsConfigurationSource
 import org.springframework.context.annotation.Lazy
 
 @Configuration
-@EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@EnableWebFluxSecurity
+@EnableReactiveMethodSecurity
 class SecurityConfig(
     @Lazy private val userDetailsService: UserDetailsService,
-    @Lazy private val jwtAuthenticationFilter: JwtAuthenticationFilter,
     private val jwtAuthenticationEntryPoint: JwtAuthenticationEntryPoint,
     private val corsConfigurationSource: CorsConfigurationSource
 ) {
@@ -48,34 +44,33 @@ class SecurityConfig(
     }
 
     @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain {
-        http.cors { it.configurationSource(corsConfigurationSource) }
+    fun springSecurityFilterChain(http: ServerHttpSecurity): SecurityWebFilterChain {
+        return http
             .csrf { it.disable() }
-            .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .authorizeHttpRequests { authz ->
-                authz
-
-                    .requestMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
-                                   "/email-subscription", "/template-management").permitAll()
-                    .requestMatchers("/css/**", "/js/**", "/*.html", "/*.css", "/*.js",
-                                   "/*.png", "/*.jpg", "/*.gif", "/*.ico",
-                                   "/*.svg").permitAll()
-                    .requestMatchers("/api/auth/**").permitAll()
-                    .requestMatchers("/api/public/**").permitAll()
-                    .requestMatchers("/ws/**").permitAll()
-                    .requestMatchers("/actuator/health").permitAll()
-                    .requestMatchers("/api/stocks/**").permitAll()
-                    .requestMatchers("/api/cqrs/stocks/**").permitAll()
-                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                    .requestMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
-                    .requestMatchers("/api/templates/**").hasRole("ADMIN")
-                    .requestMatchers("/api/ai-analysis/**").hasAnyRole("USER", "ADMIN")
-                    .requestMatchers("/api/ai-email/**").hasRole("ADMIN")
-                    .anyRequest().authenticated()
+            .cors { it.configurationSource(corsConfigurationSource) }
+            .exceptionHandling { exceptions ->
+                exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint)
             }
-            .exceptionHandling { it.authenticationEntryPoint(jwtAuthenticationEntryPoint) }
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
-
-        return http.build()
+            .authorizeExchange { exchanges ->
+                exchanges
+                    .pathMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
+                                 "/email-subscription", "/template-management").permitAll()
+                    .pathMatchers("/css/**", "/js/**", "/*.html", "/*.css", "/*.js",
+                                 "/*.png", "/*.jpg", "/*.gif", "/*.ico",
+                                 "/*.svg").permitAll()
+                    .pathMatchers("/api/auth/**").permitAll()
+                    .pathMatchers("/api/public/**").permitAll()
+                    .pathMatchers("/ws/**").permitAll()
+                    .pathMatchers("/actuator/health").permitAll()
+                    .pathMatchers("/api/stocks/**").permitAll()
+                    .pathMatchers("/api/cqrs/stocks/**").permitAll()
+                    .pathMatchers("/api/admin/**").hasRole("ADMIN")
+                    .pathMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
+                    .pathMatchers("/api/templates/**").hasRole("ADMIN")
+                    .pathMatchers("/api/ai-analysis/**").hasAnyRole("USER", "ADMIN")
+                    .pathMatchers("/api/ai-email/**").hasRole("ADMIN")
+                    .anyExchange().authenticated()
+            }
+            .build()
     }
 }

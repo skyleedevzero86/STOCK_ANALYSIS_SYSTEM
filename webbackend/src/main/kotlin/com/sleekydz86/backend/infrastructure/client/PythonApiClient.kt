@@ -18,27 +18,100 @@ class PythonApiClient(
     private val webClient = WebClient.builder()
         .baseUrl(baseUrl)
         .build()
+    
+    init {
+        logger.info("PythonApiClient initialized with baseUrl: $baseUrl")
+        logger.debug("WebClient configured for Python API at: $baseUrl")
+    }
 
     private val mapToStockData: (Map<*, *>) -> StockData = { data ->
-        StockData(
-            symbol = data["symbol"] as String,
-            currentPrice = (data["currentPrice"] as? Number ?: data["price"] as Number).toDouble(),
-            volume = (data["volume"] as Number).toLong(),
-            changePercent = (data["changePercent"] as? Number ?: data["change_percent"] as Number).toDouble(),
-            timestamp = LocalDateTime.now(),
-            confidenceScore = (data["confidenceScore"] as? Number ?: data["confidence_score"] as? Number)?.toDouble()
-        )
+        try {
+            logger.debug("Mapping stock data from Python API response. Keys: ${data.keys}, Data: $data")
+            
+            val symbol = (data["symbol"] as? String) ?: throw IllegalArgumentException("Missing or invalid symbol field: $data")
+            
+            val currentPrice = try {
+                val priceValue = (data["currentPrice"] as? Number) ?: (data["price"] as? Number)
+                if (priceValue == null) {
+                    logger.error("Price field missing or null in data: $data")
+                    throw IllegalArgumentException("Missing or invalid price field")
+                }
+                priceValue.toDouble()
+            } catch (e: Exception) {
+                logger.error("Error parsing price from data: $data", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid price data format: ${e.message}", e)
+            }
+            
+            val volume = try {
+                val volumeValue = data["volume"]
+                logger.debug("Volume value: $volumeValue (type: ${volumeValue?.javaClass?.name})")
+                when (volumeValue) {
+                    is Number -> volumeValue.toLong()
+                    null -> {
+                        logger.warn("Volume is null, defaulting to 0L")
+                        0L
+                    }
+                    else -> {
+                        logger.warn("Volume is not a Number (type: ${volumeValue.javaClass.name}), attempting conversion")
+                        (volumeValue as? Number)?.toLong() ?: 0L
+                    }
+                }
+            } catch (e: Exception) {
+                logger.error("Error parsing volume from data: $data", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid volume data format: ${e.message}", e)
+            }
+            
+            val changePercent = try {
+                val changePercentValue = (data["changePercent"] as? Number) ?: (data["change_percent"] as? Number)
+                if (changePercentValue == null) {
+                    logger.error("ChangePercent field missing or null in data: $data")
+                    throw IllegalArgumentException("Missing or invalid changePercent field")
+                }
+                changePercentValue.toDouble()
+            } catch (e: Exception) {
+                logger.error("Error parsing changePercent from data: $data", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid changePercent data format: ${e.message}", e)
+            }
+            
+            val confidenceScore = (data["confidenceScore"] as? Number ?: data["confidence_score"] as? Number)?.toDouble()
+            
+            logger.debug("Successfully mapped stock data: symbol=$symbol, price=$currentPrice, volume=$volume, changePercent=$changePercent")
+            
+            StockData(
+                symbol = symbol,
+                currentPrice = currentPrice,
+                volume = volume,
+                changePercent = changePercent,
+                timestamp = LocalDateTime.now(),
+                confidenceScore = confidenceScore
+            )
+        } catch (e: Exception) {
+            logger.error("Error mapping stock data from Python API response. Data: $data", e)
+            logger.error("Exception type: ${e.javaClass.name}, message: ${e.message}", e)
+            if (e is com.sleekydz86.backend.global.exception.DataProcessingException) {
+                throw e
+            }
+            throw com.sleekydz86.backend.global.exception.DataProcessingException(
+                "Failed to parse stock data from Python API: ${e.message}. Response data: $data",
+                e
+            )
+        }
     }
 
     val getRealtimeData: (String) -> Mono<StockData> = { symbol ->
-        logger.debug("Requesting realtime data for symbol: $symbol from $baseUrl")
+        val url = "$baseUrl/api/realtime/$symbol"
+        logger.info("Requesting realtime data for symbol: $symbol from $url")
+        
         webClient.get()
             .uri("/api/realtime/{symbol}", symbol)
             .retrieve()
             .onStatus({ status -> status.is5xxServerError || status.is4xxClientError }, { response ->
-                logger.error("Python API 서버 HTTP 오류: ${response.statusCode()} (symbol: $symbol, url: $baseUrl/api/realtime/$symbol)")
+                logger.error("Python API 서버 HTTP 오류: ${response.statusCode()} (symbol: $symbol, url: $url)")
                 response.bodyToMono(String::class.java)
                     .defaultIfEmpty("")
+                    .doOnNext { body ->
+                        logger.error("Python API error response body: $body")
+                    }
                     .flatMap { body ->
                         Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
                             "Python API 서버 오류 (${response.statusCode()}): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}. Python API 서버 로그를 확인하세요."
@@ -46,10 +119,40 @@ class PythonApiClient(
                     }
             })
             .bodyToMono(Map::class.java)
-            .map(mapToStockData)
+            .doOnNext { data ->
+                logger.info("Received response from Python API for symbol $symbol. Response keys: ${data.keys}")
+                logger.debug("Full response data: $data")
+            }
+            .flatMap { data ->
+                try {
+                    logger.debug("Parsing stock data for symbol: $symbol")
+                    val stockData = mapToStockData(data)
+                    logger.info("Successfully parsed stock data for symbol: $symbol")
+                    Mono.just(stockData)
+                } catch (e: Exception) {
+                    logger.error("Error parsing stock data response for symbol: $symbol", e)
+                    logger.error("Exception type: ${e.javaClass.name}, message: ${e.message}")
+                    logger.error("Response data that failed to parse: $data")
+                    logger.error("Response data type: ${data.javaClass.name}")
+                    logger.error("Response data keys: ${data.keys}")
+                    Mono.error(
+                        when (e) {
+                            is com.sleekydz86.backend.global.exception.DataProcessingException -> e
+                            else -> com.sleekydz86.backend.global.exception.DataProcessingException(
+                                "Failed to parse stock data from Python API response: ${e.message}. Response data: $data",
+                                e
+                            )
+                        }
+                    )
+                }
+            }
             .timeout(java.time.Duration.ofSeconds(10))
             .doOnError { error ->
                 logger.error("Failed to get realtime data for symbol: $symbol from $baseUrl", error)
+                logger.error("Error type: ${error.javaClass.name}, message: ${error.message}")
+                if (error.cause != null) {
+                    logger.error("Error cause: ${error.cause?.javaClass?.name}, message: ${error.cause?.message}", error.cause)
+                }
             }
             .onErrorMap { error ->
                 when (error) {
@@ -61,20 +164,33 @@ class PythonApiClient(
                         )
                     }
                     is org.springframework.web.reactive.function.client.WebClientException -> {
-                        logger.error("Python API 서버 연결 실패: $baseUrl (symbol: $symbol). 서버가 실행 중인지 확인하세요.")
+                        logger.error("Python API 서버 연결 실패: $baseUrl (symbol: $symbol)", error)
+                        logger.error("WebClientException details: ${error.message}")
                         com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 서버 연결 실패: ${baseUrl}. 서버가 실행 중인지 확인하세요. (서버 시작: python start_python_api.py 또는 uvicorn api_server:app --port 9000)",
+                            "Python API 서버 연결 실패: ${baseUrl}. 서버가 실행 중인지 확인하세요. (서버 시작: python start_python_api.py 또는 uvicorn api_server:app --port 9000). Error: ${error.message}",
                             error
                         )
+                    }
+                    is com.fasterxml.jackson.databind.JsonMappingException,
+                    is com.fasterxml.jackson.core.JsonParseException -> {
+                        logger.error("JSON 파싱 오류: $baseUrl (symbol: $symbol)", error)
+                        com.sleekydz86.backend.global.exception.DataProcessingException(
+                            "Python API 서버 응답 형식 오류: JSON 파싱 실패. Error: ${error.message}",
+                            error
+                        )
+                    }
+                    is com.sleekydz86.backend.global.exception.DataProcessingException -> {
+                        logger.error("DataProcessingException for symbol: $symbol", error)
+                        error
                     }
                     else -> {
                         // 이미 ExternalApiException으로 변환된 경우 그대로 반환
                         if (error is com.sleekydz86.backend.global.exception.ExternalApiException) {
                             error
                         } else {
-                            logger.error("Python API 서버 오류: ${error.message} (symbol: $symbol)")
+                            logger.error("Unexpected Python API 서버 오류: ${error.message} (symbol: $symbol, type: ${error.javaClass.name})", error)
                             com.sleekydz86.backend.global.exception.ExternalApiException(
-                                "Python API 서버 오류: ${error.message}",
+                                "Python API 서버 오류: ${error.message ?: error.javaClass.simpleName}",
                                 error
                             )
                         }

@@ -69,7 +69,21 @@ class StockDashboard {
 
         } catch (error) {
             console.error("데이터 로드 실패:", error);
-            this.showError("데이터를 불러올 수 없습니다.");
+            if (error.response) {
+
+                console.error("서버 응답 상태:", error.response.status);
+                console.error("서버 응답 데이터:", error.response.data);
+                const errorMessage = error.response.data?.message || error.response.data?.error || "알 수 없는 오류";
+                this.showError(`데이터를 불러올 수 없습니다: ${errorMessage}`);
+            } else if (error.request) {
+
+                console.error("서버 응답 없음:", error.request);
+                this.showError("서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.");
+            } else {
+
+                console.error("요청 설정 오류:", error.message);
+                this.showError(`데이터를 불러올 수 없습니다: ${error.message}`);
+            }
         }
     }
 

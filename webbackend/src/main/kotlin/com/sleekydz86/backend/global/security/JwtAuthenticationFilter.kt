@@ -1,52 +1,66 @@
 package com.sleekydz86.backend.global.security
 
-import jakarta.servlet.FilterChain
-import jakarta.servlet.http.HttpServletRequest
-import jakarta.servlet.http.HttpServletResponse
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.core.context.ReactiveSecurityContextHolder
+import org.springframework.security.core.context.SecurityContext
+import org.springframework.security.core.context.SecurityContextImpl
 import org.springframework.security.core.userdetails.UserDetailsService
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource
 import org.springframework.stereotype.Component
-import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.server.ServerWebExchange
+import org.springframework.web.server.WebFilter
+import org.springframework.web.server.WebFilterChain
+import reactor.core.publisher.Mono
 
 @Component
 class JwtAuthenticationFilter(
     private val jwtUtil: JwtUtil,
     private val userDetailsService: UserDetailsService
-) : OncePerRequestFilter() {
+) : WebFilter {
 
     companion object {
         private const val BEARER_PREFIX = "Bearer "
         private const val AUTHORIZATION_HEADER = "Authorization"
     }
 
-    override fun doFilterInternal(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        filterChain: FilterChain
-    ) {
-        val authHeader = request.getHeader(AUTHORIZATION_HEADER)
+    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
+        val authHeader = exchange.request.headers.getFirst(AUTHORIZATION_HEADER)
 
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             val token = authHeader.substring(BEARER_PREFIX.length)
 
             if (jwtUtil.validateToken(token)) {
-                val username = jwtUtil.extractUsername(token)
-                val userDetails = userDetailsService.loadUserByUsername(username)
-
-                if (jwtUtil.validateToken(token, userDetails)) {
-                    val authToken = UsernamePasswordAuthenticationToken(
-                        userDetails,
-                        null,
-                        userDetails.authorities
-                    )
-                    authToken.details = WebAuthenticationDetailsSource().buildDetails(request)
-                    SecurityContextHolder.getContext().authentication = authToken
+                return Mono.fromCallable {
+                    jwtUtil.extractUsername(token)
+                }
+                .flatMap { username ->
+                    Mono.fromCallable {
+                        userDetailsService.loadUserByUsername(username)
+                    }
+                    .flatMap { userDetails ->
+                        if (jwtUtil.validateToken(token, userDetails)) {
+                            val authToken = UsernamePasswordAuthenticationToken(
+                                userDetails,
+                                null,
+                                userDetails.authorities
+                            )
+                            
+                            val securityContext: SecurityContext = SecurityContextImpl().apply {
+                                authentication = authToken
+                            }
+                            
+                            ReactiveSecurityContextHolder.withContext(Mono.just(securityContext))
+                                .then(chain.filter(exchange))
+                        } else {
+                            chain.filter(exchange)
+                        }
+                    }
+                }
+                .onErrorResume {
+                    chain.filter(exchange)
                 }
             }
         }
 
-        filterChain.doFilter(request, response)
+        return chain.filter(exchange)
     }
 }

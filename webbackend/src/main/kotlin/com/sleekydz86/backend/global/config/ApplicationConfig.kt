@@ -12,7 +12,6 @@ import java.util.HashMap
 @Configuration
 class ApplicationConfig(
     private val stockRoutes: RouterFunction<ServerResponse>,
-    private val webSocketRoutes: RouterFunction<ServerResponse>,
     private val stockWebSocketHandler: StockWebSocketHandler
 ) {
 
@@ -32,5 +31,5 @@ class ApplicationConfig(
 
     @Bean
     fun allRoutes(): RouterFunction<ServerResponse> =
-        stockRoutes.and(webSocketRoutes)
+        stockRoutes
 }

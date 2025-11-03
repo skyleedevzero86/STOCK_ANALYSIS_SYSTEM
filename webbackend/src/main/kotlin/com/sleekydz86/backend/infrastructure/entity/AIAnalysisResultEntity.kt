@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.infrastructure.entity
 
+import com.sleekydz86.backend.domain.model.AIAnalysisResult
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -25,8 +26,8 @@ data class AIAnalysisResultEntity(
     @Column(name = "created_at")
     val createdAt: LocalDateTime = LocalDateTime.now()
 ) {
-    fun toDomain(): com.stockanalysis.domain.model.AIAnalysisResult {
-        return com.stockanalysis.domain.model.AIAnalysisResult(
+    fun toDomain(): AIAnalysisResult {
+        return AIAnalysisResult(
             id = this.id,
             symbol = this.symbol,
             analysisType = this.analysisType,
@@ -41,7 +42,7 @@ data class AIAnalysisResultEntity(
     }
 
     companion object {
-        fun fromDomain(domain: com.stockanalysis.domain.model.AIAnalysisResult): AIAnalysisResultEntity {
+        fun fromDomain(domain: AIAnalysisResult): AIAnalysisResultEntity {
             return AIAnalysisResultEntity(
                 id = domain.id ?: 0,
                 symbol = domain.symbol,

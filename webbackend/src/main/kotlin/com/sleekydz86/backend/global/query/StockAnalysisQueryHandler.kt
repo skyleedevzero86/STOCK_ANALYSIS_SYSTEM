@@ -26,6 +26,9 @@ class StockAnalysisQueryHandler(
                 Mono.just(QueryResult(
                     data = TechnicalAnalysis(
                         symbol = query.symbol,
+                        currentPrice = 0.0,
+                        volume = 0L,
+                        changePercent = 0.0,
                         trend = "unknown",
                         trendStrength = 0.0,
                         signals = TradingSignals("hold", 0.0, null, null, null),

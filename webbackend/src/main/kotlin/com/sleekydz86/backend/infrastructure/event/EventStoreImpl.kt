@@ -17,7 +17,7 @@ class EventStoreImpl : EventStore {
         return Mono.fromCallable {
             events.computeIfAbsent(aggregateId) { mutableListOf() }.add(event)
             eventVersions[aggregateId] = version
-        }.then()
+        }.thenReturn(Unit)
     }
 
     override fun getEvents(aggregateId: String): Flux<StockEvent> {

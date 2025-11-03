@@ -30,7 +30,7 @@ class CacheAspect(
                         (joinPoint.proceed() as Mono<*>)
                             .cast(StockData::class.java)
                             .flatMap { stockData ->
-                                stockCacheService.setStockData(symbol, stockData, Duration.ofMinutes(cacheable.ttl))
+                                stockCacheService.setStockData(symbol, stockData, Duration.ofMinutes(cacheable.ttl.toLong()))
                                     .then(Mono.just(stockData))
                             }
                     )
@@ -42,7 +42,7 @@ class CacheAspect(
                         (joinPoint.proceed() as Mono<*>)
                             .cast(TechnicalAnalysis::class.java)
                             .flatMap { analysis ->
-                                stockCacheService.setStockAnalysis(symbol, analysis, Duration.ofMinutes(cacheable.ttl))
+                                stockCacheService.setStockAnalysis(symbol, analysis, Duration.ofMinutes(cacheable.ttl.toLong()))
                                     .then(Mono.just(analysis))
                             }
                     )
@@ -55,7 +55,7 @@ class CacheAspect(
                         (joinPoint.proceed() as Mono<*>)
                             .cast(HistoricalData::class.java)
                             .flatMap { historicalData ->
-                                stockCacheService.setHistoricalData(symbol, days, historicalData, Duration.ofMinutes(cacheable.ttl))
+                                stockCacheService.setHistoricalData(symbol, days, historicalData, Duration.ofMinutes(cacheable.ttl.toLong()))
                                     .then(Mono.just(historicalData))
                             }
                     )
@@ -66,7 +66,7 @@ class CacheAspect(
                         (joinPoint.proceed() as Mono<*>)
                             .cast(List::class.java)
                             .flatMap { symbols ->
-                                stockCacheService.setAvailableSymbols(symbols as List<String>, Duration.ofMinutes(cacheable.ttl))
+                                stockCacheService.setAvailableSymbols(symbols as List<String>, Duration.ofMinutes(cacheable.ttl.toLong()))
                                     .then(Mono.just(symbols))
                             }
                     )
@@ -77,9 +77,9 @@ class CacheAspect(
                         (joinPoint.proceed() as Flux<*>)
                             .cast(StockData::class.java)
                             .collectList()
-                            .flatMap { stockDataList ->
-                                stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(cacheable.ttl))
-                                    .then(Flux.fromIterable(stockDataList))
+                            .flatMapMany { stockDataList ->
+                                stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(cacheable.ttl.toLong()))
+                                    .thenMany(Flux.fromIterable(stockDataList))
                             }
                     )
             }
@@ -89,9 +89,9 @@ class CacheAspect(
                         (joinPoint.proceed() as Flux<*>)
                             .cast(TechnicalAnalysis::class.java)
                             .collectList()
-                            .flatMap { analysisList ->
-                                stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(cacheable.ttl))
-                                    .then(Flux.fromIterable(analysisList))
+                            .flatMapMany { analysisList ->
+                                stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(cacheable.ttl.toLong()))
+                                    .thenMany(Flux.fromIterable(analysisList))
                             }
                     )
             }

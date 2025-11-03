@@ -4,6 +4,7 @@ import com.sleekydz86.backend.domain.cqrs.query.QueryResult
 import com.sleekydz86.backend.domain.cqrs.query.StockQuery
 import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
+import java.lang.reflect.ParameterizedType
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
@@ -24,9 +25,17 @@ class QueryBusImpl : QueryBus {
     override fun register(handler: QueryHandler<*, *>) {
         val queryType = handler::class.java
             .genericInterfaces
-            .firstOrNull { it.typeName.contains("QueryHandler") }
-            ?.let { it.actualTypeArguments.firstOrNull() }
-            ?.let { Class.forName(it.typeName) }
+            .firstOrNull { it is ParameterizedType && it.rawType.typeName.contains("QueryHandler") }
+            ?.let { it as ParameterizedType }
+            ?.actualTypeArguments
+            ?.firstOrNull()
+            ?.let { typeArg ->
+                try {
+                    Class.forName(typeArg.typeName)
+                } catch (e: Exception) {
+                    null
+                }
+            }
 
         queryType?.let { handlers[it] = handler }
     }

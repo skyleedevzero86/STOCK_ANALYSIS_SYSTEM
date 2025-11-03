@@ -30,7 +30,7 @@ class EventPublisherImpl : EventPublisher {
                     }
                 }
             }
-        }.then()
+        }.thenReturn(Unit)
     }
 
     override fun publish(events: List<StockEvent>): Mono<Unit> {
@@ -49,7 +49,7 @@ class EventPublisherImpl : EventPublisher {
                     }
                 }
             }
-        }.then()
+        }.thenReturn(Unit)
     }
 }
 

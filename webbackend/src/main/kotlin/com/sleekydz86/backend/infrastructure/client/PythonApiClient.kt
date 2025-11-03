@@ -80,7 +80,7 @@ class PythonApiClient(
     }
 
     private val mapToFibonacciLevels: (Map<*, *>) -> FibonacciLevels = { fibMap ->
-        val levelsMap = (fibMap["levels"] as Map<*, *>).mapValues { (it.value as Number).toDouble() }
+        val levelsMap = (fibMap["levels"] as Map<*, *>).mapKeys { it.key.toString() }.mapValues { (it.value as Number).toDouble() }
         FibonacciLevels(
             levels = levelsMap,
             nearestLevel = fibMap["nearest_level"] as String,

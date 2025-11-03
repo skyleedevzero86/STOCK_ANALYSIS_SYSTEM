@@ -20,17 +20,19 @@ class CacheManager(
                     .flatMap { symbol ->
                         stockCacheService.getStockData(symbol)
                             .switchIfEmpty(
-                                stockCacheService.setStockData(
-                                    symbol,
-                                    com.stockanalysis.domain.model.StockData(
+                                Mono.just(
+                                    StockData(
                                         symbol = symbol,
                                         currentPrice = 0.0,
                                         volume = 0L,
                                         changePercent = 0.0,
                                         timestamp = LocalDateTime.now()
-                                    ),
-                                    Duration.ofMinutes(5)
+                                    )
                                 )
+                                .flatMap { stockData ->
+                                    stockCacheService.setStockData(symbol, stockData, Duration.ofMinutes(5))
+                                        .then(Mono.just(stockData))
+                                }
                             )
                     }
                     .then()

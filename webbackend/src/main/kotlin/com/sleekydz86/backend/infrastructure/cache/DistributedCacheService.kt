@@ -27,13 +27,14 @@ class DistributedCacheService(
 
     fun <T> set(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForValue().set(key, value, ttl.toMillis(), TimeUnit.MILLISECONDS)
+            redisTemplate.opsForValue().set(key, value as Any, ttl.toMillis(), TimeUnit.MILLISECONDS)
+            true
         }
     }
 
     fun <T> setIfAbsent(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForValue().setIfAbsent(key, value, ttl.toMillis(), TimeUnit.MILLISECONDS)
+            redisTemplate.opsForValue().setIfAbsent(key, value as Any, ttl.toMillis(), TimeUnit.MILLISECONDS) ?: false
         }
     }
 
@@ -66,7 +67,7 @@ class DistributedCacheService(
         }
     }
 
-    fun <T> getOrSet(key: String, type: Class<T>, supplier: () -> Mono<T>, ttl: Duration = Duration.ofMinutes(30)): Mono<T> {
+    fun <T : Any> getOrSet(key: String, type: Class<T>, supplier: () -> Mono<T>, ttl: Duration = Duration.ofMinutes(30)): Mono<T> {
         return get(key, type)
             .switchIfEmpty(
                 supplier()
@@ -77,17 +78,29 @@ class DistributedCacheService(
             )
     }
 
-    fun <T> getOrSetFlux(key: String, type: Class<T>, supplier: () -> Flux<T>, ttl: Duration = Duration.ofMinutes(30)): Flux<T> {
-        return get(key, type)
-            .switchIfEmpty(
-                supplier()
-                    .collectList()
-                    .flatMap { values ->
-                        set(key, values, ttl)
-                            .then(Mono.just(values))
-                    }
-            )
-            .flatMapMany { Flux.fromIterable(it as List<T>) }
+    fun <T : Any> getOrSetFlux(key: String, type: Class<T>, supplier: () -> Flux<T>, ttl: Duration = Duration.ofMinutes(30)): Flux<T> {
+        return Mono.fromCallable {
+            val value = redisTemplate.opsForValue().get(key)
+            if (value != null) {
+                val listType = objectMapper.typeFactory.constructCollectionType(List::class.java, type)
+                @Suppress("UNCHECKED_CAST")
+                objectMapper.convertValue(value, listType) as? List<T>
+            } else {
+                null
+            }
+        }
+            .flatMapMany { cachedList ->
+                if (cachedList != null) {
+                    Flux.fromIterable(cachedList)
+                } else {
+                    supplier()
+                        .collectList()
+                        .flatMapMany { values ->
+                            set(key, values, ttl)
+                                .thenMany(Flux.fromIterable(values))
+                        }
+                }
+            }
     }
 
     fun increment(key: String, delta: Long = 1L): Mono<Long> {
@@ -104,7 +117,7 @@ class DistributedCacheService(
 
     fun <T> hashGet(hashKey: String, field: String, type: Class<T>): Mono<T> {
         return Mono.fromCallable {
-            val value = redisTemplate.opsForHash().get(hashKey, field)
+            val value: Any? = redisTemplate.opsForHash<String, Any, Any>().get(hashKey, field)
             if (value != null) {
                 objectMapper.convertValue(value, type)
             } else {
@@ -115,7 +128,7 @@ class DistributedCacheService(
 
     fun <T> hashSet(hashKey: String, field: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForHash().put(hashKey, field, value)
+            redisTemplate.opsForHash<String, Any, Any>().put(hashKey, field, value as Any)
             redisTemplate.expire(hashKey, ttl.toMillis(), TimeUnit.MILLISECONDS)
             true
         }
@@ -123,16 +136,16 @@ class DistributedCacheService(
 
     fun hashDelete(hashKey: String, field: String): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForHash().delete(hashKey, field)
+            redisTemplate.opsForHash<String, Any, Any>().delete(hashKey, field)
             true
         }
     }
 
     fun <T> listPush(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Long> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForList().rightPush(key, value)
+            val result = redisTemplate.opsForList<String, Any>().rightPush(key, value as Any)
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
-            result
+            result ?: 0L
         }
     }
 
@@ -158,9 +171,9 @@ class DistributedCacheService(
 
     fun setAdd(key: String, value: Any, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForSet().add(key, value)
+            val result = redisTemplate.opsForSet<String, Any>().add(key, value)
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
-            result > 0
+            (result ?: 0L) > 0
         }
     }
 
@@ -175,8 +188,8 @@ class DistributedCacheService(
 
     fun setRemove(key: String, value: Any): Mono<Boolean> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForSet().remove(key, value)
-            result > 0
+            val result = redisTemplate.opsForSet<String, Any>().remove(key, value)
+            (result ?: 0L) > 0
         }
     }
 }

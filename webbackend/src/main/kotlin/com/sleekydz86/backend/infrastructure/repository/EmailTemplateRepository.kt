@@ -7,5 +7,4 @@ import org.springframework.stereotype.Repository
 @Repository
 interface EmailTemplateRepository : JpaRepository<EmailTemplateEntity, Long> {
     fun findAllByIsActiveTrue(): List<EmailTemplateEntity>
-    fun findById(id: Long): EmailTemplateEntity?
 }

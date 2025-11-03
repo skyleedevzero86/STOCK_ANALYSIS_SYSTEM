@@ -1,6 +1,9 @@
 package com.sleekydz86.backend.global.handler
 
 import com.sleekydz86.backend.domain.model.TechnicalAnalysis
+import com.sleekydz86.backend.domain.model.TradingSignals
+import com.sleekydz86.backend.domain.model.Anomaly
+import java.time.LocalDateTime
 import com.sleekydz86.backend.domain.service.StockAnalysisService
 import com.sleekydz86.backend.global.exception.DataProcessingException
 import com.sleekydz86.backend.global.exception.ExternalApiException
@@ -196,20 +199,27 @@ class StockHandler(
                             is WebSocketException ->
                                 Flux.just(TechnicalAnalysis(
                                     symbol = "ERROR",
-                                    timestamp = System.currentTimeMillis(),
-                                    rsi = 0.0,
-                                    macd = 0.0,
-                                    sma20 = 0.0,
-                                    sma50 = 0.0,
-                                    ema12 = 0.0,
-                                    ema26 = 0.0,
-                                    bollingerUpper = 0.0,
-                                    bollingerLower = 0.0,
-                                    bollingerMiddle = 0.0,
-                                    volume = 0.0,
-                                    price = 0.0,
-                                    change = 0.0,
-                                    changePercent = 0.0
+                                    currentPrice = 0.0,
+                                    volume = 0L,
+                                    changePercent = 0.0,
+                                    trend = "ERROR",
+                                    trendStrength = 0.0,
+                                    signals = TradingSignals(
+                                        signal = "ERROR",
+                                        confidence = 0.0,
+                                        rsi = null,
+                                        macd = null,
+                                        macdSignal = null
+                                    ),
+                                    anomalies = listOf(
+                                        Anomaly(
+                                            type = "WebSocket Error",
+                                            severity = "HIGH",
+                                            message = error.message ?: "WebSocket connection error",
+                                            timestamp = LocalDateTime.now()
+                                        )
+                                    ),
+                                    timestamp = LocalDateTime.now()
                                 ))
                             else ->
                                 Flux.error(error)

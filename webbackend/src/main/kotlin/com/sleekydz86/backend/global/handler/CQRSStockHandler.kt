@@ -4,6 +4,7 @@ import com.sleekydz86.backend.application.command.CommandBus
 import com.sleekydz86.backend.domain.cqrs.command.StockCommand
 import com.sleekydz86.backend.domain.cqrs.query.StockQuery
 import com.sleekydz86.backend.global.query.QueryBus
+import org.springframework.core.ParameterizedTypeReference
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.server.ServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse
@@ -28,7 +29,7 @@ class CQRSStockHandler(
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -45,7 +46,7 @@ class CQRSStockHandler(
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -63,7 +64,7 @@ class CQRSStockHandler(
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -79,7 +80,7 @@ class CQRSStockHandler(
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -95,7 +96,7 @@ class CQRSStockHandler(
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -107,18 +108,19 @@ class CQRSStockHandler(
         return commandBus.send(command)
             .flatMap { result ->
                 if (result.success) {
-                    ServerResponse.ok().bodyValue(result.data)
+                    ServerResponse.ok().bodyValue(result.data ?: emptyMap<Any, Any>())
                 } else {
                     ServerResponse.badRequest().bodyValue(mapOf("error" to result.message))
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
     fun updateStockPrice(request: ServerRequest): Mono<ServerResponse> {
-        return request.bodyToMono<Map<String, Any>>()
+        val typeRef = object : ParameterizedTypeReference<Map<String, Any>>() {}
+        return request.bodyToMono(typeRef)
             .flatMap { body ->
                 val symbol = body["symbol"] as String
                 val price = (body["price"] as Number).toDouble()
@@ -128,14 +130,14 @@ class CQRSStockHandler(
                 commandBus.send(command)
                     .flatMap { result ->
                         if (result.success) {
-                            ServerResponse.ok().bodyValue(result.data)
+                            ServerResponse.ok().bodyValue(result.data ?: emptyMap<Any, Any>())
                         } else {
                             ServerResponse.badRequest().bodyValue(mapOf("error" to result.message))
                         }
                     }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 
@@ -147,13 +149,13 @@ class CQRSStockHandler(
         return commandBus.send(command)
             .flatMap { result ->
                 if (result.success) {
-                    ServerResponse.ok().bodyValue(result.data)
+                    ServerResponse.ok().bodyValue(result.data ?: emptyMap<Any, Any>())
                 } else {
                     ServerResponse.badRequest().bodyValue(mapOf("error" to result.message))
                 }
             }
             .onErrorResume { error ->
-                ServerResponse.badRequest().bodyValue(mapOf("error" to error.message))
+                ServerResponse.badRequest().bodyValue(mapOf("error" to (error.message ?: "Unknown error")))
             }
     }
 }

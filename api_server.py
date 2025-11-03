@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.openapi.utils import get_openapi
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import asyncio
 import json
 import logging
@@ -15,11 +15,14 @@ from analysis_engine.technical_analyzer import TechnicalAnalyzer
 from config.settings import settings
 
 class StockDataResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     symbol: str = Field(..., description="주식 심볼", example="AAPL")
     currentPrice: float = Field(..., description="현재 가격", example=150.25, alias="price")
     volume: int = Field(..., description="거래량", example=1000000)
     changePercent: float = Field(..., description="변동률 (%)", example=2.5, alias="change_percent")
     timestamp: datetime = Field(..., description="데이터 수집 시간")
+    confidenceScore: Optional[float] = Field(None, description="데이터 신뢰도", example=0.95, alias="confidence_score")
 
 class TradingSignalsResponse(BaseModel):
     signal: str = Field(..., description="매매 신호")
@@ -126,12 +129,22 @@ class StockAnalysisAPI:
             data = self.collector.get_realtime_data(symbol)
             if not data:
                 raise HTTPException(status_code=404, detail=f"Data not found for symbol: {symbol}")
+            
+            timestamp = data.get('timestamp')
+            if isinstance(timestamp, str):
+                try:
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except:
+                    timestamp = datetime.now()
+            elif timestamp is None:
+                timestamp = datetime.now()
+            
             return {
                 'symbol': data['symbol'],
                 'currentPrice': data['price'],
                 'volume': data.get('volume', 0),
                 'changePercent': data.get('change_percent', 0),
-                'timestamp': data.get('timestamp', datetime.now().isoformat()),
+                'timestamp': timestamp,
                 'confidenceScore': data.get('confidence_score', 0.95)
             }
         except Exception as e:

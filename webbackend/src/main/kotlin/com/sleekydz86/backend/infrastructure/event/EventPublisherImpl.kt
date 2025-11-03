@@ -1,5 +1,8 @@
 package com.sleekydz86.backend.infrastructure.event
 
+import com.sleekydz86.backend.domain.cqrs.event.EventHandler
+import com.sleekydz86.backend.domain.cqrs.event.EventPublisher
+import com.sleekydz86.backend.domain.cqrs.event.StockEvent
 import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
 import java.util.concurrent.CopyOnWriteArrayList

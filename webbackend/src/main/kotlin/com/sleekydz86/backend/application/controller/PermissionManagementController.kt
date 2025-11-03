@@ -4,6 +4,8 @@ import com.sleekydz86.backend.application.dto.CreatePermissionRequest
 import com.sleekydz86.backend.application.dto.PermissionResponse
 import com.sleekydz86.backend.application.dto.UpdatePermissionRequest
 import com.sleekydz86.backend.application.mapper.PermissionMapper
+import com.sleekydz86.backend.domain.model.Permission
+import com.sleekydz86.backend.domain.service.PermissionService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*

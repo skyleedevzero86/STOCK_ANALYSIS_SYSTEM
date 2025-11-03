@@ -2,6 +2,9 @@ package com.sleekydz86.backend.application.controller
 
 import com.sleekydz86.backend.application.dto.*
 import com.sleekydz86.backend.application.mapper.UserMapper
+import com.sleekydz86.backend.domain.model.User
+import com.sleekydz86.backend.domain.service.AuthService
+import com.sleekydz86.backend.domain.service.UserService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 

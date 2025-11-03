@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.infrastructure.client
 
+import com.sleekydz86.backend.domain.model.*
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.client.WebClient

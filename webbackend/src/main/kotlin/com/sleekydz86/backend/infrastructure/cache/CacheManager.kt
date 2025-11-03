@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.infrastructure.cache
 
+import com.sleekydz86.backend.domain.model.StockData
 import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux

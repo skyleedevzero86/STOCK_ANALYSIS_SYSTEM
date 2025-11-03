@@ -1,12 +1,17 @@
 package com.sleekydz86.backend.application.service
 
+import com.sleekydz86.backend.domain.model.HistoricalData
+import com.sleekydz86.backend.domain.model.StockData
+import com.sleekydz86.backend.domain.model.TechnicalAnalysis
 import com.sleekydz86.backend.domain.service.StockAnalysisService
-import org.springframework.cache.CacheManager
+import com.sleekydz86.backend.infrastructure.cache.CacheAnnotation
+import com.sleekydz86.backend.infrastructure.cache.CacheManager
+import com.sleekydz86.backend.infrastructure.cache.CacheType
+import com.sleekydz86.backend.infrastructure.cache.StockCacheService
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux
 import java.time.Duration
-import com.sleekydz86.backend.infrastructure.cache.*
 
 @Service
 class CachedStockAnalysisService(

@@ -1,5 +1,8 @@
 package com.sleekydz86.backend.application.controller
 
+import com.sleekydz86.backend.domain.model.EmailTemplate
+import com.sleekydz86.backend.domain.model.TemplateRequest
+import com.sleekydz86.backend.domain.service.EmailTemplateService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*

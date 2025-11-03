@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.global.router
 
+import com.sleekydz86.backend.global.handler.StockHandler
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.reactive.function.server.RouterFunction

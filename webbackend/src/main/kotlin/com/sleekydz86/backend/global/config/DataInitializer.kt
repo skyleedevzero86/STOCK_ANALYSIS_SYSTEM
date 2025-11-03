@@ -1,5 +1,11 @@
 package com.sleekydz86.backend.global.config
 
+import com.sleekydz86.backend.domain.model.Permission
+import com.sleekydz86.backend.domain.model.Role
+import com.sleekydz86.backend.domain.model.User
+import com.sleekydz86.backend.domain.repository.PermissionRepository
+import com.sleekydz86.backend.domain.repository.RoleRepository
+import com.sleekydz86.backend.domain.repository.UserRepository
 import org.springframework.boot.CommandLineRunner
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Component

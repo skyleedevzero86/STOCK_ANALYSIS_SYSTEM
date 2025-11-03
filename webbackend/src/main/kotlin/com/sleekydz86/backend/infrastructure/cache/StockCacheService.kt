@@ -1,5 +1,8 @@
 package com.sleekydz86.backend.infrastructure.cache
 
+import com.sleekydz86.backend.domain.model.HistoricalData
+import com.sleekydz86.backend.domain.model.StockData
+import com.sleekydz86.backend.domain.model.TechnicalAnalysis
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux

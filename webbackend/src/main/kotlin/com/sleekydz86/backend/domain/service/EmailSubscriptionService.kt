@@ -1,5 +1,9 @@
 package com.sleekydz86.backend.domain.service
 
+import com.sleekydz86.backend.domain.model.EmailSubscription
+import com.sleekydz86.backend.domain.model.EmailSubscriptionRequest
+import com.sleekydz86.backend.infrastructure.entity.EmailSubscriptionEntity
+import com.sleekydz86.backend.infrastructure.repository.EmailSubscriptionRepository
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono

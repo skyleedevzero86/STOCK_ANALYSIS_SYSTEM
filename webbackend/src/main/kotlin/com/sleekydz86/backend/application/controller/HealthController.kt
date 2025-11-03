@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.application.controller
 
+import com.sleekydz86.backend.global.circuitbreaker.CircuitBreakerManager
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController

@@ -1,5 +1,7 @@
 package com.sleekydz86.backend.global.query
 
+import com.sleekydz86.backend.domain.cqrs.query.QueryResult
+import com.sleekydz86.backend.domain.cqrs.query.StockQuery
 import org.springframework.stereotype.Component
 import reactor.core.publisher.Mono
 import java.util.concurrent.ConcurrentHashMap

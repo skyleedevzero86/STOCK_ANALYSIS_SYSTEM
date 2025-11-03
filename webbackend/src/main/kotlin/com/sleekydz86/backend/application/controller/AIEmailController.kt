@@ -1,5 +1,7 @@
 package com.sleekydz86.backend.application.controller
 
+import com.sleekydz86.backend.domain.service.AIEmailService
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
 

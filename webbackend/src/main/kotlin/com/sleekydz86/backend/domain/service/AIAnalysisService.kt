@@ -1,5 +1,9 @@
 package com.sleekydz86.backend.domain.service
 
+import com.sleekydz86.backend.domain.model.AIAnalysisRequest
+import com.sleekydz86.backend.domain.model.AIAnalysisResult
+import com.sleekydz86.backend.domain.model.TechnicalAnalysis
+import com.sleekydz86.backend.infrastructure.client.PythonApiClient
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime

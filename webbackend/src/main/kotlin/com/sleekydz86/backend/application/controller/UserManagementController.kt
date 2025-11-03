@@ -4,6 +4,8 @@ import com.sleekydz86.backend.application.dto.ChangePasswordRequest
 import com.sleekydz86.backend.application.dto.UpdateUserRequest
 import com.sleekydz86.backend.application.dto.UserResponse
 import com.sleekydz86.backend.application.mapper.UserMapper
+import com.sleekydz86.backend.domain.service.RoleService
+import com.sleekydz86.backend.domain.service.UserService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*

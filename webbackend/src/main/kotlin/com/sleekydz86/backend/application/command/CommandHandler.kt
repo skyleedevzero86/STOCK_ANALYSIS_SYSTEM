@@ -1,5 +1,7 @@
 package com.sleekydz86.backend.application.command
 
+import com.sleekydz86.backend.domain.cqrs.command.CommandResult
+import com.sleekydz86.backend.domain.cqrs.command.StockCommand
 import reactor.core.publisher.Mono
 
 interface CommandHandler<T : StockCommand> {

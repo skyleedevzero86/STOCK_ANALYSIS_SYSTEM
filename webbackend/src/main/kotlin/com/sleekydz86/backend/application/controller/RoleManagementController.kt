@@ -4,6 +4,10 @@ import com.sleekydz86.backend.application.dto.CreateRoleRequest
 import com.sleekydz86.backend.application.dto.RoleResponse
 import com.sleekydz86.backend.application.dto.UpdateRoleRequest
 import com.sleekydz86.backend.application.mapper.RoleMapper
+import com.sleekydz86.backend.domain.model.Permission
+import com.sleekydz86.backend.domain.model.Role
+import com.sleekydz86.backend.domain.service.PermissionService
+import com.sleekydz86.backend.domain.service.RoleService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*

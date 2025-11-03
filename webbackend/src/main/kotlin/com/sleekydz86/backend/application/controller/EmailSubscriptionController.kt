@@ -3,6 +3,8 @@ package com.sleekydz86.backend.application.controller
 import com.sleekydz86.backend.application.dto.ApiResponse
 import com.sleekydz86.backend.application.dto.ApiResponseBuilder
 import com.sleekydz86.backend.application.mapper.EmailSubscriptionMapper
+import com.sleekydz86.backend.domain.model.EmailSubscriptionRequest
+import com.sleekydz86.backend.domain.service.EmailSubscriptionService
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
 

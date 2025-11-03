@@ -1,5 +1,9 @@
 package com.sleekydz86.backend.domain.service
 
+import com.sleekydz86.backend.domain.model.EmailTemplate
+import com.sleekydz86.backend.domain.model.TemplateRequest
+import com.sleekydz86.backend.infrastructure.entity.EmailTemplateEntity
+import com.sleekydz86.backend.infrastructure.repository.EmailTemplateRepository
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import reactor.kotlin.core.publisher.toMono

@@ -117,7 +117,7 @@ class DistributedCacheService(
 
     fun <T> hashGet(hashKey: String, field: String, type: Class<T>): Mono<T> {
         return Mono.fromCallable {
-            val value: Any? = redisTemplate.opsForHash<String, Any, Any>().get(hashKey, field)
+            val value: Any? = redisTemplate.opsForHash<String, Any>().get(hashKey, field)
             if (value != null) {
                 objectMapper.convertValue(value, type)
             } else {
@@ -128,7 +128,7 @@ class DistributedCacheService(
 
     fun <T> hashSet(hashKey: String, field: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForHash<String, Any, Any>().put(hashKey, field, value as Any)
+            redisTemplate.opsForHash<String, Any>().put(hashKey, field, value as Any)
             redisTemplate.expire(hashKey, ttl.toMillis(), TimeUnit.MILLISECONDS)
             true
         }
@@ -136,14 +136,14 @@ class DistributedCacheService(
 
     fun hashDelete(hashKey: String, field: String): Mono<Boolean> {
         return Mono.fromCallable {
-            redisTemplate.opsForHash<String, Any, Any>().delete(hashKey, field)
+            redisTemplate.opsForHash<String, Any>().delete(hashKey, field)
             true
         }
     }
 
     fun <T> listPush(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Long> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForList<String, Any>().rightPush(key, value as Any)
+            val result = redisTemplate.opsForList().rightPush(key, value as Any)
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
             result ?: 0L
         }
@@ -171,7 +171,7 @@ class DistributedCacheService(
 
     fun setAdd(key: String, value: Any, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForSet<String, Any>().add(key, value)
+            val result = redisTemplate.opsForSet().add(key, value)
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
             (result ?: 0L) > 0
         }
@@ -188,7 +188,7 @@ class DistributedCacheService(
 
     fun setRemove(key: String, value: Any): Mono<Boolean> {
         return Mono.fromCallable {
-            val result = redisTemplate.opsForSet<String, Any>().remove(key, value)
+            val result = redisTemplate.opsForSet().remove(key, value)
             (result ?: 0L) > 0
         }
     }

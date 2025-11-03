@@ -7,6 +7,7 @@ import com.sleekydz86.backend.infrastructure.repository.EmailTemplateRepository
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
+import java.util.Optional
 
 @Service
 class EmailTemplateService(
@@ -32,36 +33,40 @@ class EmailTemplateService(
     }
 
     fun getTemplateById(id: Long): Mono<EmailTemplate> {
-        return emailTemplateRepository.findById(id)
-            ?.let { entity: EmailTemplateEntity -> Mono.just(entity.toDomain()) }
-            ?: Mono.error(IllegalArgumentException("Template not found with id: $id"))
+        return Mono.fromCallable {
+            emailTemplateRepository.findById(id)
+                .map { entity: EmailTemplateEntity -> entity.toDomain() }
+                .orElseThrow { IllegalArgumentException("Template not found with id: $id") }
+        }
     }
 
     fun updateTemplate(id: Long, request: TemplateRequest): Mono<EmailTemplate> {
-        return emailTemplateRepository.findById(id)
-            ?.let { existing: EmailTemplateEntity ->
-                val updated = existing.copy(
-                    name = request.name,
-                    subject = request.subject,
-                    content = request.content,
-                    updatedAt = LocalDateTime.now()
-                )
-                Mono.just(emailTemplateRepository.save(updated).toDomain())
-            }
-            ?: Mono.error(IllegalArgumentException("Template not found with id: $id"))
+        return Mono.fromCallable {
+            emailTemplateRepository.findById(id)
+                .map { existing: EmailTemplateEntity ->
+                    val updated = existing.copy(
+                        name = request.name,
+                        subject = request.subject,
+                        content = request.content,
+                        updatedAt = LocalDateTime.now()
+                    )
+                    emailTemplateRepository.save(updated).toDomain()
+                }
+                .orElseThrow { IllegalArgumentException("Template not found with id: $id") }
+        }
     }
 
     fun deleteTemplate(id: Long): Mono<Void> {
         return Mono.fromCallable {
             emailTemplateRepository.findById(id)
-                ?.let { existing: EmailTemplateEntity ->
+                .map { existing: EmailTemplateEntity ->
                     val deactivated = existing.copy(
                         isActive = false,
                         updatedAt = LocalDateTime.now()
                     )
                     emailTemplateRepository.save(deactivated)
                 }
-                ?: throw IllegalArgumentException("Template not found with id: $id")
+                .orElseThrow { IllegalArgumentException("Template not found with id: $id") }
         }.then()
     }
 

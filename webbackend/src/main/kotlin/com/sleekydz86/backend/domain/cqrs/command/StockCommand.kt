@@ -9,10 +9,3 @@ sealed class StockCommand {
     data class ProcessAnomaly(val symbol: String, val anomalyType: String, val severity: String) : StockCommand()
     data class SendNotification(val symbol: String, val message: String, val recipients: List<String>) : StockCommand()
 }
-
-data class CommandResult(
-    val success: Boolean,
-    val message: String,
-    val data: Any? = null,
-    val timestamp: LocalDateTime = LocalDateTime.now()
-)

@@ -2,13 +2,11 @@ package com.sleekydz86.backend.domain.model
 
 import java.time.LocalDateTime
 
-data class EmailSubscription(
+data class AdminUser(
     val id: Long? = null,
-    val name: String,
     val email: String,
-    val phone: String? = null,
-    val isEmailConsent: Boolean,
-    val isPhoneConsent: Boolean = false,
+    val password: String,
     val createdAt: LocalDateTime = LocalDateTime.now(),
     val isActive: Boolean = true
 )
+

@@ -1,5 +1,6 @@
 package com.sleekydz86.backend.domain.service
 
+import com.sleekydz86.backend.domain.model.AIAnalysisRequest
 import com.sleekydz86.backend.domain.model.AIAnalysisResult
 import com.sleekydz86.backend.domain.model.EmailSubscription
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
@@ -22,7 +23,7 @@ class AIEmailService(
                 emailSubscriptionService.getAllActiveSubscriptions()
                     .flatMap { subscribers ->
                         aiAnalysisService.generateAIAnalysis(
-                            com.stockanalysis.domain.model.AIAnalysisRequest(symbol = symbol)
+                            AIAnalysisRequest(symbol = symbol)
                         ).flatMap { aiResult ->
                             val emailSubscribers = subscribers.filter { it.isEmailConsent }
                             val emailResults = mutableListOf<String>()
@@ -93,7 +94,7 @@ class AIEmailService(
 
                         symbols.forEach { symbol ->
                             aiAnalysisService.generateAIAnalysis(
-                                com.stockanalysis.domain.model.AIAnalysisRequest(symbol = symbol)
+                                AIAnalysisRequest(symbol = symbol)
                             ).subscribe { aiResult ->
                                 emailSubscribers.forEach { subscriber ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)

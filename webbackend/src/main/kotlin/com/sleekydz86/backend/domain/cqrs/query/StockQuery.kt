@@ -12,9 +12,3 @@ sealed class StockQuery {
     object GetAvailableSymbols : StockQuery()
     data class GetMarketTrend(val timeframe: String = "daily") : StockQuery()
 }
-
-data class QueryResult<T>(
-    val data: T,
-    val timestamp: LocalDateTime = LocalDateTime.now(),
-    val success: Boolean = true
-)

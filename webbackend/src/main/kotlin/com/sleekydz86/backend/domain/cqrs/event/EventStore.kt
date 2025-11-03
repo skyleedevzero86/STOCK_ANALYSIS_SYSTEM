@@ -11,13 +11,3 @@ interface EventStore {
     fun getEventsByType(eventType: String): Flux<StockEvent>
     fun getEventsBySymbol(symbol: String): Flux<StockEvent>
 }
-
-interface EventPublisher {
-    fun publish(event: StockEvent): Mono<Unit>
-    fun publish(events: List<StockEvent>): Mono<Unit>
-}
-
-interface EventHandler<T : StockEvent> {
-    fun handle(event: T): Mono<Unit>
-    fun canHandle(event: StockEvent): Boolean
-}

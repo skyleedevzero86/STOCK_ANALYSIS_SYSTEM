@@ -47,11 +47,3 @@ sealed class StockEvent {
         val affectedSymbols: List<String>
     ) : StockEvent()
 }
-
-data class EventMetadata(
-    val eventId: String,
-    val aggregateId: String,
-    val version: Long,
-    val timestamp: LocalDateTime,
-    val eventType: String
-)

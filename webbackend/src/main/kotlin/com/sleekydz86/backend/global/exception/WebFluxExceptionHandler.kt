@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 
-@Order(-2) 
+@Order(-2)
 @Component
 class WebFluxExceptionHandler(
     private val objectMapper: ObjectMapper

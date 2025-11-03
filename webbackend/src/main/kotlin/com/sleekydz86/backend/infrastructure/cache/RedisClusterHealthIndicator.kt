@@ -32,7 +32,8 @@ class RedisClusterHealthIndicator(
             }
         } catch (e: Exception) {
             Health.down()
-                .withDetail("status", "error")
+                .withDetail("status", "unavailable")
+                .withDetail("message", "Redis connection failed, but application continues without cache")
                 .withDetail("error", e.message)
                 .build()
         }
@@ -45,7 +46,7 @@ class RedisClusterHealthIndicator(
     }
 
     fun updateClusterInfo(info: Map<String, Any>): Mono<Boolean> {
-        return distributedCacheService.set("cluster:info", info, Duration.ofMinutes(30))
+        return distributedCacheService.set<Map<String, Any>>("cluster:info", info, Duration.ofMinutes(30))
     }
 
     fun getClusterNodes(): Mono<List<String>> {
@@ -55,7 +56,7 @@ class RedisClusterHealthIndicator(
     }
 
     fun setClusterNodes(nodes: List<String>): Mono<Boolean> {
-        return distributedCacheService.set("cluster:nodes", nodes, Duration.ofMinutes(30))
+        return distributedCacheService.set<List<String>>("cluster:nodes", nodes, Duration.ofMinutes(30))
     }
 
     fun getClusterStats(): Mono<Map<String, Any>> {
@@ -65,6 +66,6 @@ class RedisClusterHealthIndicator(
     }
 
     fun updateClusterStats(stats: Map<String, Any>): Mono<Boolean> {
-        return distributedCacheService.set("cluster:stats", stats, Duration.ofMinutes(30))
+        return distributedCacheService.set<Map<String, Any>>("cluster:stats", stats, Duration.ofMinutes(30))
     }
 }

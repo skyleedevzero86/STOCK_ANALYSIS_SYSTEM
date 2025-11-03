@@ -57,9 +57,9 @@ class SecurityConfig(
 
                     .requestMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
                                    "/email-subscription", "/template-management").permitAll()
-                    .requestMatchers("/css/**", "/js/**", "/*.html", "/**/*.css", "/**/*.js",
-                                   "/**/*.png", "/**/*.jpg", "/**/*.gif", "/**/*.ico",
-                                   "/**/*.svg").permitAll()
+                    .requestMatchers("/css/**", "/js/**", "/*.html", "/*.css", "/*.js",
+                                   "/*.png", "/*.jpg", "/*.gif", "/*.ico",
+                                   "/*.svg").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/ws/**").permitAll()

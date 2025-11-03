@@ -7,22 +7,30 @@ import reactor.core.publisher.Mono
 import reactor.core.publisher.Flux
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import org.slf4j.LoggerFactory
 
 @Service
 class DistributedCacheService(
     private val redisTemplate: RedisTemplate<String, Any>,
     private val objectMapper: ObjectMapper
 ) {
+    private val logger = LoggerFactory.getLogger(DistributedCacheService::class.java)
 
-    fun <T> get(key: String, type: Class<T>): Mono<T> {
+    fun <T : Any> get(key: String, type: Class<T>): Mono<T> {
         return Mono.fromCallable {
-            val value = redisTemplate.opsForValue().get(key)
-            if (value != null) {
-                objectMapper.convertValue(value, type)
-            } else {
-                null
-            }
+            redisTemplate.opsForValue().get(key)
         }
+            .flatMap { value ->
+                if (value != null) {
+                    Mono.just(objectMapper.convertValue(value, type) as T)
+                } else {
+                    Mono.empty()
+                }
+            }
+            .onErrorResume { error ->
+                logger.warn("Redis get operation failed for key: $key, falling back to null", error)
+                Mono.empty()
+            }
     }
 
     fun <T> set(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
@@ -30,18 +38,30 @@ class DistributedCacheService(
             redisTemplate.opsForValue().set(key, value as Any, ttl.toMillis(), TimeUnit.MILLISECONDS)
             true
         }
+            .onErrorResume { error ->
+                logger.warn("Redis set operation failed for key: $key, continuing without cache", error)
+                Mono.just(false)
+            }
     }
 
     fun <T> setIfAbsent(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
         return Mono.fromCallable {
             redisTemplate.opsForValue().setIfAbsent(key, value as Any, ttl.toMillis(), TimeUnit.MILLISECONDS) ?: false
         }
+            .onErrorResume { error ->
+                logger.warn("Redis setIfAbsent operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 
     fun delete(key: String): Mono<Boolean> {
         return Mono.fromCallable {
             redisTemplate.delete(key)
         }
+            .onErrorResume { error ->
+                logger.warn("Redis delete operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 
     fun deletePattern(pattern: String): Mono<Long> {
@@ -53,18 +73,30 @@ class DistributedCacheService(
                 0L
             }
         }
+            .onErrorResume { error ->
+                logger.warn("Redis deletePattern operation failed for pattern: $pattern", error)
+                Mono.just(0L)
+            }
     }
 
     fun exists(key: String): Mono<Boolean> {
         return Mono.fromCallable {
             redisTemplate.hasKey(key)
         }
+            .onErrorResume { error ->
+                logger.warn("Redis exists operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 
     fun expire(key: String, ttl: Duration): Mono<Boolean> {
         return Mono.fromCallable {
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
         }
+            .onErrorResume { error ->
+                logger.warn("Redis expire operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 
     fun <T : Any> getOrSet(key: String, type: Class<T>, supplier: () -> Mono<T>, ttl: Duration = Duration.ofMinutes(30)): Mono<T> {
@@ -76,6 +108,10 @@ class DistributedCacheService(
                             .then(Mono.just(value))
                     }
             )
+            .onErrorResume { error ->
+                logger.warn("Redis getOrSet operation failed for key: $key, falling back to supplier", error)
+                supplier()
+            }
     }
 
     fun <T : Any> getOrSetFlux(key: String, type: Class<T>, supplier: () -> Flux<T>, ttl: Duration = Duration.ofMinutes(30)): Flux<T> {
@@ -101,29 +137,47 @@ class DistributedCacheService(
                         }
                 }
             }
+            .onErrorResume { error ->
+                logger.warn("Redis getOrSetFlux operation failed for key: $key, falling back to supplier", error)
+                supplier()
+            }
     }
 
     fun increment(key: String, delta: Long = 1L): Mono<Long> {
         return Mono.fromCallable {
-            redisTemplate.opsForValue().increment(key, delta)
+            redisTemplate.opsForValue().increment(key, delta) ?: 0L
         }
+            .onErrorResume { error ->
+                logger.warn("Redis increment operation failed for key: $key", error)
+                Mono.just(0L)
+            }
     }
 
     fun decrement(key: String, delta: Long = 1L): Mono<Long> {
         return Mono.fromCallable {
-            redisTemplate.opsForValue().increment(key, -delta)
+            redisTemplate.opsForValue().increment(key, -delta) ?: 0L
         }
+            .onErrorResume { error ->
+                logger.warn("Redis decrement operation failed for key: $key", error)
+                Mono.just(0L)
+            }
     }
 
-    fun <T> hashGet(hashKey: String, field: String, type: Class<T>): Mono<T> {
+    fun <T : Any> hashGet(hashKey: String, field: String, type: Class<T>): Mono<T> {
         return Mono.fromCallable {
-            val value: Any? = redisTemplate.opsForHash<String, Any>().get(hashKey, field)
-            if (value != null) {
-                objectMapper.convertValue(value, type)
-            } else {
-                null
-            }
+            redisTemplate.opsForHash<String, Any>().get(hashKey, field)
         }
+            .flatMap { value ->
+                if (value != null) {
+                    Mono.just(objectMapper.convertValue(value, type) as T)
+                } else {
+                    Mono.empty()
+                }
+            }
+            .onErrorResume { error ->
+                logger.warn("Redis hashGet operation failed for hashKey: $hashKey, field: $field", error)
+                Mono.empty()
+            }
     }
 
     fun <T> hashSet(hashKey: String, field: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
@@ -132,6 +186,10 @@ class DistributedCacheService(
             redisTemplate.expire(hashKey, ttl.toMillis(), TimeUnit.MILLISECONDS)
             true
         }
+            .onErrorResume { error ->
+                logger.warn("Redis hashSet operation failed for hashKey: $hashKey", error)
+                Mono.just(false)
+            }
     }
 
     fun hashDelete(hashKey: String, field: String): Mono<Boolean> {
@@ -139,6 +197,10 @@ class DistributedCacheService(
             redisTemplate.opsForHash<String, Any>().delete(hashKey, field)
             true
         }
+            .onErrorResume { error ->
+                logger.warn("Redis hashDelete operation failed for hashKey: $hashKey", error)
+                Mono.just(false)
+            }
     }
 
     fun <T> listPush(key: String, value: T, ttl: Duration = Duration.ofMinutes(30)): Mono<Long> {
@@ -147,17 +209,27 @@ class DistributedCacheService(
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
             result ?: 0L
         }
+            .onErrorResume { error ->
+                logger.warn("Redis listPush operation failed for key: $key", error)
+                Mono.just(0L)
+            }
     }
 
-    fun <T> listPop(key: String, type: Class<T>): Mono<T> {
+    fun <T : Any> listPop(key: String, type: Class<T>): Mono<T> {
         return Mono.fromCallable {
-            val value = redisTemplate.opsForList().leftPop(key)
-            if (value != null) {
-                objectMapper.convertValue(value, type)
-            } else {
-                null
-            }
+            redisTemplate.opsForList().leftPop(key)
         }
+            .flatMap { value ->
+                if (value != null) {
+                    Mono.just(objectMapper.convertValue(value, type) as T)
+                } else {
+                    Mono.empty()
+                }
+            }
+            .onErrorResume { error ->
+                logger.warn("Redis listPop operation failed for key: $key", error)
+                Mono.empty()
+            }
     }
 
     fun <T> listRange(key: String, start: Long, end: Long, type: Class<T>): Flux<T> {
@@ -167,6 +239,10 @@ class DistributedCacheService(
             .flatMapMany { values ->
                 Flux.fromIterable(values.map { objectMapper.convertValue(it, type) })
             }
+            .onErrorResume { error ->
+                logger.warn("Redis listRange operation failed for key: $key", error)
+                Flux.empty()
+            }
     }
 
     fun setAdd(key: String, value: Any, ttl: Duration = Duration.ofMinutes(30)): Mono<Boolean> {
@@ -175,6 +251,10 @@ class DistributedCacheService(
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
             (result ?: 0L) > 0
         }
+            .onErrorResume { error ->
+                logger.warn("Redis setAdd operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 
     fun setMembers(key: String, type: Class<*>): Flux<Any> {
@@ -184,6 +264,10 @@ class DistributedCacheService(
             .flatMapMany { members ->
                 Flux.fromIterable(members ?: emptySet())
             }
+            .onErrorResume { error ->
+                logger.warn("Redis setMembers operation failed for key: $key", error)
+                Flux.empty()
+            }
     }
 
     fun setRemove(key: String, value: Any): Mono<Boolean> {
@@ -191,5 +275,9 @@ class DistributedCacheService(
             val result = redisTemplate.opsForSet().remove(key, value)
             (result ?: 0L) > 0
         }
+            .onErrorResume { error ->
+                logger.warn("Redis setRemove operation failed for key: $key", error)
+                Mono.just(false)
+            }
     }
 }

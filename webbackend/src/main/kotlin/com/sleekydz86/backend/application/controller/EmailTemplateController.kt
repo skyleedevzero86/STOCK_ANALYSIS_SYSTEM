@@ -28,7 +28,7 @@ class EmailTemplateController(
     @GetMapping("/{id}")
     fun getTemplateById(@PathVariable id: Long): Mono<ResponseEntity<EmailTemplate>> {
         return emailTemplateService.getTemplateById(id)
-            .map { ResponseEntity.ok(it) }
+            .map { template: EmailTemplate -> ResponseEntity.ok(template) }
             .onErrorResume(IllegalArgumentException::class.java) {
                 Mono.just(ResponseEntity.notFound().build())
             }
@@ -40,7 +40,7 @@ class EmailTemplateController(
         @RequestBody request: TemplateRequest
     ): Mono<ResponseEntity<EmailTemplate>> {
         return emailTemplateService.updateTemplate(id, request)
-            .map { ResponseEntity.ok(it) }
+            .map { template: EmailTemplate -> ResponseEntity.ok(template) }
             .onErrorResume(IllegalArgumentException::class.java) {
                 Mono.just(ResponseEntity.notFound().build())
             }

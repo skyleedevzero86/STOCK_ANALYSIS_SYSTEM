@@ -9,7 +9,7 @@ sealed class StockQuery {
     data class GetAllAnalysis(val symbols: List<String>? = null) : StockQuery()
     data class GetTradingSignals(val symbol: String) : StockQuery()
     data class GetAnomalies(val symbol: String, val fromDate: LocalDateTime? = null) : StockQuery()
-    data class GetAvailableSymbols() : StockQuery()
+    object GetAvailableSymbols : StockQuery()
     data class GetMarketTrend(val timeframe: String = "daily") : StockQuery()
 }
 

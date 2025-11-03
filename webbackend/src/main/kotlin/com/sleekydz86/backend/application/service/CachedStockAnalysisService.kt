@@ -25,13 +25,13 @@ class CachedStockAnalysisService(
         return stockCacheService.getStockData(symbol)
             .switchIfEmpty(
                 stockAnalysisService.getRealtimeStockData(symbol)
-                    .flatMap { stockData ->
+                    .flatMap { stockData: StockData ->
                         stockCacheService.setStockData(symbol, stockData, Duration.ofMinutes(5))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Mono.just(stockData))
                     }
             )
-            .flatMap { stockData ->
+            .flatMap { stockData: StockData ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_realtime_data", symbol))
                     .then(Mono.just(stockData))
@@ -43,13 +43,13 @@ class CachedStockAnalysisService(
         return stockCacheService.getStockAnalysis(symbol)
             .switchIfEmpty(
                 stockAnalysisService.getStockAnalysis(symbol)
-                    .flatMap { analysis ->
+                    .flatMap { analysis: TechnicalAnalysis ->
                         stockCacheService.setStockAnalysis(symbol, analysis, Duration.ofMinutes(15))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Mono.just(analysis))
                     }
             )
-            .flatMap { analysis ->
+            .flatMap { analysis: TechnicalAnalysis ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_analysis", symbol))
                     .then(Mono.just(analysis))
@@ -61,13 +61,13 @@ class CachedStockAnalysisService(
         return stockCacheService.getHistoricalData(symbol, days)
             .switchIfEmpty(
                 stockAnalysisService.getStockHistoricalData(symbol, days)
-                    .flatMap { historicalData ->
+                    .flatMap { historicalData: HistoricalData ->
                         stockCacheService.setHistoricalData(symbol, days, historicalData, Duration.ofHours(1))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Mono.just(historicalData))
                     }
             )
-            .flatMap { historicalData ->
+            .flatMap { historicalData: HistoricalData ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_historical_data", symbol))
                     .then(Mono.just(historicalData))
@@ -79,13 +79,13 @@ class CachedStockAnalysisService(
         return stockCacheService.getAvailableSymbols()
             .switchIfEmpty(
                 stockAnalysisService.getAvailableSymbols()
-                    .flatMap { symbols ->
+                    .flatMap { symbols: List<String> ->
                         stockCacheService.setAvailableSymbols(symbols, Duration.ofHours(6))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Mono.just(symbols))
                     }
             )
-            .flatMap { symbols ->
+            .flatMap { symbols: List<String> ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_symbols"))
                     .then(Mono.just(symbols))
@@ -98,13 +98,13 @@ class CachedStockAnalysisService(
             .switchIfEmpty(
                 stockAnalysisService.getAllRealtimeStockData()
                     .collectList()
-                    .flatMap { stockDataList ->
+                    .flatMap { stockDataList: List<StockData> ->
                         stockCacheService.setAllStockData(stockDataList, Duration.ofMinutes(5))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Flux.fromIterable(stockDataList))
                     }
             )
-            .flatMap { stockData ->
+            .flatMap { stockData: StockData ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_all_realtime_data"))
                     .then(Mono.just(stockData))
@@ -117,13 +117,13 @@ class CachedStockAnalysisService(
             .switchIfEmpty(
                 stockAnalysisService.getAllStockAnalysis()
                     .collectList()
-                    .flatMap { analysisList ->
+                    .flatMap { analysisList: List<TechnicalAnalysis> ->
                         stockCacheService.setAllStockAnalysis(analysisList, Duration.ofMinutes(15))
                             .then(cacheManager.updateCacheHitRate(false))
                             .then(Flux.fromIterable(analysisList))
                     }
             )
-            .flatMap { analysis ->
+            .flatMap { analysis: TechnicalAnalysis ->
                 cacheManager.updateCacheHitRate(true)
                     .then(cacheManager.updateCacheStats("get_all_analysis"))
                     .then(Mono.just(analysis))

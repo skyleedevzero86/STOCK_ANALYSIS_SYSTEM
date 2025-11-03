@@ -4,7 +4,7 @@ import com.sleekydz86.backend.domain.model.HistoricalData
 import com.sleekydz86.backend.domain.model.StockData
 import com.sleekydz86.backend.domain.model.TechnicalAnalysis
 import com.sleekydz86.backend.global.circuitbreaker.CircuitBreakerManager
-import com.sleekydz86.backend.global.circuitbreaker.CircuitBreakerOpenException
+import com.sleekydz86.backend.global.exception.CircuitBreakerOpenException
 import com.sleekydz86.backend.global.exception.ExternalApiException
 import com.sleekydz86.backend.global.exception.InvalidSymbolException
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
@@ -27,7 +27,7 @@ class StockController(
             pythonApiClient.getSymbols()
         }
             .timeout(Duration.ofSeconds(10))
-            .onErrorResume { error ->
+            .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Mono.error(ExternalApiException("Service temporarily unavailable", error))
@@ -50,7 +50,7 @@ class StockController(
             pythonApiClient.getRealtimeData(symbol)
         }
             .timeout(Duration.ofSeconds(15))
-            .onErrorResume { error ->
+            .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Mono.error(ExternalApiException("Service temporarily unavailable", error))
@@ -73,7 +73,7 @@ class StockController(
             pythonApiClient.getAnalysis(symbol)
         }
             .timeout(Duration.ofSeconds(20))
-            .onErrorResume { error ->
+            .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Mono.error(ExternalApiException("Service temporarily unavailable", error))
@@ -92,7 +92,7 @@ class StockController(
             pythonApiClient.getAllAnalysis()
         }
             .timeout(Duration.ofSeconds(45))
-            .onErrorResume { error ->
+            .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Flux.error(ExternalApiException("Service temporarily unavailable", error))
@@ -120,7 +120,7 @@ class StockController(
             pythonApiClient.getHistoricalData(symbol, validDays)
         }
             .timeout(Duration.ofSeconds(25))
-            .onErrorResume { error ->
+            .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Mono.error(ExternalApiException("Service temporarily unavailable", error))

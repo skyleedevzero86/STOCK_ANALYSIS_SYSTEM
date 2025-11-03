@@ -84,7 +84,7 @@ class CQRSStockHandler(
     }
 
     fun getSymbols(request: ServerRequest): Mono<ServerResponse> {
-        val query = StockQuery.GetAvailableSymbols()
+        val query = StockQuery.GetAvailableSymbols
 
         return queryBus.send<StockQuery.GetAvailableSymbols, Any>(query)
             .flatMap { result ->

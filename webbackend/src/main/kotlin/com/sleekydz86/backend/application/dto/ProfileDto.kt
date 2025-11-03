@@ -16,8 +16,3 @@ data class UpdateProfileRequest(
     val lastName: String? = null
 )
 
-data class ChangePasswordRequest(
-    val currentPassword: String,
-    val newPassword: String
-)
-

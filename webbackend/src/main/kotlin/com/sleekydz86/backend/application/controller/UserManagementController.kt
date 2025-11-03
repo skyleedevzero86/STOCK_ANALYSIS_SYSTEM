@@ -54,7 +54,8 @@ class UserManagementController(
             userService.activateUser(username)
             return ResponseEntity.ok(mapOf("message" to "User activated successfully"))
         } catch (e: Exception) {
-            return ResponseEntity.badRequest().body(mapOf("error" to e.message ?: "Failed to activate user"))
+            val errorMessage: String = e.message ?: "Failed to activate user"
+            return ResponseEntity.badRequest().body(mapOf("error" to errorMessage))
         }
     }
 
@@ -64,7 +65,8 @@ class UserManagementController(
             userService.deactivateUser(username)
             return ResponseEntity.ok(mapOf("message" to "User deactivated successfully"))
         } catch (e: Exception) {
-            return ResponseEntity.badRequest().body(mapOf("error" to e.message ?: "Failed to deactivate user"))
+            val errorMessage: String = e.message ?: "Failed to deactivate user"
+            return ResponseEntity.badRequest().body(mapOf("error" to errorMessage))
         }
     }
 
@@ -77,7 +79,8 @@ class UserManagementController(
             userService.updatePassword(username, request.newPassword)
             return ResponseEntity.ok(mapOf("message" to "Password changed successfully"))
         } catch (e: Exception) {
-            return ResponseEntity.badRequest().body(mapOf("error" to e.message ?: "Failed to change password"))
+            val errorMessage: String = e.message ?: "Failed to change password"
+            return ResponseEntity.badRequest().body(mapOf("error" to errorMessage))
         }
     }
 }

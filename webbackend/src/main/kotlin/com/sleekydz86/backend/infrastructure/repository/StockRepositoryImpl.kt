@@ -25,7 +25,7 @@ class StockRepositoryImpl(
     }
 
     override val getRealtimeData: (String) -> Mono<StockData> =
-        pythonApiClient::getRealtimeData
+        pythonApiClient.getRealtimeData
 
     override val getAllRealtimeData: () -> Flux<StockData> = {
         pythonApiClient.getAllAnalysis()
@@ -33,14 +33,14 @@ class StockRepositoryImpl(
     }
 
     override val getAnalysis: (String) -> Mono<TechnicalAnalysis> =
-        pythonApiClient::getAnalysis
+        pythonApiClient.getAnalysis
 
     override val getAllAnalysis: () -> Flux<TechnicalAnalysis> =
-        pythonApiClient::getAllAnalysis
+        pythonApiClient.getAllAnalysis
 
     override val getHistoricalData: (String, Int) -> Mono<HistoricalData> =
-        pythonApiClient::getHistoricalData
+        pythonApiClient.getHistoricalData
 
     override val getAvailableSymbols: () -> Mono<List<String>> =
-        pythonApiClient::getSymbols
+        pythonApiClient.getSymbols
 }

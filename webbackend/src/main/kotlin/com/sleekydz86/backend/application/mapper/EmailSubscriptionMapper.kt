@@ -4,8 +4,8 @@ import com.sleekydz86.backend.domain.model.EmailSubscription
 
 object EmailSubscriptionMapper {
     fun toMaskedSubscriptionMap(subscription: EmailSubscription, maskEmail: (String) -> String, maskPhone: (String?) -> String): Map<String, Any> {
-        return mapOf(
-            "id" to subscription.id,
+        return mapOf<String, Any>(
+            "id" to (subscription.id ?: 0L),
             "name" to subscription.name,
             "email" to maskEmail(subscription.email),
             "phone" to maskPhone(subscription.phone),
@@ -17,8 +17,8 @@ object EmailSubscriptionMapper {
     }
 
     fun toEmailConsentSubscriptionMap(subscription: EmailSubscription, maskPhone: (String?) -> String): Map<String, Any> {
-        return mapOf(
-            "id" to subscription.id,
+        return mapOf<String, Any>(
+            "id" to (subscription.id ?: 0L),
             "name" to subscription.name,
             "email" to subscription.email,
             "phone" to maskPhone(subscription.phone),

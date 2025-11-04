@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>실시간 주식 분석 대시보드</title>
-    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/common.css?v=2.0" />
+    <link rel="stylesheet" href="css/dashboard.css?v=2.0" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
@@ -13,116 +14,199 @@
     <div class="container">
       <div class="header">
         <h1>실시간 주식 분석 대시보드</h1>
-        <p>Python API와 Spring Boot를 통한 실시간 주식 데이터 시각화</p>
+        <div class="header-buttons">
+          <a href="/" class="nav-link active">메인</a>
+          <a href="/email-subscription.html" class="nav-link">구독 신청</a>
+          <a href="/admin-login.html" class="nav-link">로그인</a>
+          <button id="symbolSelectBtn" class="nav-link btn-nav">
+            종목선택
+          </button>
+        </div>
       </div>
 
       <div class="navigation">
-        <a href="/" class="nav-link active">메인</a>
-        <a href="/email-subscription.html" class="nav-link">구독 신청</a>
-        <a href="/admin-login.html" class="nav-link">로그인</a>
         <a href="/template-management.html" class="nav-link">템플릿 보기</a>
         <a href="/api-view.html" class="nav-link">API 보기</a>
       </div>
 
+      <div id="symbolSelectModal" class="modal-overlay" style="display: none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>종목 선택</h3>
+            <button class="modal-close" id="modalCloseBtn">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div class="control-group">
+              <label for="symbolSelect">종목:</label>
+              <select id="symbolSelect">
+                <option value="AAPL">Apple (AAPL)</option>
+                <option value="GOOGL">Google (GOOGL)</option>
+                <option value="MSFT">Microsoft (MSFT)</option>
+                <option value="AMZN">Amazon (AMZN)</option>
+                <option value="TSLA">Tesla (TSLA)</option>
+              </select>
+            </div>
+
+            <div class="controls">
+              <div class="control-group">
+                <label for="daysSlider">기간 (일):</label>
+                <input
+                  type="range"
+                  id="daysSlider"
+                  min="7"
+                  max="365"
+                  value="30"
+                />
+                <span id="daysValue">30</span>
+              </div>
+
+              <div class="control-group">
+                <button id="refreshBtn">새로고침</button>
+                <label>
+                  <input type="checkbox" id="autoRefresh" /> 자동 새로고침
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="dashboard-grid">
-        <div class="card">
-          <h3>종목 선택</h3>
-          <select id="symbolSelect">
-            <option value="AAPL">Apple (AAPL)</option>
-            <option value="GOOGL">Google (GOOGL)</option>
-            <option value="MSFT">Microsoft (MSFT)</option>
-            <option value="AMZN">Amazon (AMZN)</option>
-            <option value="TSLA">Tesla (TSLA)</option>
-          </select>
+        <div class="card tabbed-card">
+          <div class="tab-header">
+            <button class="tab-button active" data-tab="realtime">
+              실시간 주가
+            </button>
+            <button class="tab-button" data-tab="indicators">
+              기술적 지표
+            </button>
+          </div>
 
-          <div class="controls">
-            <div class="control-group">
-              <label for="daysSlider">기간 (일):</label>
-              <input
-                type="range"
-                id="daysSlider"
-                min="7"
-                max="365"
-                value="30"
-              />
-              <span id="daysValue">30</span>
+          <div class="tab-content">
+            <div id="realtimeTab" class="tab-pane active">
+              <div class="metrics">
+                <div class="metric">
+                  <span class="metric-label">현재가:</span>
+                  <span id="currentPrice" class="metric-value">$0.00</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">변동률:</span>
+                  <span id="priceChange" class="metric-change">+0.00%</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">거래량:</span>
+                  <span id="volume" class="metric-value">0</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">거래량 변화:</span>
+                  <span id="volumeChange" class="metric-value">+0</span>
+                </div>
+              </div>
             </div>
 
-            <div class="control-group">
-              <button id="refreshBtn">새로고침</button>
-              <label>
-                <input type="checkbox" id="autoRefresh" /> 자동 새로고침
-              </label>
+            <div id="indicatorsTab" class="tab-pane">
+              <div class="indicators">
+                <div class="indicator">
+                  <span class="indicator-label">RSI:</span>
+                  <span id="rsi" class="indicator-value">0.0</span>
+                  <span id="rsiStatus" class="indicator-status">정상</span>
+                </div>
+                <div class="indicator">
+                  <span class="indicator-label">MACD:</span>
+                  <span id="macd" class="indicator-value">0.000</span>
+                  <span id="macdStatus" class="indicator-status">상승</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card tabbed-card">
+          <div class="tab-header">
+            <button class="tab-button active" data-tab="analysis">
+              기술적 분석 상세
+            </button>
+            <button class="tab-button" data-tab="stats">거래 통계</button>
+          </div>
+
+          <div class="tab-content">
+            <div id="analysisTab" class="tab-pane active">
+              <div id="technicalIndicators" class="analysis-details">
+                <div class="loading"></div>
+                <p>분석 데이터를 불러오는 중...</p>
+              </div>
+            </div>
+
+            <div id="statsTab" class="tab-pane">
+              <div id="tradingStats" class="analysis-details">
+                <div class="loading"></div>
+                <p>통계 데이터를 불러오는 중...</p>
+              </div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <h3>실시간 주가</h3>
-          <div class="metrics">
-            <div class="metric">
-              <span class="metric-label">현재가:</span>
-              <span id="currentPrice" class="metric-value">$0.00</span>
+          <h3>연결 상태 & 시스템 모니터</h3>
+          <div id="connectionStatus">
+            <div class="status-item">
+              <span class="status-label">통신Api:</span>
+              <span id="wsStatus" class="status-value neutral">연결 중...</span>
             </div>
-            <div class="metric">
-              <span class="metric-label">변동률:</span>
-              <span id="priceChange" class="metric-change">+0.00%</span>
+            <div class="status-item">
+              <span class="status-label">화면서버:</span>
+              <span id="apiStatus" class="status-value neutral"
+                >확인 중...</span
+              >
             </div>
-            <div class="metric">
-              <span class="metric-label">거래량:</span>
-              <span id="volume" class="metric-value">0</span>
+            <div class="status-item">
+              <span class="status-label">데이터서버:</span>
+              <span id="pythonApiStatus" class="status-value neutral"
+                >확인 중...</span
+              >
             </div>
-            <div class="metric">
-              <span class="metric-label">거래량 변화:</span>
-              <span id="volumeChange" class="metric-value">+0</span>
+            <div class="status-item">
+              <span class="status-label">데이터 변경:</span>
+              <span id="lastUpdateTime" class="status-value neutral">-</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">데이터 확인:</span>
+              <span id="messageCount" class="status-value neutral">0</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">연결 실패:</span>
+              <span id="reconnectCount" class="status-value neutral">0</span>
+            </div>
+            <div class="status-controls">
+              <button class="btn-small" onclick="dashboard.checkSystemHealth()">
+                시스템 체크
+              </button>
+              <button
+                class="btn-small"
+                onclick="dashboard.resetConnectionStats()"
+              >
+                통계 리셋
+              </button>
             </div>
           </div>
         </div>
 
-        <div class="card">
-          <h3>기술적 지표</h3>
-          <div class="indicators">
-            <div class="indicator">
-              <span class="indicator-label">RSI:</span>
-              <span id="rsi" class="indicator-value">0.0</span>
-              <span id="rsiStatus" class="indicator-status">정상</span>
-            </div>
-            <div class="indicator">
-              <span class="indicator-label">MACD:</span>
-              <span id="macd" class="indicator-value">0.000</span>
-              <span id="macdStatus" class="indicator-status">상승</span>
-            </div>
+        <div class="card tabbed-card chart-card">
+          <div class="tab-header">
+            <button class="tab-button active" data-tab="price">
+              가격 차트
+            </button>
+            <button class="tab-button" data-tab="volume">거래량</button>
           </div>
-        </div>
 
-        <div class="card chart-card">
-          <h3>가격 차트</h3>
-          <div id="priceChart" class="chart-container"></div>
-        </div>
+          <div class="tab-content">
+            <div id="priceTab" class="tab-pane active">
+              <div id="priceChart" class="chart-container"></div>
+            </div>
 
-        <div class="card chart-card">
-          <h3>거래량</h3>
-          <div id="volumeChart" class="chart-container"></div>
-        </div>
-
-        <div class="card chart-card">
-          <h3>기술적 지표</h3>
-          <div id="indicatorsChart" class="chart-container"></div>
-        </div>
-
-        <div class="card">
-          <h3>기술적 분석 상세</h3>
-          <div id="technicalIndicators" class="analysis-details">
-            <div class="loading"></div>
-            <p>분석 데이터를 불러오는 중...</p>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>거래 통계</h3>
-          <div id="tradingStats" class="analysis-details">
-            <div class="loading"></div>
-            <p>통계 데이터를 불러오는 중...</p>
+            <div id="volumeTab" class="tab-pane">
+              <div id="volumeChart" class="chart-container"></div>
+            </div>
           </div>
         </div>
 
@@ -147,51 +231,6 @@
                 </tr>
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>연결 상태 & 시스템 모니터</h3>
-          <div id="connectionStatus">
-            <div class="status-item">
-              <span class="status-label">WebSocket:</span>
-              <span id="wsStatus" class="status-value neutral">연결 중...</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">백엔드 API:</span>
-              <span id="apiStatus" class="status-value neutral"
-                >확인 중...</span
-              >
-            </div>
-            <div class="status-item">
-              <span class="status-label">Python API:</span>
-              <span id="pythonApiStatus" class="status-value neutral"
-                >확인 중...</span
-              >
-            </div>
-            <div class="status-item">
-              <span class="status-label">마지막 업데이트:</span>
-              <span id="lastUpdateTime" class="status-value neutral">-</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">수신 메시지:</span>
-              <span id="messageCount" class="status-value neutral">0</span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">재연결 시도:</span>
-              <span id="reconnectCount" class="status-value neutral">0</span>
-            </div>
-            <div class="status-controls">
-              <button class="btn-small" onclick="dashboard.checkSystemHealth()">
-                시스템 체크
-              </button>
-              <button
-                class="btn-small"
-                onclick="dashboard.resetConnectionStats()"
-              >
-                통계 리셋
-              </button>
-            </div>
           </div>
         </div>
       </div>

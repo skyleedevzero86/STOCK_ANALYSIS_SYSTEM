@@ -10,7 +10,7 @@ import java.time.LocalDateTime
 
 @Component
 class PythonApiClient(
-    @Value("\${python.api.base-url:http://localhost:8000}")
+    @Value("\${python.api.base-url:http://localhost:9000}")
     private val baseUrl: String
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)

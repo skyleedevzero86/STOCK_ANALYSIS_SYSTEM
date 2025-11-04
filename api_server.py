@@ -115,7 +115,7 @@ class StockAnalysisAPI:
         import pandas as pd
         import numpy as np
         
-        dates = pd.date_range(start=datetime.now() - pd.Timedelta(days=30), end=datetime.now(), freq='D')
+        dates = pd.date_range(start=datetime.now() - pd.Timedelta(days=60), end=datetime.now(), freq='D')
         np.random.seed(hash(symbol) % 2**32)
         
         base_price = 100 + hash(symbol) % 200

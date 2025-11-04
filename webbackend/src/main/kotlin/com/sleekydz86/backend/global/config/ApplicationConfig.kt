@@ -3,8 +3,10 @@ package com.sleekydz86.backend.global.config
 import com.sleekydz86.backend.global.websocket.StockWebSocketHandler
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpStatus
 import org.springframework.web.reactive.function.server.RouterFunction
 import org.springframework.web.reactive.function.server.ServerResponse
+import org.springframework.web.reactive.function.server.router
 import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter
 import java.util.HashMap
@@ -12,6 +14,7 @@ import java.util.HashMap
 @Configuration
 class ApplicationConfig(
     private val stockRoutes: RouterFunction<ServerResponse>,
+    private val cqrsStockRoutes: RouterFunction<ServerResponse>,
     private val stockWebSocketHandler: StockWebSocketHandler
 ) {
 
@@ -30,6 +33,15 @@ class ApplicationConfig(
     }
 
     @Bean
+    fun faviconRouter(): RouterFunction<ServerResponse> = router {
+        GET("/favicon.ico") {
+            ServerResponse.status(HttpStatus.NO_CONTENT).build()
+        }
+    }
+
+    @Bean
     fun allRoutes(): RouterFunction<ServerResponse> =
         stockRoutes
+            .and(cqrsStockRoutes)
+            .and(faviconRouter())
 }

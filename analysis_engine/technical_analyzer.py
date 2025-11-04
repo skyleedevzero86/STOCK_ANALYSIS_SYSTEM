@@ -40,9 +40,13 @@ class TechnicalAnalyzer:
         }
     
     def calculate_volume_indicators(self, data: pd.DataFrame) -> Dict:
+
+        volume_sma = data['volume'].rolling(window=20).mean()
+        volume_ema = data['volume'].ewm(span=20, adjust=False).mean()
+        
         return {
-            'volume_sma': ta.volume.VolumeSMAIndicator(data['close'], data['volume'], window=20).volume_sma(),
-            'volume_ema': ta.volume.VolumeEMAIndicator(data['close'], data['volume'], window=20).volume_ema(),
+            'volume_sma': volume_sma,
+            'volume_ema': volume_ema,
             'obv': ta.volume.OnBalanceVolumeIndicator(data['close'], data['volume']).on_balance_volume()
         }
     

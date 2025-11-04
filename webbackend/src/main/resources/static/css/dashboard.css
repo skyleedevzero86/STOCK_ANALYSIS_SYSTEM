@@ -493,3 +493,91 @@ tr:hover {
         grid-template-columns: 1fr;
     }
 }
+
+/* 연결 상태 스타일 */
+.status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.status-item:last-child {
+    border-bottom: none;
+}
+
+.status-label {
+    font-weight: 500;
+    color: #2c3e50;
+    font-size: 0.95em;
+}
+
+.status-value {
+    font-weight: bold;
+    font-size: 0.9em;
+    padding: 4px 12px;
+    border-radius: 4px;
+    min-width: 80px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.status-value.positive {
+    background-color: #d5f4e6;
+    color: #27ae60;
+}
+
+.status-value.negative {
+    background-color: #fadbd8;
+    color: #e74c3c;
+}
+
+.status-value.neutral {
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+}
+
+.status-value.warning {
+    background-color: #fff3cd;
+    color: #f39c12;
+}
+
+.status-value:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.status-controls {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.btn-small {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background-color 0.3s;
+    min-width: 100px;
+}
+
+.btn-small:hover {
+    background-color: #2980b9;
+}
+
+.btn-small:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+.btn-small:active {
+    transform: scale(0.95);
+    transition: transform 0.1s ease;
+}
+}

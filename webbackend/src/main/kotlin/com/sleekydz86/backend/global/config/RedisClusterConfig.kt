@@ -53,10 +53,13 @@ class RedisClusterConfig {
                 clusterConfig.setMaxRedirects(maxRedirects)
                 
                 val topologyRefreshOptions = ClusterTopologyRefreshOptions.builder()
-                    .enableAllRefreshTriggers()
+                    .enableAdaptiveRefreshTrigger(
+                        ClusterTopologyRefreshOptions.RefreshTrigger.MOVED_REDIRECT,
+                        ClusterTopologyRefreshOptions.RefreshTrigger.PERSISTENT_RECONNECTS,
+                        ClusterTopologyRefreshOptions.RefreshTrigger.ASK_REDIRECT
+                    )
                     .enablePeriodicRefresh(Duration.ofSeconds(30))
                     .adaptiveRefreshTriggersTimeout(Duration.ofSeconds(30))
-                    .refreshTriggersReconnectAttempts(5)
                     .build()
                 
                 val clientOptions = ClusterClientOptions.builder()

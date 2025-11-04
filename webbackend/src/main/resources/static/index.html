@@ -151,9 +151,47 @@
         </div>
 
         <div class="card">
-          <h3>연결 상태</h3>
+          <h3>연결 상태 & 시스템 모니터</h3>
           <div id="connectionStatus">
-            <p>WebSocket 연결 중...</p>
+            <div class="status-item">
+              <span class="status-label">WebSocket:</span>
+              <span id="wsStatus" class="status-value neutral">연결 중...</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">백엔드 API:</span>
+              <span id="apiStatus" class="status-value neutral"
+                >확인 중...</span
+              >
+            </div>
+            <div class="status-item">
+              <span class="status-label">Python API:</span>
+              <span id="pythonApiStatus" class="status-value neutral"
+                >확인 중...</span
+              >
+            </div>
+            <div class="status-item">
+              <span class="status-label">마지막 업데이트:</span>
+              <span id="lastUpdateTime" class="status-value neutral">-</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">수신 메시지:</span>
+              <span id="messageCount" class="status-value neutral">0</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">재연결 시도:</span>
+              <span id="reconnectCount" class="status-value neutral">0</span>
+            </div>
+            <div class="status-controls">
+              <button class="btn-small" onclick="dashboard.checkSystemHealth()">
+                시스템 체크
+              </button>
+              <button
+                class="btn-small"
+                onclick="dashboard.resetConnectionStats()"
+              >
+                통계 리셋
+              </button>
+            </div>
           </div>
         </div>
       </div>

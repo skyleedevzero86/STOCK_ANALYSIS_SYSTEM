@@ -25,6 +25,8 @@ class StockDataResponse(BaseModel):
     confidenceScore: Optional[float] = Field(None, description="데이터 신뢰도", example=0.95, alias="confidence_score")
 
 class TradingSignalsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     signal: str = Field(..., description="매매 신호")
     confidence: float = Field(..., description="신뢰도")
     rsi: Optional[float] = Field(None, description="RSI 값")
@@ -38,6 +40,8 @@ class AnomalyResponse(BaseModel):
     timestamp: datetime = Field(..., description="발생 시간")
 
 class TechnicalAnalysisResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
     symbol: str = Field(..., description="주식 심볼")
     currentPrice: float = Field(..., description="현재 가격", alias="current_price")
     volume: int = Field(..., description="거래량")
@@ -165,9 +169,9 @@ class StockAnalysisAPI:
             
             return {
                 'symbol': symbol,
-                'currentPrice': realtime_data['price'],
+                'currentPrice': realtime_data['currentPrice'],
                 'volume': realtime_data.get('volume', 0),
-                'changePercent': realtime_data.get('change_percent', 0),
+                'changePercent': realtime_data.get('changePercent', 0),
                 'trend': trend_analysis['trend'],
                 'trendStrength': trend_analysis['strength'],
                 'signals': {
@@ -182,10 +186,10 @@ class StockAnalysisAPI:
                         'type': anomaly['type'],
                         'severity': anomaly['severity'],
                         'message': anomaly['message'],
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': datetime.now()
                     } for anomaly in anomalies
                 ],
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now()
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
@@ -266,6 +270,17 @@ async def get_realtime_data(
 ):
     return await stock_api.get_realtime_data(symbol)
 
+@app.get("/api/analysis/all",
+         summary="전체 종목 분석 결과",
+         description="모든 분석 중인 종목의 기술적 분석 결과를 조회합니다.",
+         response_model=List[TechnicalAnalysisResponse],
+         responses={
+             200: {"description": "성공적으로 모든 분석 결과를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_all_analysis():
+    return await stock_api.get_all_symbols_analysis()
+
 @app.get("/api/analysis/{symbol}",
          summary="기술적 분석 결과",
          description="특정 종목의 기술적 분석 결과를 조회합니다.",
@@ -293,17 +308,6 @@ async def get_historical_data(
     days: int = Query(30, description="조회할 일수", ge=1, le=365)
 ):
     return await stock_api.get_historical_data(symbol, days)
-
-@app.get("/api/analysis/all",
-         summary="전체 종목 분석 결과",
-         description="모든 분석 중인 종목의 기술적 분석 결과를 조회합니다.",
-         response_model=List[TechnicalAnalysisResponse],
-         responses={
-             200: {"description": "성공적으로 모든 분석 결과를 조회했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
-         })
-async def get_all_analysis():
-    return await stock_api.get_all_symbols_analysis()
 
 @app.get("/api/alpha-vantage/search/{keywords}",
          summary="Alpha Vantage 종목 검색",

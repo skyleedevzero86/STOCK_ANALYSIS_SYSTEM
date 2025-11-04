@@ -105,8 +105,11 @@ class AdvancedTechnicalAnalyzer:
         indicators['fi'] = ta.volume.ForceIndexIndicator(data['close'], data['volume']).force_index()
         indicators['eom'] = ta.volume.EaseOfMovementIndicator(data['high'], data['low'], data['volume']).ease_of_movement()
         indicators['sma_eom'] = ta.volume.EaseOfMovementIndicator(data['high'], data['low'], data['volume']).sma_ease_of_movement()
-        indicators['vwap'] = ta.volume.VolumeSMAIndicator(data['close'], data['volume']).volume_sma()
-        indicators['vwma'] = ta.volume.VolumeSMAIndicator(data['close'], data['volume']).volume_sma()
+        
+        window = 20
+        vwap = (data['close'] * data['volume']).rolling(window=window).sum() / data['volume'].rolling(window=window).sum()
+        indicators['vwap'] = vwap
+        indicators['vwma'] = vwap
         
         indicators['mfi'] = ta.volume.MFIIndicator(data['high'], data['low'], data['close'], data['volume']).money_flow_index()
         indicators['nvi'] = ta.volume.NegativeVolumeIndexIndicator(data['close'], data['volume']).negative_volume_index()

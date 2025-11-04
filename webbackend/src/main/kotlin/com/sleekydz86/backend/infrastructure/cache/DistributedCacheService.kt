@@ -31,7 +31,7 @@ class DistributedCacheService(
                 val isMovedError = error.message?.contains("MOVED") == true || 
                                   error.cause?.message?.contains("MOVED") == true
                 if (isMovedError) {
-                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)", error)
+                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)")
                 } else {
                     logger.warn("Redis get operation failed for key: $key, falling back to null", error)
                 }
@@ -48,7 +48,7 @@ class DistributedCacheService(
                 val isMovedError = error.message?.contains("MOVED") == true || 
                                   error.cause?.message?.contains("MOVED") == true
                 if (isMovedError) {
-                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)", error)
+                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)")
                     Mono.just(false)
                 } else {
                     logger.warn("Redis set operation failed for key: $key, continuing without cache", error)

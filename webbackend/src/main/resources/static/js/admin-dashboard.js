@@ -1,10 +1,15 @@
-let adminToken = localStorage.getItem("adminToken");
-
-if (!adminToken) {
+if (!localStorage.getItem("adminToken")) {
     window.location.href = "/admin-login.html";
 }
 
 async function loadSubscriptions() {
+    const adminToken = localStorage.getItem("adminToken");
+    
+    if (!adminToken) {
+        window.location.href = "/admin-login.html";
+        return;
+    }
+
     try {
         const response = await fetch("/api/admin/subscriptions", {
             headers: {
@@ -12,17 +17,23 @@ async function loadSubscriptions() {
             },
         });
 
+        if (response.status === 401) {
+            localStorage.removeItem("adminToken");
+            window.location.href = "/admin-login.html";
+            return;
+        }
+
         const result = await response.json();
 
         if (result.success) {
             displaySubscriptions(result.data.subscriptions);
             updateStats(result.data.subscriptions);
         } else {
-            if (result.message.includes("인증")) {
+            if (result.message && result.message.includes("인증")) {
                 localStorage.removeItem("adminToken");
                 window.location.href = "/admin-login.html";
             } else {
-                showError(result.message);
+                showError(result.message || "데이터를 불러오는 중 오류가 발생했습니다.");
             }
         }
     } catch (error) {
@@ -116,4 +127,7 @@ function logout() {
     window.location.href = "/admin-login.html";
 }
 
-loadSubscriptions();
+document.addEventListener("DOMContentLoaded", function() {
+    updateNavigation();
+    loadSubscriptions();
+});

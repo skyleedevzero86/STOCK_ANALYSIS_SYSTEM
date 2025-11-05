@@ -1,43 +1,51 @@
-document
-    .getElementById("loginForm")
-    .addEventListener("submit", async function (e) {
-        e.preventDefault();
+if (localStorage.getItem("adminToken")) {
+    window.location.href = "/admin-dashboard.html";
+}
 
-        const formData = new FormData(this);
-        const data = {
-            email: formData.get("email"),
-            password: formData.get("password"),
-        };
+document.addEventListener("DOMContentLoaded", function() {
+    updateNavigation();
+    
+    document
+        .getElementById("loginForm")
+        .addEventListener("submit", async function (e) {
+            e.preventDefault();
 
-        try {
-            const response = await fetch("/api/admin/login", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(data),
-            });
+            const formData = new FormData(this);
+            const data = {
+                email: formData.get("email"),
+                password: formData.get("password"),
+            };
 
-            const result = await response.json();
+            try {
+                const response = await fetch("/api/admin/login", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(data),
+                });
 
-            if (result.success) {
-                localStorage.setItem("adminToken", result.data.token);
-                updateNavigation();
-                showStatusMessage(
-                    true,
-                    "로그인 성공! 구독자 목록 페이지로 이동합니다."
-                );
+                const result = await response.json();
 
-                setTimeout(() => {
-                    window.location.href = "/admin-dashboard.html";
-                }, 2000);
-            } else {
-                showStatusMessage(false, result.message);
+                if (result.success) {
+                    localStorage.setItem("adminToken", result.data.token);
+                    updateNavigation();
+                    showStatusMessage(
+                        true,
+                        "로그인 성공! 구독자 목록 페이지로 이동합니다."
+                    );
+
+                    setTimeout(() => {
+                        window.location.href = "/admin-dashboard.html";
+                    }, 2000);
+                } else {
+                    showStatusMessage(false, result.message);
+                }
+            } catch (error) {
+                showStatusMessage(false, "로그인 중 오류가 발생했습니다.");
             }
-        } catch (error) {
-            showStatusMessage(false, "로그인 중 오류가 발생했습니다.");
-        }
-    });
+        });
+});
 
 function showStatusMessage(success, message) {
     const statusDiv = document.getElementById("statusMessage");

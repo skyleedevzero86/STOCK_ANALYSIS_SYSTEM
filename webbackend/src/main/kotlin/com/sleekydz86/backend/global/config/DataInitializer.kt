@@ -6,6 +6,8 @@ import com.sleekydz86.backend.domain.model.User
 import com.sleekydz86.backend.domain.repository.PermissionRepository
 import com.sleekydz86.backend.domain.repository.RoleRepository
 import com.sleekydz86.backend.domain.repository.UserRepository
+import com.sleekydz86.backend.infrastructure.entity.AdminUserEntity
+import com.sleekydz86.backend.infrastructure.repository.AdminUserRepository
 import org.springframework.boot.CommandLineRunner
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Component
@@ -16,6 +18,7 @@ class DataInitializer(
     private val userRepository: UserRepository,
     private val roleRepository: RoleRepository,
     private val permissionRepository: PermissionRepository,
+    private val adminUserRepository: AdminUserRepository,
     private val passwordEncoder: PasswordEncoder
 ) : CommandLineRunner {
 
@@ -24,6 +27,7 @@ class DataInitializer(
         initializePermissions()
         initializeRoles()
         initializeUsers()
+        initializeAdminUsers()
     }
 
     private fun initializePermissions() {
@@ -103,6 +107,17 @@ class DataInitializer(
                 roles = setOf(userRole)
             )
             userRepository.save(regularUser)
+        }
+    }
+
+    private fun initializeAdminUsers() {
+        if (adminUserRepository.findByEmail("admin@admin.com") == null) {
+            val adminUser = AdminUserEntity(
+                email = "admin@admin.com",
+                passwordHash = passwordEncoder.encode("1234"),
+                isActive = true
+            )
+            adminUserRepository.save(adminUser)
         }
     }
 }

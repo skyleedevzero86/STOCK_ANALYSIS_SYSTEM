@@ -68,7 +68,8 @@ async function loadTemplates() {
         }
 
         if (response.ok) {
-            templates = await response.json();
+            const responseData = await response.json();
+            templates = Array.isArray(responseData) ? responseData : [];
             renderTemplates();
         } else {
             const errorText = await response.text();
@@ -83,9 +84,26 @@ async function loadTemplates() {
 
 function renderTemplates() {
     const templateList = document.getElementById("templateList");
+    const templateSelect = document.getElementById("templateSelect");
     templateList.innerHTML = "";
 
+    if (templateSelect) {
+        templateSelect.innerHTML = '<option value="">템플릿을 선택하세요</option>';
+    }
+
+    if (templates.length === 0) {
+        templateList.innerHTML = '<div class="no-templates">등록된 템플릿이 없습니다. 새 템플릿을 생성해주세요.</div>';
+        return;
+    }
+
     templates.forEach((template) => {
+        if (templateSelect) {
+            const option = document.createElement("option");
+            option.value = template.id;
+            option.textContent = template.name;
+            templateSelect.appendChild(option);
+        }
+
         const templateItem = document.createElement("div");
         templateItem.className = "template-item";
         templateItem.innerHTML = `
@@ -102,13 +120,10 @@ function renderTemplates() {
       </div>
       <div class="template-content">
         <strong>제목:</strong> ${template.subject}<br>
-        <strong>내용:</strong> ${template.content.substring(
-            0,
-            100
-        )}...
+        <strong>내용:</strong> ${template.content ? template.content.substring(0, 100) + "..." : "(내용 없음)"}
       </div>
       <div class="template-meta">
-        생성일: ${new Date(template.createdAt).toLocaleString()}
+        생성일: ${template.createdAt ? new Date(template.createdAt).toLocaleString() : "-"}
       </div>
     `;
         templateList.appendChild(templateItem);
@@ -268,6 +283,14 @@ async function sendAIEmail() {
         return;
     }
 
+    const templateSelect = document.getElementById("templateSelect");
+    const templateId = templateSelect ? templateSelect.value : null;
+    
+    if (!templateId || templateId === "") {
+        alert("템플릿을 선택해주세요.");
+        return;
+    }
+
     const headers = getAuthHeaders();
     if (!headers) {
         return;
@@ -278,8 +301,6 @@ async function sendAIEmail() {
     resultArea.textContent = "AI 분석 이메일 발송 중...";
 
     try {
-        const templateId = templates.length > 0 ? templates[0].id : 1;
-
         const response = await fetch(
             `/api/ai-email/send/${templateId}/${symbol}`,
             {
@@ -331,6 +352,14 @@ async function sendBulkAIEmail() {
         return;
     }
 
+    const templateSelect = document.getElementById("templateSelect");
+    const templateId = templateSelect ? templateSelect.value : null;
+    
+    if (!templateId || templateId === "") {
+        alert("템플릿을 선택해주세요.");
+        return;
+    }
+
     const headers = getAuthHeaders();
     if (!headers) {
         return;
@@ -341,8 +370,6 @@ async function sendBulkAIEmail() {
     resultArea.textContent = "대량 AI 분석 이메일 발송 중...";
 
     try {
-        const templateId = templates.length > 0 ? templates[0].id : 1;
-
         const response = await fetch(
             `/api/ai-email/send-bulk/${templateId}`,
             {

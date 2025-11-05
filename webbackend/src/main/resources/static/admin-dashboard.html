@@ -17,11 +17,15 @@
 
       <div class="navigation">
         <a href="/" class="nav-link">메인</a>
-        <a href="/admin-login.html" class="nav-link" style="display: none;">로그인</a>
-        <a href="/email-subscription.html" class="nav-link" style="display: none;">구독신청</a>
         <a href="/template-management.html" class="nav-link">템플릿보기</a>
         <a href="/api-view.html" class="nav-link">API보기</a>
-        <a href="/admin-dashboard.html" class="nav-link active">관리자대시보드</a>
+        <a href="/admin-dashboard.html" class="nav-link active"
+          >관리자대시보드</a
+        >
+        <button class="nav-link btn-logout-nav" onclick="logout()">
+          로그아웃
+        </button>
+        <button id="symbolSelectBtn" class="nav-link btn-nav">종목선택</button>
       </div>
 
       <div class="admin-dashboard">
@@ -48,19 +52,60 @@
         <div class="subscriptions-table">
           <div class="table-header">
             <h3>구독자 목록</h3>
-            <button
-              onclick="loadSubscriptions()"
-              style="
-                padding: 8px 16px;
-                background: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-              "
-            >
-              새로고침
-            </button>
+            <div style="display: flex; gap: 10px; align-items: center">
+              <input
+                type="text"
+                id="searchNameInput"
+                placeholder="이름으로 검색..."
+                style="
+                  padding: 8px 12px;
+                  border: 1px solid #ddd;
+                  border-radius: 4px;
+                  font-size: 14px;
+                  width: 200px;
+                "
+                onkeyup="handleSearchKeyUp(event)"
+              />
+              <button
+                onclick="handleSearch()"
+                style="
+                  padding: 8px 16px;
+                  background: #3498db;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                "
+              >
+                검색
+              </button>
+              <button
+                onclick="clearSearch()"
+                style="
+                  padding: 8px 16px;
+                  background: #95a5a6;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                "
+              >
+                초기화
+              </button>
+              <button
+                onclick="loadSubscriptions()"
+                style="
+                  padding: 8px 16px;
+                  background: #3498db;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  cursor: pointer;
+                "
+              >
+                새로고침
+              </button>
+            </div>
           </div>
           <div class="table-content">
             <div id="subscriptionsContent">

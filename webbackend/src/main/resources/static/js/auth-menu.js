@@ -3,22 +3,27 @@ function checkAuthStatus() {
     return adminToken !== null;
 }
 
+function logout() {
+    localStorage.removeItem("adminToken");
+    updateNavigation();
+    window.location.href = "/admin-login.html";
+}
+
 function updateNavigation() {
     const isLoggedIn = checkAuthStatus();
     const navLinks = document.querySelectorAll('.nav-link');
     const symbolSelectBtn = document.getElementById('symbolSelectBtn');
+    const logoutButtons = document.querySelectorAll('.btn-logout-nav');
     const currentPage = window.location.pathname;
     const isMainPage = currentPage === '/' || currentPage === '/index.html';
+    const isLoginPage = currentPage === '/admin-login.html' || currentPage === '/admin-login';
+    const isSubscriptionPage = currentPage === '/email-subscription.html' || currentPage === '/email-subscription';
 
     navLinks.forEach(link => {
         const href = link.getAttribute('href');
 
         if (href === '/') {
-            if (isLoggedIn) {
-                link.style.display = 'inline-block';
-            } else {
-                link.style.display = 'inline-block';
-            }
+            link.style.display = 'inline-block';
         } else if (href === '/admin-login.html') {
             if (isLoggedIn) {
                 link.style.display = 'none';
@@ -52,24 +57,40 @@ function updateNavigation() {
         }
     });
 
+    logoutButtons.forEach(btn => {
+        if (isLoggedIn) {
+            btn.style.display = 'inline-block';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
+
     if (symbolSelectBtn) {
-        if (isLoggedIn && isMainPage) {
+        if (isLoginPage || isSubscriptionPage) {
+            symbolSelectBtn.style.display = 'none';
+        } else if (isLoggedIn && isMainPage) {
             symbolSelectBtn.style.display = 'inline-block';
         } else if (isLoggedIn && !isMainPage) {
             symbolSelectBtn.style.display = 'none';
-        } else {
+        } else if (!isLoggedIn && isMainPage) {
             symbolSelectBtn.style.display = 'inline-block';
+        } else {
+            symbolSelectBtn.style.display = 'none';
         }
     }
 
     const symbolSelectLinks = document.querySelectorAll('.nav-link.btn-nav');
     symbolSelectLinks.forEach(link => {
-        if (isLoggedIn && isMainPage) {
+        if (isLoginPage || isSubscriptionPage) {
+            link.style.display = 'none';
+        } else if (isLoggedIn && isMainPage) {
             link.style.display = 'inline-block';
         } else if (isLoggedIn && !isMainPage) {
             link.style.display = 'none';
-        } else {
+        } else if (!isLoggedIn && isMainPage) {
             link.style.display = 'inline-block';
+        } else {
+            link.style.display = 'none';
         }
     });
 }

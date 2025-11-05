@@ -79,6 +79,9 @@
   font-size: 0.875rem;
   font-weight: 500;
   transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .nav-link:hover {
@@ -93,6 +96,15 @@
 
 .nav-link[style*="display: none"] {
   display: none !important;
+}
+
+.btn-logout-nav {
+  background: #e74c3c !important;
+  color: #fff !important;
+}
+
+.btn-logout-nav:hover {
+  background: #c0392b !important;
 }
 
 .dashboard-grid {

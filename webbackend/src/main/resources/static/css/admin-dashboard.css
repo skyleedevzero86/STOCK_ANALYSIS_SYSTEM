@@ -188,6 +188,105 @@ tr:hover {
   color: #e74c3c;
 }
 
+.name-link {
+  color: #2f456e;
+  text-decoration: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.name-link:hover {
+  color: #60bde6;
+  text-decoration: underline;
+}
+
+.consent-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.consent-toggle input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.status-toggle-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.status-active-btn {
+  background: #d5f4e6;
+  color: #27ae60;
+}
+
+.status-active-btn:hover {
+  background: #27ae60;
+  color: #fff;
+}
+
+.status-inactive-btn {
+  background: #fadbd8;
+  color: #e74c3c;
+}
+
+.status-inactive-btn:hover {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 20px;
+  flex-wrap: wrap;
+}
+
+.page-btn {
+  padding: 8px 16px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #2f456e;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.page-btn:hover {
+  background: #f6f7f7;
+  border-color: #2f456e;
+}
+
+.page-btn.active {
+  background: #2f456e;
+  color: #fff;
+  border-color: #2f456e;
+}
+
+.page-ellipsis {
+  padding: 8px 4px;
+  color: #666;
+}
+
+.page-info {
+  margin-left: 16px;
+  color: #666;
+  font-size: 0.875rem;
+}
+
 .navigation {
   text-align: center;
   margin-bottom: 30px;

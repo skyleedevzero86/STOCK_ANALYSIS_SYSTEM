@@ -45,6 +45,53 @@ class EmailSubscriptionService(
         }
     }
 
+    fun getAllActiveSubscriptions(page: Int, size: Int, name: String? = null): Mono<Pair<List<EmailSubscription>, Long>> {
+        return Mono.fromCallable {
+            val pageable = org.springframework.data.domain.PageRequest.of(page, size)
+            val pageResult = if (name.isNullOrBlank()) {
+                emailSubscriptionRepository.findAllActive(pageable)
+            } else {
+                emailSubscriptionRepository.findAllActiveByNameContaining(name.trim(), pageable)
+            }
+            Pair(
+                pageResult.content.map { entity: EmailSubscriptionEntity -> entity.toDomain() },
+                pageResult.totalElements
+            )
+        }
+    }
+
+    fun updateSubscriptionConsent(id: Long, isEmailConsent: Boolean?, isPhoneConsent: Boolean?): Mono<EmailSubscription> {
+        return Mono.fromCallable {
+            val entity = emailSubscriptionRepository.findById(id)
+                .orElseThrow { IllegalArgumentException("구독자를 찾을 수 없습니다.") }
+            
+            val updated = entity.copy(
+                isEmailConsent = isEmailConsent ?: entity.isEmailConsent,
+                isPhoneConsent = isPhoneConsent ?: entity.isPhoneConsent
+            )
+            
+            emailSubscriptionRepository.save(updated).toDomain()
+        }
+    }
+
+    fun updateSubscriptionStatus(id: Long, isActive: Boolean): Mono<EmailSubscription> {
+        return Mono.fromCallable {
+            val entity = emailSubscriptionRepository.findById(id)
+                .orElseThrow { IllegalArgumentException("구독자를 찾을 수 없습니다.") }
+            
+            val updated = entity.copy(isActive = isActive)
+            emailSubscriptionRepository.save(updated).toDomain()
+        }
+    }
+
+    fun getSubscriptionById(id: Long): Mono<EmailSubscription> {
+        return Mono.fromCallable {
+            val entity = emailSubscriptionRepository.findById(id)
+                .orElseThrow { IllegalArgumentException("구독자를 찾을 수 없습니다.") }
+            entity.toDomain()
+        }
+    }
+
     fun getActiveSubscriptionsWithEmailConsent(): Mono<List<EmailSubscription>> {
         return Mono.fromCallable {
             emailSubscriptionRepository.findAllActiveWithEmailConsent()

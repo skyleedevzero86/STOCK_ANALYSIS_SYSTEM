@@ -17,11 +17,13 @@
 
       <div class="navigation">
         <a href="/" class="nav-link">메인</a>
-        <a href="/admin-login.html" class="nav-link" style="display: none;">로그인</a>
-        <a href="/email-subscription.html" class="nav-link" style="display: none;">구독신청</a>
         <a href="/template-management.html" class="nav-link">템플릿보기</a>
         <a href="/api-view.html" class="nav-link active">API보기</a>
         <a href="/admin-dashboard.html" class="nav-link">관리자대시보드</a>
+        <button class="nav-link btn-logout-nav" onclick="logout()">
+          로그아웃
+        </button>
+        <button id="symbolSelectBtn" class="nav-link btn-nav">종목선택</button>
       </div>
 
       <div class="api-container">

@@ -67,7 +67,7 @@ def start_python_api():
     print("포트: 9000")
     print("API 엔드포인트: http://localhost:9000")
     print("문서: http://localhost:9000/docs")
-    print("Airflow UI: http://localhost:8080")
+    print("Airflow UI: http://localhost:8081")
     print("-" * 60)
     
     if not check_port_available(9000):

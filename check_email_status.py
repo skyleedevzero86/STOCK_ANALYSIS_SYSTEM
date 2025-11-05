@@ -32,7 +32,7 @@ def check_email_sending_status():
     print("   - 관리자 로그인 후 발송 로그 확인")
     print()
     print("   방법 3: Airflow UI에서 확인")
-    print("   - http://localhost:8080 접속 (Airflow UI)")
+    print("   - http://localhost:8081 접속 (Airflow UI)")
     print("   - email_notification_dag 실행 상태 확인")
     
     print("\n4. 이메일이 발송되지 않았다면:")

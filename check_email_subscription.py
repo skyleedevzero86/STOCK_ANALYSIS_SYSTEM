@@ -149,14 +149,14 @@ def check_airflow_status():
         print("Airflow DAG 상태 확인")
         print("=" * 60)
         
-        airflow_url = "http://localhost:8080/api/v1/dags"
+        airflow_url = "http://localhost:8081/api/v1/dags"
         
         try:
             response = requests.get(airflow_url, timeout=5)
             if response.status_code == 200:
                 print("Airflow 서버가 실행 중입니다.")
                 
-                dag_url = "http://localhost:8080/api/v1/dags/email_notification_dag"
+                dag_url = "http://localhost:8081/api/v1/dags/email_notification_dag"
                 dag_response = requests.get(dag_url, timeout=5)
                 
                 if dag_response.status_code == 200:
@@ -191,7 +191,7 @@ def check_airflow_status():
                 print(f"Airflow 서버 응답 오류: {response.status_code}")
         except requests.exceptions.ConnectionError:
             print("Airflow 서버에 연결할 수 없습니다.")
-            print("   Airflow 서버를 시작하세요: airflow webserver --port 8080")
+            print("   Airflow 서버를 시작하세요: airflow webserver --port 8081")
         except Exception as e:
             print(f"오류 발생: {e}")
             

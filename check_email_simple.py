@@ -70,7 +70,7 @@ def check_airflow_dag():
         print("Airflow DAG 확인")
         print("=" * 60)
         
-        url = "http://localhost:8080/api/v1/dags/email_notification_dag"
+        url = "http://localhost:8081/api/v1/dags/email_notification_dag"
         response = requests.get(url, timeout=5)
         
         if response.status_code == 200:
@@ -103,7 +103,7 @@ def check_airflow_dag():
             
     except requests.exceptions.ConnectionError:
         print("Airflow 서버에 연결할 수 없습니다.")
-        print("   Airflow 서버를 시작하세요: airflow webserver --port 8080")
+        print("   Airflow 서버를 시작하세요: airflow webserver --port 8081")
         return False
     except Exception as e:
         print(f"오류 발생: {e}")
@@ -144,7 +144,7 @@ def main():
     print("1. 모든 서버가 실행 중인지 확인:")
     print("   - Spring Boot: http://localhost:8080")
     print("   - Python API: http://localhost:9000")
-    print("   - Airflow: http://localhost:8080 (Airflow UI)")
+    print("   - Airflow: http://localhost:8081 (Airflow UI)")
     print()
     print("2. Airflow 스케줄러 실행:")
     print("   airflow scheduler")

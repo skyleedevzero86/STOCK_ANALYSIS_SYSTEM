@@ -220,17 +220,28 @@ class StockAnalysisAPI:
             historical_data = self._load_historical_data(symbol)
             analyzed_data = self.analyzer.calculate_all_indicators(historical_data)
             
+            import pandas as pd
+            import numpy as np
+            
             chart_data = []
             for i, row in analyzed_data.iterrows():
+                def safe_float(value, default=None):
+                    if pd.isna(value) or np.isnan(value):
+                        return default
+                    try:
+                        return float(value) if value is not None else default
+                    except (ValueError, TypeError):
+                        return default
+                
                 chart_data.append({
                     'date': row['date'].isoformat(),
-                    'close': float(row['close']),
-                    'volume': int(row['volume']),
-                    'rsi': float(row.get('rsi', 0)) if 'rsi' in row else None,
-                    'macd': float(row.get('macd', 0)) if 'macd' in row else None,
-                    'bb_upper': float(row.get('bb_upper', 0)) if 'bb_upper' in row else None,
-                    'bb_lower': float(row.get('bb_lower', 0)) if 'bb_lower' in row else None,
-                    'sma_20': float(row.get('sma_20', 0)) if 'sma_20' in row else None
+                    'close': safe_float(row['close'], 0.0),
+                    'volume': int(row['volume']) if not pd.isna(row['volume']) else 0,
+                    'rsi': safe_float(row.get('rsi')) if 'rsi' in row else None,
+                    'macd': safe_float(row.get('macd')) if 'macd' in row else None,
+                    'bb_upper': safe_float(row.get('bb_upper')) if 'bb_upper' in row else None,
+                    'bb_lower': safe_float(row.get('bb_lower')) if 'bb_lower' in row else None,
+                    'sma_20': safe_float(row.get('sma_20')) if 'sma_20' in row else None
                 })
             
             return {

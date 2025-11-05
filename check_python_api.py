@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Python API 서버 상태 확인 스크립트
-실제로 RSI와 MACD 데이터가 반환되는지 확인합니다.
-"""
-
 import requests
 import json
 import sys

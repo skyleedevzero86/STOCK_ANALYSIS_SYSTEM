@@ -70,6 +70,7 @@ class SecurityConfig(
                     .pathMatchers("/api/stocks/**").permitAll()
                     .pathMatchers("/api/cqrs/stocks/**").permitAll()
                     .pathMatchers("/api/admin/**").hasRole("ADMIN")
+                    .pathMatchers("/api/email-subscriptions/subscribe", "/api/email-subscriptions/unsubscribe").permitAll()
                     .pathMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
                     .pathMatchers("/api/templates/**").hasRole("ADMIN")
                     .pathMatchers("/api/ai-analysis/**").hasAnyRole("USER", "ADMIN")

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Path
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.openapi.utils import get_openapi
@@ -12,6 +12,7 @@ import uvicorn
 
 from data_collectors.stock_data_collector import StockDataCollector
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
+from notification.notification_service import NotificationService
 from config.settings import settings
 
 class StockDataResponse(BaseModel):
@@ -55,6 +56,15 @@ class TechnicalAnalysisResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str = Field(..., description="오류 메시지")
     detail: str = Field(..., description="상세 오류 정보")
+
+class EmailNotificationRequest(BaseModel):
+    to_email: str = Field(..., description="수신자 이메일")
+    subject: str = Field(..., description="이메일 제목")
+    body: str = Field(..., description="이메일 내용")
+
+class EmailNotificationResponse(BaseModel):
+    success: bool = Field(..., description="발송 성공 여부")
+    message: str = Field(..., description="응답 메시지")
 
 app = FastAPI(
     title="Stock Analysis API",
@@ -110,6 +120,17 @@ class StockAnalysisAPI:
             use_alpha_vantage=True
         )
         self.analyzer = TechnicalAnalyzer()
+        
+        email_config = {
+            'smtp_server': settings.EMAIL_SMTP_SERVER,
+            'smtp_port': settings.EMAIL_SMTP_PORT,
+            'user': settings.EMAIL_USER,
+            'password': settings.EMAIL_PASSWORD
+        }
+        self.notification_service = NotificationService(
+            email_config=email_config,
+            slack_webhook=settings.SLACK_WEBHOOK_URL
+        )
 
     def _load_historical_data(self, symbol: str):
         import pandas as pd
@@ -393,6 +414,54 @@ async def websocket_realtime(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+@app.post("/api/notifications/email",
+         summary="이메일 발송",
+         description="이메일을 발송합니다. 요청 본문 또는 쿼리 파라미터로 전달할 수 있습니다.",
+         response_model=EmailNotificationResponse,
+         responses={
+             200: {"description": "이메일이 성공적으로 발송되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def send_email_notification(
+    to_email: Optional[str] = Query(None, description="수신자 이메일"),
+    subject: Optional[str] = Query(None, description="이메일 제목"),
+    body: Optional[str] = Query(None, description="이메일 내용"),
+    request: Optional[EmailNotificationRequest] = Body(None, description="요청 본문")
+):
+    try:
+        if request:
+            to_email = request.to_email
+            subject = request.subject
+            body = request.body
+        
+        if not all([to_email, subject, body]):
+            raise HTTPException(
+                status_code=400,
+                detail="to_email, subject, body는 필수입니다."
+            )
+        
+        success = stock_api.notification_service.send_email(
+            to_email=to_email,
+            subject=subject,
+            body=body
+        )
+        
+        if success:
+            return EmailNotificationResponse(
+                success=True,
+                message="이메일이 성공적으로 발송되었습니다."
+            )
+        else:
+            return EmailNotificationResponse(
+                success=False,
+                message="이메일 발송에 실패했습니다."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"이메일 발송 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"이메일 발송 오류: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)

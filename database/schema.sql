@@ -1,5 +1,5 @@
 
--- 주식 분석 시스템 데이터베이스 생성
+
 CREATE DATABASE IF NOT EXISTS stock_analysis;
 USE stock_analysis;
 
@@ -89,7 +89,10 @@ CREATE TABLE IF NOT EXISTS notification_settings (
     price_change_threshold DECIMAL(5,2), -- 가격 변동 임계값
     is_active BOOLEAN DEFAULT TRUE,      -- 활성화 여부
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_email (user_email),
+    INDEX idx_symbol (symbol),
+    INDEX idx_active (is_active)
 );
 
 -- 알림 발송 로그 테이블
@@ -101,7 +104,12 @@ CREATE TABLE IF NOT EXISTS notification_logs (
     message TEXT,                       -- 발송 메시지
     sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 발송 시간
     status ENUM('sent', 'failed', 'pending') DEFAULT 'pending',  -- 발송 상태
-    error_message TEXT                 -- 오류 메시지
+    error_message TEXT,                 -- 오류 메시지
+    INDEX idx_user_email (user_email),
+    INDEX idx_symbol (symbol),
+    INDEX idx_notification_type (notification_type),
+    INDEX idx_status (status),
+    INDEX idx_sent_at (sent_at)
 );
 
 -- 일일 분석 요약 테이블
@@ -140,7 +148,72 @@ CREATE TABLE IF NOT EXISTS admin_users (
     password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    INDEX idx_email (email)
+    INDEX idx_email (email),
+    INDEX idx_active (is_active)
+);
+
+-- 사용자 테이블 (Spring Boot 백엔드용)
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_username (username),
+    INDEX idx_email (email),
+    INDEX idx_active (is_active)
+);
+
+-- 권한(Permission) 테이블
+CREATE TABLE IF NOT EXISTS permissions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    resource VARCHAR(100),
+    action VARCHAR(100),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_name (name),
+    INDEX idx_resource (resource),
+    INDEX idx_active (is_active)
+);
+
+-- 역할(Role) 테이블
+CREATE TABLE IF NOT EXISTS roles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_name (name),
+    INDEX idx_active (is_active)
+);
+
+-- 사용자-역할 조인 테이블
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id BIGINT NOT NULL,
+    role_id BIGINT NOT NULL,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_role_id (role_id)
+);
+
+-- 역할-권한 조인 테이블
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_id BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    PRIMARY KEY (role_id, permission_id),
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+    INDEX idx_role_id (role_id),
+    INDEX idx_permission_id (permission_id)
 );
 
 -- 초기 주식 데이터 삽입 (주요 기술주)
@@ -188,6 +261,71 @@ CREATE TABLE IF NOT EXISTS ai_analysis_results (
 INSERT INTO admin_users (email, password_hash) VALUES
 ('admin@admin.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDi')
 ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash);
+
+-- 기본 권한 생성
+INSERT INTO permissions (name, description, resource, action) VALUES
+('STOCK_READ', 'Read stock data', 'stock', 'read'),
+('STOCK_WRITE', 'Write stock data', 'stock', 'write'),
+('ANALYSIS_READ', 'Read analysis data', 'analysis', 'read'),
+('ANALYSIS_WRITE', 'Write analysis data', 'analysis', 'write'),
+('USER_READ', 'Read user data', 'user', 'read'),
+('USER_WRITE', 'Write user data', 'user', 'write'),
+('ADMIN_READ', 'Read admin data', 'admin', 'read'),
+('ADMIN_WRITE', 'Write admin data', 'admin', 'write'),
+('EMAIL_READ', 'Read email data', 'email', 'read'),
+('EMAIL_WRITE', 'Write email data', 'email', 'write'),
+('TEMPLATE_READ', 'Read template data', 'template', 'read'),
+('TEMPLATE_WRITE', 'Write template data', 'template', 'write')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
+
+-- 기본 역할 생성
+INSERT INTO roles (name, description) VALUES
+('USER', 'Regular user role'),
+('ADMIN', 'Administrator role')
+ON DUPLICATE KEY UPDATE description = VALUES(description);
+
+-- 역할에 권한 할당 (USER 역할)
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r, permissions p
+WHERE r.name = 'USER'
+  AND p.resource IN ('stock', 'analysis', 'email')
+ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
+
+-- 역할에 권한 할당 (ADMIN 역할 - 모든 권한)
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r, permissions p
+WHERE r.name = 'ADMIN'
+ON DUPLICATE KEY UPDATE role_id = VALUES(role_id);
+
+-- 기본 관리자 사용자 생성 (username: admin, password: admin123)
+-- 참고: 실제 프로덕션 환경에서는 DataInitializer.kt에서 처리하므로 이 INSERT는 선택사항입니다.
+INSERT INTO users (username, email, password, first_name, last_name, is_active, is_email_verified)
+SELECT 'admin', 'admin@stockanalysis.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDi', 'Admin', 'User', TRUE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin')
+ON DUPLICATE KEY UPDATE email = VALUES(email);
+
+-- 기본 일반 사용자 생성 (username: user, password: user123)
+-- 참고: 실제 프로덕션 환경에서는 DataInitializer.kt에서 처리하므로 이 INSERT는 선택사항입니다.
+INSERT INTO users (username, email, password, first_name, last_name, is_active, is_email_verified)
+SELECT 'user', 'user@stockanalysis.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDi', 'Regular', 'User', TRUE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'user')
+ON DUPLICATE KEY UPDATE email = VALUES(email);
+
+-- 사용자에게 역할 할당 (admin -> ADMIN)
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u, roles r
+WHERE u.username = 'admin' AND r.name = 'ADMIN'
+ON DUPLICATE KEY UPDATE user_id = VALUES(user_id);
+
+-- 사용자에게 역할 할당 (user -> USER)
+INSERT INTO user_roles (user_id, role_id)
+SELECT u.id, r.id
+FROM users u, roles r
+WHERE u.username = 'user' AND r.name = 'USER'
+ON DUPLICATE KEY UPDATE user_id = VALUES(user_id);
 
 -- 기본 이메일 템플릿 생성
 INSERT INTO email_templates (name, subject, content) VALUES

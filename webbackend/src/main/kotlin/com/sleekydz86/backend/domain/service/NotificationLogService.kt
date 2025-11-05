@@ -5,6 +5,7 @@ import com.sleekydz86.backend.infrastructure.repository.NotificationLogRepositor
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
+import java.time.LocalDateTime
 
 @Service
 class NotificationLogService(
@@ -47,6 +48,37 @@ class NotificationLogService(
                     "errorMessage" to (entity.errorMessage ?: "")
                 )
             }
+        }
+    }
+
+    fun saveEmailLog(
+        userEmail: String,
+        subject: String,
+        message: String,
+        status: String,
+        errorMessage: String? = null,
+        source: String = "manual"
+    ): Mono<NotificationLogEntity> {
+        return Mono.fromCallable {
+            val logMessage = if (source == "manual") {
+                "[수기발송] $subject\n$message"
+            } else if (source == "airflow") {
+                "[Airflow발송] $subject\n$message"
+            } else {
+                "[$source] $subject\n$message"
+            }
+            
+            val logEntity = NotificationLogEntity(
+                userEmail = userEmail,
+                symbol = null,
+                notificationType = "email",
+                message = logMessage,
+                sentAt = LocalDateTime.now(),
+                status = status,
+                errorMessage = errorMessage
+            )
+            
+            notificationLogRepository.save(logEntity)
         }
     }
 }

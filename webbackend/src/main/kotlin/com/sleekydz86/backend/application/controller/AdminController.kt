@@ -251,18 +251,44 @@ class AdminController(
                     }
                     
                     pythonApiClient.sendEmail(toEmail, subject, body)
-                        .map { success ->
+                        .flatMap { success ->
                             if (success) {
-                                ApiResponseBuilder.success<Map<String, Any>>(
-                                    "이메일이 성공적으로 발송되었습니다.",
-                                    mapOf("email" to toEmail) as Map<String, Any>
-                                )
+                                notificationLogService.saveEmailLog(
+                                    userEmail = toEmail,
+                                    subject = subject,
+                                    message = body,
+                                    status = "sent",
+                                    source = "manual"
+                                ).map {
+                                    ApiResponseBuilder.success<Map<String, Any>>(
+                                        "이메일이 성공적으로 발송되었습니다.",
+                                        mapOf("email" to toEmail) as Map<String, Any>
+                                    )
+                                }
                             } else {
-                                ApiResponseBuilder.failure<Map<String, Any>>("이메일 발송에 실패했습니다.", null)
+                                notificationLogService.saveEmailLog(
+                                    userEmail = toEmail,
+                                    subject = subject,
+                                    message = body,
+                                    status = "failed",
+                                    errorMessage = "이메일 발송에 실패했습니다.",
+                                    source = "manual"
+                                ).map {
+                                    ApiResponseBuilder.failure<Map<String, Any>>("이메일 발송에 실패했습니다.", null)
+                                }
                             }
                         }
                         .onErrorResume { error ->
-                            Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "이메일 발송에 실패했습니다.", null))
+                            notificationLogService.saveEmailLog(
+                                userEmail = toEmail,
+                                subject = subject,
+                                message = body,
+                                status = "failed",
+                                errorMessage = error.message ?: "이메일 발송 중 오류 발생",
+                                source = "manual"
+                            ).map {
+                                ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "이메일 발송에 실패했습니다.", null)
+                            }
                         }
                 } else {
                     Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))

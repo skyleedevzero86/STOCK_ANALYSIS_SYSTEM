@@ -105,12 +105,15 @@
         </div>
         <div style="margin-bottom: 15px;">
           <label style="display: block; margin-bottom: 5px; font-weight: bold;">수신자 이메일</label>
-          <input type="email" id="recipientEmail" placeholder="이메일 주소를 입력하세요" style="
+          <input type="text" id="recipientEmail" readonly style="
             width: 100%;
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            background: #f5f5f5;
+            cursor: not-allowed;
           ">
+          <input type="hidden" id="actualRecipientEmail">
         </div>
         <div style="margin-bottom: 15px;">
           <label style="display: block; margin-bottom: 5px; font-weight: bold;">제목</label>
@@ -143,7 +146,7 @@
           ">
             취소
           </button>
-          <button onclick="sendEmail()" style="
+          <button id="sendEmailBtn" onclick="sendEmail(event)" style="
             padding: 10px 20px;
             background: #27ae60;
             color: white;

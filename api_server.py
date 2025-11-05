@@ -10,6 +10,13 @@ from datetime import datetime
 from typing import List, Dict, Optional
 import uvicorn
 
+try:
+    import pymysql
+    PYMYSQL_AVAILABLE = True
+except ImportError:
+    PYMYSQL_AVAILABLE = False
+    logging.warning("pymysql 모듈이 설치되지 않았습니다. 이메일 발송 이력 저장 기능이 비활성화됩니다.")
+
 from data_collectors.stock_data_collector import StockDataCollector
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
 from notification.notification_service import NotificationService
@@ -457,6 +464,44 @@ async def send_email_notification(
             subject=subject,
             body=body
         )
+        
+        source = "api"
+        if PYMYSQL_AVAILABLE:
+            try:
+                conn = pymysql.connect(
+                    host=settings.MYSQL_HOST,
+                    user=settings.MYSQL_USER,
+                    password=settings.MYSQL_PASSWORD,
+                    database=settings.MYSQL_DATABASE,
+                    port=settings.MYSQL_PORT,
+                    charset='utf8mb4'
+                )
+                cursor = conn.cursor()
+                
+                log_message = f"[API발송] {subject}\n{body}"
+                status = "sent" if success else "failed"
+                error_msg = None if success else "이메일 발송에 실패했습니다."
+                
+                cursor.execute("""
+                    INSERT INTO notification_logs 
+                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_email,
+                    None,
+                    'email',
+                    log_message,
+                    status,
+                    datetime.now(),
+                    error_msg
+                ))
+                
+                conn.commit()
+                cursor.close()
+                conn.close()
+                logging.info(f"이메일 발송 이력 저장 완료: {to_email} - {status}")
+            except Exception as e:
+                logging.error(f"이메일 발송 이력 저장 실패: {str(e)}")
         
         if success:
             return EmailNotificationResponse(

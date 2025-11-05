@@ -100,11 +100,19 @@ async function loadEmailHistory(page = 0) {
                 localStorage.removeItem("adminToken");
                 window.location.href = "/admin-login.html";
             } else {
-                showError(result.message || "데이터를 불러오는 중 오류가 발생했습니다.");
+                console.error("이력 로드 실패:", result.message);
+                const content = document.getElementById("emailHistoryContent");
+                if (content) {
+                    content.innerHTML = '<div class="error">데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.</div>';
+                }
             }
         }
     } catch (error) {
-        showError("데이터를 불러오는 중 오류가 발생했습니다: " + error.message);
+        console.error("이메일 이력 로드 오류:", error);
+        const content = document.getElementById("emailHistoryContent");
+        if (content) {
+            content.innerHTML = '<div class="error">데이터를 불러오는 중 오류가 발생했습니다. 페이지를 새로고침해주세요.</div>';
+        }
     }
 }
 
@@ -242,15 +250,17 @@ function maskEmail(email) {
 function openSendEmailModal() {
     const modal = document.getElementById("sendEmailModal");
     const recipientEmailInput = document.getElementById("recipientEmail");
+    const actualRecipientEmailInput = document.getElementById("actualRecipientEmail");
     
-    let defaultEmail = "";
+    let actualEmail = "";
     if (actualUserEmail) {
-        defaultEmail = actualUserEmail;
+        actualEmail = actualUserEmail;
     } else if (userEmail) {
-        defaultEmail = userEmail;
+        actualEmail = userEmail;
     }
     
-    recipientEmailInput.value = defaultEmail;
+    recipientEmailInput.value = maskEmail(actualEmail);
+    actualRecipientEmailInput.value = actualEmail;
     
     document.getElementById("emailSubject").value = "";
     document.getElementById("emailBody").value = "";
@@ -262,14 +272,15 @@ function closeSendEmailModal() {
     modal.style.display = "none";
 }
 
-async function sendEmail() {
+async function sendEmail(event) {
     const adminToken = localStorage.getItem("adminToken");
     if (!adminToken) {
         alert("인증이 필요합니다.");
         return;
     }
 
-    const recipientEmail = document.getElementById("recipientEmail").value.trim();
+    const recipientEmail = document.getElementById("actualRecipientEmail").value.trim();
+    const maskedEmail = document.getElementById("recipientEmail").value.trim();
     const subject = document.getElementById("emailSubject").value.trim();
     const body = document.getElementById("emailBody").value.trim();
 
@@ -280,12 +291,20 @@ async function sendEmail() {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(recipientEmail)) {
-        alert("올바른 이메일 주소를 입력해주세요.");
+        alert("올바른 이메일 주소가 아닙니다.");
         return;
     }
 
-    if (!confirm(`다음 이메일 주소로 이메일을 발송하시겠습니까?\n\n${recipientEmail}`)) {
+    if (!confirm(`다음 이메일 주소로 이메일을 발송하시겠습니까?\n\n${maskedEmail}`)) {
         return;
+    }
+
+    const sendButton = document.getElementById("sendEmailBtn");
+    if (sendButton) {
+        sendButton.disabled = true;
+        sendButton.textContent = "발송 중...";
+        sendButton.style.cursor = "not-allowed";
+        sendButton.style.opacity = "0.6";
     }
 
     try {
@@ -311,13 +330,35 @@ async function sendEmail() {
         const result = await response.json();
 
         if (result.success) {
+            if (sendButton) {
+                sendButton.disabled = false;
+                sendButton.textContent = "발송";
+                sendButton.style.cursor = "pointer";
+                sendButton.style.opacity = "1";
+            }
             alert("이메일이 성공적으로 발송되었습니다.");
             closeSendEmailModal();
-            loadEmailHistory(currentHistoryPage);
+            setTimeout(() => {
+                loadEmailHistory(currentHistoryPage).catch(error => {
+                    console.error("이력 로드 실패:", error);
+                });
+            }, 500);
         } else {
+            if (sendButton) {
+                sendButton.disabled = false;
+                sendButton.textContent = "발송";
+                sendButton.style.cursor = "pointer";
+                sendButton.style.opacity = "1";
+            }
             alert(result.message || "이메일 발송에 실패했습니다.");
         }
     } catch (error) {
+        if (sendButton) {
+            sendButton.disabled = false;
+            sendButton.textContent = "발송";
+            sendButton.style.cursor = "pointer";
+            sendButton.style.opacity = "1";
+        }
         alert("이메일 발송 중 오류가 발생했습니다: " + error.message);
     }
 }

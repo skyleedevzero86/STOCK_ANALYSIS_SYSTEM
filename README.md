@@ -33,6 +33,7 @@ graph TB
         SPRING[Spring Boot Server<br/>Port 8080]
         PYTHON_API[Python FastAPI Server<br/>Port 9000]
         PYTHON_ENHANCED[Enhanced Python API<br/>Port 8001]
+        AIRFLOW[Apache Airflow<br/>Port 8081]
     end
 
     subgraph "Service Layer"
@@ -58,11 +59,14 @@ graph TB
     API_CLIENT --> PYTHON_ENHANCED
     SPRING --> PYTHON_API
     SPRING --> PYTHON_ENHANCED
+    AIRFLOW --> SPRING
+    AIRFLOW --> PYTHON_API
     PYTHON_API --> DATA_COLLECTOR
     PYTHON_ENHANCED --> DATA_COLLECTOR
     PYTHON_API --> ANALYSIS_ENGINE
     PYTHON_ENHANCED --> ANALYSIS_ENGINE
     PYTHON_ENHANCED --> AI_SERVICE
+    PYTHON_API --> NOTIFICATION
     PYTHON_ENHANCED --> NOTIFICATION
     DATA_COLLECTOR --> ALPHA_VANTAGE
     DATA_COLLECTOR --> YAHOO
@@ -112,6 +116,7 @@ graph TB
 - **자동 발송**: Airflow DAG를 통한 일일 리포트 자동 발송
 - **관리자 대시보드**: 구독자 관리 및 통계 확인
 - **개인정보 보호**: 이메일/전화번호 마스킹 처리
+- **발송 이력 관리**: 이메일 발송 로그 및 통계 확인
 
 ### 6. 보안 및 모니터링
 
@@ -154,6 +159,8 @@ StockAnalysisSystem/
 ├── airflow_dags/           # Airflow DAG들
 │   ├── stock_analysis_dag.py
 │   └── email_notification_dag.py
+├── notification/           # 알림 서비스
+│   └── notification_service.py
 ├── database/               # DB 스키마
 │   ├── schema.sql
 │   └── sample_notification_settings.sql
@@ -179,7 +186,12 @@ StockAnalysisSystem/
 ├── start_python_api.py     # Python API 서버 실행 스크립트
 ├── requirements.txt        # Python 의존성
 ├── start_spring_boot.sh    # Spring Boot 실행 스크립트 (Linux/Mac)
-└── start_spring_boot.bat   # Spring Boot 실행 스크립트 (Windows)
+├── start_spring_boot.bat   # Spring Boot 실행 스크립트 (Windows)
+├── check_python_api.py     # Python API 상태 확인
+├── check_email_*.py        # 이메일 발송 디버깅 도구
+├── test_airflow_connection.py  # Airflow 연결 테스트
+├── env_example.txt         # 환경 변수 예제
+└── docker-compose.airflow.yml  # Airflow Docker Compose 설정
 ```
 
 ## 빠른 시작
@@ -212,19 +224,7 @@ cp env_example.txt .env
 
 ### 3. 서버 실행
 
-#### Python API 서버 (터미널 1)
-
-```bash
-# 기본 API 서버 (Port 9000)
-python start_python_api.py
-# 또는
-python api_server.py
-
-# 향상된 API 서버 (Port 8001)
-python api_server_enhanced.py
-```
-
-#### Spring Boot 서버 (터미널 2)
+#### Spring Boot 서버 (터미널 1)
 
 ```bash
 # Linux/Mac
@@ -239,15 +239,47 @@ cd webbackend
 ./gradlew bootRun
 ```
 
+#### Python API 서버 (터미널 2)
+
+```bash
+# 기본 API 서버 (Port 9000)
+python start_python_api.py
+# 또는
+python api_server.py
+
+# 향상된 API 서버 (Port 8001)
+python api_server_enhanced.py
+```
+
+# 또는 로컬에서 직접 실행
+
+airflow webserver --port 8081
+airflow scheduler
+
+```
+
+> **참고**: 실행 순서는 Spring Boot → Python API → Airflow 순서입니다. 자세한 내용은 [AIRFLOW_DOCKER_SETUP.md](AIRFLOW_DOCKER_SETUP.md)를 참조하세요.
+
 ### 4. 대시보드 접속
+
+#### 웹 인터페이스 (Spring Boot - Port 8080)
 
 - **메인 대시보드**: http://localhost:8080
 - **이메일 구독**: http://localhost:8080/email-subscription.html
 - **관리자 로그인**: http://localhost:8080/admin-login.html
+- **관리자 대시보드**: http://localhost:8080/admin-dashboard.html
 - **API 테스트**: http://localhost:8080/api-view.html
-- **Python API 문서**:
-  - 기본 API: http://localhost:9000/docs
-  - 향상된 API: http://localhost:8001/docs
+- **템플릿 관리**: http://localhost:8080/template-management.html
+- **이메일 발송 이력**: http://localhost:8080/email-history.html
+
+#### API 문서
+
+- **Python API (기본)**: http://localhost:9000/docs
+- **Python API (향상된)**: http://localhost:8001/docs
+
+#### Airflow UI
+
+- **Airflow 대시보드**: http://localhost:8081 (기본 계정: airflow/airflow)
 
 ## 기술 스택
 
@@ -268,89 +300,104 @@ cd webbackend
 ### DevOps & Monitoring
 
 - **Apache Airflow**: 워크플로우 자동화
-- **Docker**: 컨테이너화 (예정)
-- **Prometheus**: 모니터링 (예정)
-- **Grafana**: 대시보드 (예정)
+- **Docker**: 컨테이너화 (Airflow Docker Compose 포함)
+- **로깅 시스템**: 종합적인 로그 관리 및 오류 추적
+- **디버깅 도구**: 시스템 상태 확인 및 진단 스크립트
 
 ## API 엔드포인트
 
 ### Python FastAPI - 기본 서버 (Port 9000)
 
 ```
-GET  /                              # API 서버 정보
-GET  /api/health                    # 헬스 체크
-GET  /api/symbols                   # 종목 목록
-GET  /api/realtime/{symbol}         # 실시간 주가
-GET  /api/analysis/{symbol}         # 기술적 분석
-GET  /api/historical/{symbol}       # 과거 데이터
-GET  /api/analysis/all              # 전체 종목 분석
-GET  /api/alpha-vantage/search/{keywords}  # 종목 검색
-GET  /api/alpha-vantage/intraday/{symbol}  # 분별 데이터
-GET  /api/alpha-vantage/weekly/{symbol}    # 주별 데이터
-GET  /api/alpha-vantage/monthly/{symbol}   # 월별 데이터
-WS   /ws                            # WebSocket 연결
-WS   /ws/realtime                   # WebSocket 실시간 데이터
+
+GET / # API 서버 정보
+GET /api/health # 헬스 체크
+GET /api/symbols # 종목 목록
+GET /api/realtime/{symbol} # 실시간 주가
+GET /api/analysis/{symbol} # 기술적 분석
+GET /api/historical/{symbol} # 과거 데이터
+GET /api/analysis/all # 전체 종목 분석
+GET /api/alpha-vantage/search/{keywords} # 종목 검색
+GET /api/alpha-vantage/intraday/{symbol} # 분별 데이터
+GET /api/alpha-vantage/weekly/{symbol} # 주별 데이터
+GET /api/alpha-vantage/monthly/{symbol} # 월별 데이터
+POST /api/notifications/email # 이메일 발송
+WS /ws # WebSocket 연결
+WS /ws/realtime # WebSocket 실시간 데이터
+
 ```
 
 ### Python FastAPI - 향상된 서버 (Port 8001)
 
 ```
-GET  /                              # API 서버 정보
-GET  /api/health                    # 헬스 체크 (성능 메트릭 포함)
-GET  /api/performance               # 성능 메트릭
-GET  /api/realtime/{symbol}         # 실시간 주가 (향상된)
-GET  /api/analysis/{symbol}         # 고급 기술적 분석
-GET  /api/analysis/batch            # 배치 분석
-GET  /api/errors                    # 오류 통계
-WS   /ws                            # WebSocket 연결
-WS   /ws/realtime                   # WebSocket 실시간 데이터
+
+GET / # API 서버 정보
+GET /api/health # 헬스 체크 (성능 메트릭 포함)
+GET /api/performance # 성능 메트릭
+GET /api/realtime/{symbol} # 실시간 주가 (향상된)
+GET /api/analysis/{symbol} # 고급 기술적 분석
+GET /api/analysis/batch # 배치 분석
+GET /api/errors # 오류 통계
+WS /ws # WebSocket 연결
+WS /ws/realtime # WebSocket 실시간 데이터
+
 ```
 
 ### Spring Boot (Port 8080)
 
 ```
+
 # 공개 API
-GET  /api/public/health             # 헬스 체크
-GET  /api/public/info               # 서버 정보
+
+GET /api/public/health # 헬스 체크
+GET /api/public/info # 서버 정보
 
 # 주식 데이터 API
-GET  /api/stocks/symbols            # 종목 목록
-GET  /api/stocks/realtime           # 전체 실시간 데이터
-GET  /api/stocks/realtime/{symbol}  # 실시간 주가
-GET  /api/stocks/analysis           # 전체 분석 결과
-GET  /api/stocks/analysis/{symbol}  # 분석 결과
-GET  /api/stocks/historical/{symbol} # 과거 데이터
-GET  /api/stocks/stream             # 실시간 스트림
+
+GET /api/stocks/symbols # 종목 목록
+GET /api/stocks/realtime # 전체 실시간 데이터
+GET /api/stocks/realtime/{symbol} # 실시간 주가
+GET /api/stocks/analysis # 전체 분석 결과
+GET /api/stocks/analysis/{symbol} # 분석 결과
+GET /api/stocks/historical/{symbol} # 과거 데이터
+GET /api/stocks/stream # 실시간 스트림
 
 # CQRS API
-GET  /api/cqrs/stocks/symbols       # 종목 목록
-GET  /api/cqrs/stocks/analysis/{symbol}  # 분석
-GET  /api/cqrs/stocks/realtime/{symbol}   # 실시간 데이터
-POST /api/cqrs/stocks/analyze/{symbol}    # 분석 실행
-POST /api/cqrs/stocks/price/update        # 가격 업데이트
-POST /api/cqrs/stocks/signal/{symbol}     # 신호 생성
+
+GET /api/cqrs/stocks/symbols # 종목 목록
+GET /api/cqrs/stocks/analysis/{symbol} # 분석
+GET /api/cqrs/stocks/realtime/{symbol} # 실시간 데이터
+POST /api/cqrs/stocks/analyze/{symbol} # 분석 실행
+POST /api/cqrs/stocks/price/update # 가격 업데이트
+POST /api/cqrs/stocks/signal/{symbol} # 신호 생성
 
 # 이메일 구독 API
-POST /api/email-subscriptions/subscribe    # 구독 신청
-GET  /api/email-subscriptions/list         # 구독 목록
-GET  /api/email-subscriptions/email-consent # 이메일 동의 목록
+
+POST /api/email-subscriptions/subscribe # 구독 신청
+GET /api/email-subscriptions/list # 구독 목록
+GET /api/email-subscriptions/email-consent # 이메일 동의 목록
 
 # 관리자 API
-POST /api/admin/login               # 관리자 로그인
-GET  /api/admin/subscriptions       # 구독자 목록 (관리자)
+
+POST /api/admin/login # 관리자 로그인
+GET /api/admin/subscriptions # 구독자 목록 (관리자)
 
 # 인증 API
-POST /api/auth/login                # 로그인
-POST /api/auth/register            # 회원가입
-POST /api/auth/refresh             # 토큰 갱신
+
+POST /api/auth/login # 로그인
+POST /api/auth/register # 회원가입
+POST /api/auth/refresh # 토큰 갱신
 
 # 캐시 관리
-GET  /api/cache/stats               # 캐시 통계
-POST /api/cache/clear               # 캐시 클리어
+
+GET /api/cache/stats # 캐시 통계
+POST /api/cache/clear # 캐시 클리어
 
 # WebSocket
-WS   /ws/stocks                     # 실시간 주식 데이터
-```
+
+WS /ws/stocks # 실시간 주식 데이터
+
+````
 
 ## 테스트
 
@@ -363,7 +410,39 @@ pytest --cov=. --cov-report=html
 
 # 특정 모듈 테스트
 pytest tests/test_technical_analyzer.py
+````
+
+## 디버깅 및 상태 확인
+
+프로젝트에는 시스템 상태를 확인하고 디버깅할 수 있는 여러 도구가 포함되어 있습니다:
+
+```bash
+# Python API 서버 상태 확인
+python check_python_api.py
+
+# 이메일 구독자 확인
+python check_email_subscription.py
+
+# 이메일 발송 상태 확인
+python check_email_status.py
+
+# 간단한 이메일 구독 확인
+python check_email_simple.py
+
+# 상세한 이메일 발송 디버깅
+python check_email_debug.py
+
+# Airflow 연결 테스트
+python test_airflow_connection.py
 ```
+
+이 도구들은 다음을 확인합니다
+
+- 서버 실행 상태 (Spring Boot, Python API, Airflow)
+- 이메일 구독자 목록 및 동의 상태
+- 이메일 발송 로그 및 통계
+- 네트워크 연결 상태
+- 이메일 설정 구성
 
 ## 성능 지표
 
@@ -373,6 +452,7 @@ pytest tests/test_technical_analyzer.py
 - **WebSocket**: 실시간 업데이트 (5초 간격)
 - **캐시 히트율**: 80% 이상 (향상된 API)
 - **동시 연결**: 최대 100개 WebSocket 연결 지원
+- **Airflow DAG 실행**: 자동 이메일 발송
 
 ## 주요 페이지
 
@@ -383,14 +463,19 @@ pytest tests/test_technical_analyzer.py
 - **관리자 로그인** (`/admin-login.html`): 관리자 인증 페이지
 - **관리자 대시보드** (`/admin-dashboard.html`): 구독자 관리 및 통계
 - **API 테스트** (`/api-view.html`): API 엔드포인트 테스트 도구
-- **템플릿 관리** (`/template-management.html`): 이메일 템플릿 관리
+- **템플릿 관리** (`/template-management.html`): AI 기반 이메일 템플릿 관리
+- **이메일 발송 이력** (`/email-history.html`): 이메일 발송 로그 및 통계
 
 ### 추가 문서
 
-- **[EMAIL_SUBSCRIPTION_GUIDE.md](EMAIL_SUBSCRIPTION_GUIDE.md)**: 이메일 구독 시스템 상세 가이드
+- **[AIRFLOW_DOCKER_SETUP.md](AIRFLOW_DOCKER_SETUP.md)**: Airflow Docker 설정 가이드
+- **[AI_TEMPLATE_GUIDE.md](AI_TEMPLATE_GUIDE.md)**: AI 분석 템플릿 시스템 가이드
 - **[docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)**: 전체 API 문서
 - **[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md)**: 시스템 아키텍처 상세 설명
 - **[docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md)**: 통합 가이드
+- **[docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md)**: 테스트 가이드
+- **[docs/TECHNICAL_INDICATORS_GUIDE.md](docs/TECHNICAL_INDICATORS_GUIDE.md)**: 기술적 지표 가이드
+- **[docs/adr/](docs/adr/)**: 아키텍처 결정 기록 (ADR)
 
 ## 기여하기
 

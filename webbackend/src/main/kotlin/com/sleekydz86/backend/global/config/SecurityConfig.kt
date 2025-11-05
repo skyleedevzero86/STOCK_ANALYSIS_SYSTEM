@@ -72,9 +72,9 @@ class SecurityConfig(
                     .pathMatchers("/api/admin/**").permitAll()
                     .pathMatchers("/api/email-subscriptions/subscribe", "/api/email-subscriptions/unsubscribe", "/api/email-subscriptions/email-consent").permitAll()
                     .pathMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
-                    .pathMatchers("/api/templates/**").hasRole("ADMIN")
+                    .pathMatchers("/api/templates/**").permitAll()
                     .pathMatchers("/api/ai-analysis/**").hasAnyRole("USER", "ADMIN")
-                    .pathMatchers("/api/ai-email/**").hasRole("ADMIN")
+                    .pathMatchers("/api/ai-email/**").permitAll()
                     .anyExchange().authenticated()
             }
             .build()

@@ -12,7 +12,6 @@ import reactor.core.publisher.Mono
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasRole('ADMIN')")
 class AdminController(
     private val adminService: AdminService,
     private val emailSubscriptionService: EmailSubscriptionService

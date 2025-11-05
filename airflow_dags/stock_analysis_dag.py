@@ -1,13 +1,18 @@
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.dummy import DummyOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.sensors.filesystem import FileSensor
 from airflow.models import Variable
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+dag_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(dag_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+if '/opt/airflow/project_root' not in sys.path:
+    sys.path.insert(0, '/opt/airflow/project_root')
 
 from data_collectors.stock_data_collector import StockDataCollector, DataQualityChecker
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
@@ -28,7 +33,7 @@ stock_analysis_dag = DAG(
     'stock_analysis_pipeline',
     default_args=default_args,
     description='실시간 주식 데이터 수집, 분석, 알림 파이프라인',
-    schedule_interval='*/15 * * * *',
+    schedule='*/15 * * * *',
     catchup=False,
     tags=['stock', 'analysis', 'real-time']
 )
@@ -320,7 +325,7 @@ def save_analysis_results(**context):
     
     return saved_count
 
-start_task = DummyOperator(
+start_task = EmptyOperator(
     task_id='start',
     dag=stock_analysis_dag
 )
@@ -349,7 +354,7 @@ save_results_task = PythonOperator(
     dag=stock_analysis_dag
 )
 
-end_task = DummyOperator(
+end_task = EmptyOperator(
     task_id='end',
     dag=stock_analysis_dag
 )

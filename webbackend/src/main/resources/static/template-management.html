@@ -9,8 +9,21 @@
     <link rel="stylesheet" href="css/template-management.css" />
 </head>
 <body>
+<div class="container">
+    <div class="header">
+        <h1>AI 이메일 템플릿 관리</h1>
+    </div>
+
+    <div class="navigation">
+        <a href="/" class="nav-link">메인</a>
+        <a href="/admin-login.html" class="nav-link" style="display: none;">로그인</a>
+        <a href="/email-subscription.html" class="nav-link" style="display: none;">구독신청</a>
+        <a href="/template-management.html" class="nav-link active">템플릿보기</a>
+        <a href="/api-view.html" class="nav-link">API보기</a>
+        <a href="/admin-dashboard.html" class="nav-link">관리자대시보드</a>
+    </div>
+
 <div class="template-container">
-    <h1>AI 이메일 템플릿 관리</h1>
 
     <div class="ai-email-section">
         <h3>AI 분석 이메일 발송</h3>
@@ -98,6 +111,7 @@
         <div id="templateList">
         </div>
     </div>
+</div>
 </div>
 
 <script src="js/auth-menu.js"></script>

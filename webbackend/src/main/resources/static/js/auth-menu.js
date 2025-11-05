@@ -6,27 +6,70 @@ function checkAuthStatus() {
 function updateNavigation() {
     const isLoggedIn = checkAuthStatus();
     const navLinks = document.querySelectorAll('.nav-link');
+    const symbolSelectBtn = document.getElementById('symbolSelectBtn');
+    const currentPage = window.location.pathname;
+    const isMainPage = currentPage === '/' || currentPage === '/index.html';
 
     navLinks.forEach(link => {
         const href = link.getAttribute('href');
 
-        if (href === '/email-subscription.html') {
+        if (href === '/') {
+            if (isLoggedIn) {
+                link.style.display = 'inline-block';
+            } else {
+                link.style.display = 'inline-block';
+            }
+        } else if (href === '/admin-login.html') {
             if (isLoggedIn) {
                 link.style.display = 'none';
             } else {
                 link.style.display = 'inline-block';
             }
-        } else if (href === '/template-management.html' || href === '/api-view.html') {
+        } else if (href === '/email-subscription.html') {
+            if (isLoggedIn) {
+                link.style.display = 'none';
+            } else {
+                link.style.display = 'inline-block';
+            }
+        } else if (href === '/template-management.html') {
             if (isLoggedIn) {
                 link.style.display = 'inline-block';
             } else {
                 link.style.display = 'none';
             }
-        } else if (href === '/admin-login.html' || href === '/admin-dashboard.html') {
-            if (isLoggedIn && window.location.pathname !== '/admin-dashboard.html') {
-                link.setAttribute('href', '/admin-dashboard.html');
-                link.textContent = link.textContent === '관리자' ? '관리자 대시보드' : link.textContent;
+        } else if (href === '/api-view.html') {
+            if (isLoggedIn) {
+                link.style.display = 'inline-block';
+            } else {
+                link.style.display = 'none';
             }
+        } else if (href === '/admin-dashboard.html') {
+            if (isLoggedIn) {
+                link.style.display = 'inline-block';
+            } else {
+                link.style.display = 'none';
+            }
+        }
+    });
+
+    if (symbolSelectBtn) {
+        if (isLoggedIn && isMainPage) {
+            symbolSelectBtn.style.display = 'inline-block';
+        } else if (isLoggedIn && !isMainPage) {
+            symbolSelectBtn.style.display = 'none';
+        } else {
+            symbolSelectBtn.style.display = 'inline-block';
+        }
+    }
+
+    const symbolSelectLinks = document.querySelectorAll('.nav-link.btn-nav');
+    symbolSelectLinks.forEach(link => {
+        if (isLoggedIn && isMainPage) {
+            link.style.display = 'inline-block';
+        } else if (isLoggedIn && !isMainPage) {
+            link.style.display = 'none';
+        } else {
+            link.style.display = 'inline-block';
         }
     });
 }

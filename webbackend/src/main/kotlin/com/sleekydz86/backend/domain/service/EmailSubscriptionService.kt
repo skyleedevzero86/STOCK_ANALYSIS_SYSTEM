@@ -49,9 +49,9 @@ class EmailSubscriptionService(
         return Mono.fromCallable {
             val pageable = org.springframework.data.domain.PageRequest.of(page, size)
             val pageResult = if (name.isNullOrBlank()) {
-                emailSubscriptionRepository.findAllActive(pageable)
+                emailSubscriptionRepository.findAll(pageable)
             } else {
-                emailSubscriptionRepository.findAllActiveByNameContaining(name.trim(), pageable)
+                emailSubscriptionRepository.findByNameContaining(name.trim(), pageable)
             }
             Pair(
                 pageResult.content.map { entity: EmailSubscriptionEntity -> entity.toDomain() },

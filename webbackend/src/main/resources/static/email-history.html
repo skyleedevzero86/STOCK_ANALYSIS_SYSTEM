@@ -26,22 +26,53 @@
       <div class="admin-dashboard">
         <div class="dashboard-header">
           <h2 id="historyTitle">이메일 발송 이력</h2>
-          <button onclick="window.location.href='/admin-dashboard.html'" class="btn-logout">목록으로</button>
         </div>
 
         <div class="subscriptions-table">
           <div class="table-header">
             <h3>발송 이력</h3>
-            <button onclick="loadEmailHistory(currentHistoryPage)" style="
-              padding: 8px 16px;
-              background: #3498db;
-              color: white;
-              border: none;
-              border-radius: 4px;
-              cursor: pointer;
-            ">
-              새로고침
-            </button>
+            <div style="display: flex; gap: 10px; align-items: center">
+              <select id="pageSizeSelect" onchange="changePageSize()" style="
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+              ">
+                <option value="20">20개씩</option>
+                <option value="100" selected>100개씩</option>
+                <option value="1000">1000개씩</option>
+              </select>
+              <button onclick="loadEmailHistory(currentHistoryPage)" style="
+                padding: 8px 16px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              ">
+                새로고침
+              </button>
+              <button onclick="window.location.href='/admin-dashboard.html'" style="
+                padding: 8px 16px;
+                background: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              ">
+                목록으로
+              </button>
+              <button onclick="openSendEmailModal()" style="
+                padding: 8px 16px;
+                background: #27ae60;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              ">
+                메일 보내기
+              </button>
+            </div>
           </div>
           <div class="table-content">
             <div id="emailHistoryContent">
@@ -51,6 +82,96 @@
         </div>
       </div>
     </div>
+
+    <div id="sendEmailModal" class="modal" style="display: none;" onclick="if(event.target === this) closeSendEmailModal();">
+      <div class="modal-content" onclick="event.stopPropagation();" style="
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      ">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h2 style="margin: 0;">이메일 발송</h2>
+          <button onclick="closeSendEmailModal()" style="
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+          ">&times;</button>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">수신자 이메일</label>
+          <input type="email" id="recipientEmail" placeholder="이메일 주소를 입력하세요" style="
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+          ">
+        </div>
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">제목</label>
+          <input type="text" id="emailSubject" placeholder="이메일 제목을 입력하세요" style="
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+          ">
+        </div>
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: bold;">내용</label>
+          <textarea id="emailBody" placeholder="이메일 내용을 입력하세요" rows="10" style="
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            font-family: inherit;
+          "></textarea>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button onclick="closeSendEmailModal()" style="
+            padding: 10px 20px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          ">
+            취소
+          </button>
+          <button onclick="sendEmail()" style="
+            padding: 10px 20px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          ">
+            발송
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
 
     <script src="js/auth-menu.js"></script>
     <script src="js/email-history.js"></script>

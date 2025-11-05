@@ -399,17 +399,21 @@ class PythonApiClient(
 
     fun sendEmail(toEmail: String, subject: String, content: String): Mono<Boolean> {
         return webClient.post()
-            .uri("/api/notifications/email")
-            .bodyValue(mapOf(
-                "to_email" to toEmail,
-                "subject" to subject,
-                "body" to content
-            ))
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/notifications/email")
+                    .queryParam("to_email", toEmail)
+                    .queryParam("subject", subject)
+                    .queryParam("body", content)
+                    .build()
+            }
             .retrieve()
             .bodyToMono(Map::class.java)
             .map { response ->
                 response["success"] as? Boolean ?: false
             }
-            .onErrorReturn(false)
+            .onErrorResume { error ->
+                logger.error("이메일 발송 실패: ${error.message}", error)
+                Mono.just(false)
+            }
     }
 }

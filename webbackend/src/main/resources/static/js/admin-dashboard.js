@@ -148,44 +148,44 @@ function updatePagination() {
     const pagination = document.getElementById("pagination");
     if (!pagination) return;
 
-    if (totalPages <= 1) {
-        pagination.innerHTML = "";
-        return;
-    }
-
     let paginationHTML = '<div class="pagination">';
     
-    if (currentPage > 0) {
-        paginationHTML += `<button onclick="loadSubscriptions(${currentPage - 1})" class="page-btn">이전</button>`;
-    }
-
-    const startPage = Math.max(0, currentPage - 2);
-    const endPage = Math.min(totalPages - 1, currentPage + 2);
-
-    if (startPage > 0) {
-        paginationHTML += `<button onclick="loadSubscriptions(0)" class="page-btn">1</button>`;
-        if (startPage > 1) {
-            paginationHTML += `<span class="page-ellipsis">...</span>`;
+    if (totalPages <= 1) {
+        paginationHTML += `<span class="page-info">총 ${totalCount}건</span>`;
+    } else {
+        if (currentPage > 0) {
+            paginationHTML += `<button onclick="loadSubscriptions(${currentPage - 1})" class="page-btn">이전</button>`;
         }
-    }
 
-    for (let i = startPage; i <= endPage; i++) {
-        paginationHTML += `<button onclick="loadSubscriptions(${i})" 
-                                   class="page-btn ${i === currentPage ? 'active' : ''}">${i + 1}</button>`;
-    }
+        const startPage = Math.max(0, currentPage - 2);
+        const endPage = Math.min(totalPages - 1, currentPage + 2);
 
-    if (endPage < totalPages - 1) {
-        if (endPage < totalPages - 2) {
-            paginationHTML += `<span class="page-ellipsis">...</span>`;
+        if (startPage > 0) {
+            paginationHTML += `<button onclick="loadSubscriptions(0)" class="page-btn">1</button>`;
+            if (startPage > 1) {
+                paginationHTML += `<span class="page-ellipsis">...</span>`;
+            }
         }
-        paginationHTML += `<button onclick="loadSubscriptions(${totalPages - 1})" class="page-btn">${totalPages}</button>`;
+
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHTML += `<button onclick="loadSubscriptions(${i})" 
+                                       class="page-btn ${i === currentPage ? 'active' : ''}">${i + 1}</button>`;
+        }
+
+        if (endPage < totalPages - 1) {
+            if (endPage < totalPages - 2) {
+                paginationHTML += `<span class="page-ellipsis">...</span>`;
+            }
+            paginationHTML += `<button onclick="loadSubscriptions(${totalPages - 1})" class="page-btn">${totalPages}</button>`;
+        }
+
+        if (currentPage < totalPages - 1) {
+            paginationHTML += `<button onclick="loadSubscriptions(${currentPage + 1})" class="page-btn">다음</button>`;
+        }
+
+        paginationHTML += `<span class="page-info">총 ${totalCount}건 (${currentPage + 1}/${totalPages} 페이지)</span>`;
     }
 
-    if (currentPage < totalPages - 1) {
-        paginationHTML += `<button onclick="loadSubscriptions(${currentPage + 1})" class="page-btn">다음</button>`;
-    }
-
-    paginationHTML += `<span class="page-info">총 ${totalCount}건 (${currentPage + 1}/${totalPages} 페이지)</span>`;
     paginationHTML += '</div>';
 
     pagination.innerHTML = paginationHTML;

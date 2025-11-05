@@ -20,6 +20,9 @@ interface EmailSubscriptionRepository : JpaRepository<EmailSubscriptionEntity, L
     @Query("SELECT e FROM EmailSubscriptionEntity e WHERE e.isActive = true")
     fun findAllActive(pageable: Pageable): Page<EmailSubscriptionEntity>
 
+    @Query("SELECT e FROM EmailSubscriptionEntity e WHERE e.name LIKE CONCAT('%', :name, '%')")
+    fun findByNameContaining(name: String, pageable: Pageable): Page<EmailSubscriptionEntity>
+
     @Query("SELECT e FROM EmailSubscriptionEntity e WHERE e.isActive = true AND e.name LIKE CONCAT('%', :name, '%')")
     fun findAllActiveByNameContaining(name: String, pageable: Pageable): Page<EmailSubscriptionEntity>
 

@@ -7,6 +7,7 @@ import com.sleekydz86.backend.domain.model.AdminLoginRequest
 import com.sleekydz86.backend.domain.service.AdminService
 import com.sleekydz86.backend.domain.service.EmailSubscriptionService
 import com.sleekydz86.backend.domain.service.NotificationLogService
+import com.sleekydz86.backend.infrastructure.client.PythonApiClient
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
@@ -16,7 +17,8 @@ import reactor.core.publisher.Mono
 class AdminController(
     private val adminService: AdminService,
     private val emailSubscriptionService: EmailSubscriptionService,
-    private val notificationLogService: NotificationLogService
+    private val notificationLogService: NotificationLogService,
+    private val pythonApiClient: PythonApiClient
 ) {
 
     @PostMapping("/login")
@@ -138,6 +140,35 @@ class AdminController(
             }
     }
 
+    @GetMapping("/subscriptions/{id}")
+    fun getSubscription(
+        @RequestHeader("Authorization") token: String,
+        @PathVariable id: Long
+    ): Mono<ApiResponse<Map<String, Any>>> {
+        return adminService.validateToken(token)
+            .flatMap { isValid ->
+                if (isValid) {
+                    emailSubscriptionService.getSubscriptionById(id)
+                        .map { subscription ->
+                            val maskedSubscription = EmailSubscriptionMapper.toMaskedSubscriptionMap(
+                                subscription,
+                                { email: String -> subscription.email },
+                                { phone: String? -> emailSubscriptionService.maskPhone(phone) ?: "" }
+                            )
+                            ApiResponseBuilder.success(
+                                "구독자 정보를 성공적으로 조회했습니다.",
+                                maskedSubscription
+                            )
+                        }
+                        .onErrorResume { error ->
+                            Mono.just(ApiResponseBuilder.failure(error.message ?: "조회에 실패했습니다.", null))
+                        }
+                } else {
+                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                }
+            }
+    }
+
     @GetMapping("/email-consent-list")
     fun getEmailConsentList(@RequestHeader("Authorization") token: String): Mono<ApiResponse<Map<String, Any>>> {
         return adminService.validateToken(token)
@@ -198,6 +229,43 @@ class AdminController(
                         }
                 } else {
                     Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                }
+            }
+    }
+
+    @PostMapping("/subscriptions/{id}/send-email")
+    fun sendEmail(
+        @RequestHeader("Authorization") token: String,
+        @PathVariable id: Long,
+        @RequestBody request: Map<String, String>
+    ): Mono<ApiResponse<Map<String, Any>>> {
+        return adminService.validateToken(token)
+            .flatMap { isValid ->
+                if (isValid) {
+                    val toEmail = request["toEmail"] ?: ""
+                    val subject = request["subject"] ?: ""
+                    val body = request["body"] ?: ""
+                    
+                    if (toEmail.isBlank() || subject.isBlank() || body.isBlank()) {
+                        return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("이메일 주소, 제목, 내용은 필수입니다.", null))
+                    }
+                    
+                    pythonApiClient.sendEmail(toEmail, subject, body)
+                        .map { success ->
+                            if (success) {
+                                ApiResponseBuilder.success<Map<String, Any>>(
+                                    "이메일이 성공적으로 발송되었습니다.",
+                                    mapOf("email" to toEmail) as Map<String, Any>
+                                )
+                            } else {
+                                ApiResponseBuilder.failure<Map<String, Any>>("이메일 발송에 실패했습니다.", null)
+                            }
+                        }
+                        .onErrorResume { error ->
+                            Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "이메일 발송에 실패했습니다.", null))
+                        }
+                } else {
+                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
     }

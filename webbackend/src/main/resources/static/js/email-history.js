@@ -9,6 +9,7 @@ let historyTotalCount = 0;
 let subscriptionId = null;
 let userEmail = null;
 let actualUserEmail = null;
+let userPhone = null;
 
 document.addEventListener("DOMContentLoaded", function() {
     updateNavigation();
@@ -43,8 +44,13 @@ async function loadActualEmail() {
 
         if (response.ok) {
             const result = await response.json();
-            if (result.success && result.data && result.data.email) {
-                actualUserEmail = result.data.email;
+            if (result.success && result.data) {
+                if (result.data.email) {
+                    actualUserEmail = result.data.email;
+                }
+                if (result.data.phone) {
+                    userPhone = result.data.phone;
+                }
             }
         }
     } catch (error) {
@@ -360,6 +366,123 @@ async function sendEmail(event) {
             sendButton.style.opacity = "1";
         }
         alert("이메일 발송 중 오류가 발생했습니다: " + error.message);
+    }
+}
+
+function openSendSmsModal() {
+    const modal = document.getElementById("sendSmsModal");
+    const recipientPhoneInput = document.getElementById("recipientPhone");
+    const actualRecipientPhoneInput = document.getElementById("actualRecipientPhone");
+    
+    let actualPhone = "";
+    if (userPhone) {
+        actualPhone = userPhone.replace(/-/g, "");
+    }
+    
+    recipientPhoneInput.value = actualPhone;
+    actualRecipientPhoneInput.value = actualPhone;
+    
+    document.getElementById("smsFrom").value = "";
+    document.getElementById("smsBody").value = "";
+    modal.style.display = "flex";
+}
+
+function closeSendSmsModal() {
+    const modal = document.getElementById("sendSmsModal");
+    modal.style.display = "none";
+}
+
+async function sendSms(event) {
+    const adminToken = localStorage.getItem("adminToken");
+    if (!adminToken) {
+        alert("인증이 필요합니다.");
+        return;
+    }
+
+    const recipientPhone = document.getElementById("recipientPhone").value.trim().replace(/-/g, "");
+    const fromPhone = document.getElementById("smsFrom").value.trim().replace(/-/g, "");
+    const body = document.getElementById("smsBody").value.trim();
+
+    if (!recipientPhone || !fromPhone || !body) {
+        alert("전화번호와 발신번호, 메시지 내용을 모두 입력해주세요.");
+        return;
+    }
+
+    const phoneRegex = /^010\d{8}$/;
+    if (!phoneRegex.test(recipientPhone)) {
+        alert("올바른 수신자 전화번호 형식이 아닙니다. (01012345678 형식)");
+        return;
+    }
+    if (!phoneRegex.test(fromPhone)) {
+        alert("올바른 발신번호 형식이 아닙니다. (01012345678 형식)");
+        return;
+    }
+
+    if (!confirm(`다음 전화번호로 문자를 발송하시겠습니까?\n\n수신번호: ${recipientPhone}\n발신번호: ${fromPhone}`)) {
+        return;
+    }
+
+    const sendButton = document.getElementById("sendSmsBtn");
+    if (sendButton) {
+        sendButton.disabled = true;
+        sendButton.textContent = "발송 중...";
+        sendButton.style.cursor = "not-allowed";
+        sendButton.style.opacity = "0.6";
+    }
+
+    try {
+        const response = await fetch(`/api/admin/subscriptions/${subscriptionId}/send-sms`, {
+            method: "POST",
+            headers: {
+                Authorization: adminToken,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                toPhone: recipientPhone,
+                fromPhone: fromPhone,
+                message: body
+            }),
+        });
+
+        if (response.status === 401) {
+            localStorage.removeItem("adminToken");
+            window.location.href = "/admin-login.html";
+            return;
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            if (sendButton) {
+                sendButton.disabled = false;
+                sendButton.textContent = "발송";
+                sendButton.style.cursor = "pointer";
+                sendButton.style.opacity = "1";
+            }
+            alert("문자가 성공적으로 발송되었습니다.");
+            closeSendSmsModal();
+            setTimeout(() => {
+                loadEmailHistory(currentHistoryPage).catch(error => {
+                    console.error("이력 로드 실패:", error);
+                });
+            }, 500);
+        } else {
+            if (sendButton) {
+                sendButton.disabled = false;
+                sendButton.textContent = "발송";
+                sendButton.style.cursor = "pointer";
+                sendButton.style.opacity = "1";
+            }
+            alert(result.message || "문자 발송에 실패했습니다.");
+        }
+    } catch (error) {
+        if (sendButton) {
+            sendButton.disabled = false;
+            sendButton.textContent = "발송";
+            sendButton.style.cursor = "pointer";
+            sendButton.style.opacity = "1";
+        }
+        alert("문자 발송 중 오류가 발생했습니다: " + error.message);
     }
 }
 

@@ -6,12 +6,33 @@ from typing import List, Dict, Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+try:
+    from solapi import SolapiMessageService
+    from solapi.model import RequestMessage
+    SOLAPI_AVAILABLE = True
+except ImportError:
+    SOLAPI_AVAILABLE = False
+    logging.warning("solapi 모듈이 설치되지 않았습니다. 문자 발송 기능이 비활성화됩니다.")
+
 class NotificationService:
     
-    def __init__(self, email_config: Dict = None, slack_webhook: str = None):
+    def __init__(self, email_config: Dict = None, slack_webhook: str = None, solapi_config: Dict = None):
         self.email_config = email_config or {}
         self.slack_webhook = slack_webhook
+        self.solapi_config = solapi_config or {}
         self.session = requests.Session()
+        
+        if SOLAPI_AVAILABLE and self.solapi_config.get('api_key') and self.solapi_config.get('api_secret'):
+            try:
+                self.message_service = SolapiMessageService(
+                    api_key=self.solapi_config['api_key'],
+                    api_secret=self.solapi_config['api_secret']
+                )
+            except Exception as e:
+                logging.error(f"SOLAPI 초기화 실패: {str(e)}")
+                self.message_service = None
+        else:
+            self.message_service = None
         
     def send_email(self, to_email: str, subject: str, body: str) -> bool:
         try:
@@ -83,6 +104,45 @@ class NotificationService:
             
         except Exception as e:
             logging.error(f"Telegram 메시지 발송 실패: {str(e)}")
+            return False
+    
+    def send_sms(self, from_phone: str, to_phone: str, message: str) -> bool:
+        try:
+            if not SOLAPI_AVAILABLE:
+                logging.warning("solapi 모듈이 설치되지 않았습니다.")
+                return False
+            
+            if not self.message_service:
+                logging.warning("SOLAPI 서비스가 초기화되지 않았습니다.")
+                return False
+            
+            from_phone = from_phone.replace("-", "").replace(" ", "")
+            to_phone = to_phone.replace("-", "").replace(" ", "")
+            
+            sms_message = RequestMessage(
+                from_=from_phone,
+                to=to_phone,
+                text=message
+            )
+            
+            response = self.message_service.send(sms_message)
+            
+            if response and response.group_info:
+                success_count = response.group_info.count.registered_success
+                failed_count = response.group_info.count.registered_failed
+                
+                if success_count > 0:
+                    logging.info(f"SMS 발송 성공: {to_phone} (Group ID: {response.group_info.group_id})")
+                    return True
+                else:
+                    logging.error(f"SMS 발송 실패: {to_phone} (실패 개수: {failed_count})")
+                    return False
+            else:
+                logging.error(f"SMS 발송 실패: {to_phone} (응답 형식 오류)")
+                return False
+                
+        except Exception as e:
+            logging.error(f"SMS 발송 실패 ({to_phone}): {str(e)}")
             return False
     
     def create_anomaly_alert(self, anomaly_data: Dict) -> str:

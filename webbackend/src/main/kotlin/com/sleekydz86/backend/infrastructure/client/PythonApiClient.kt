@@ -416,4 +416,24 @@ class PythonApiClient(
                 Mono.just(false)
             }
     }
+
+    fun sendSms(fromPhone: String, toPhone: String, message: String): Mono<Boolean> {
+        return webClient.post()
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/notifications/sms")
+                    .queryParam("from_phone", fromPhone)
+                    .queryParam("to_phone", toPhone)
+                    .queryParam("message", message)
+                    .build()
+            }
+            .retrieve()
+            .bodyToMono(Map::class.java)
+            .map { response ->
+                response["success"] as? Boolean ?: false
+            }
+            .onErrorResume { error ->
+                logger.error("문자 발송 실패: ${error.message}", error)
+                Mono.just(false)
+            }
+    }
 }

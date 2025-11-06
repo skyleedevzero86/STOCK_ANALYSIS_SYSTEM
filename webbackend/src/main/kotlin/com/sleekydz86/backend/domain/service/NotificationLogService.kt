@@ -53,25 +53,38 @@ class NotificationLogService(
 
     fun saveEmailLog(
         userEmail: String,
-        subject: String,
+        subject: String?,
         message: String,
         status: String,
         errorMessage: String? = null,
-        source: String = "manual"
+        source: String = "manual",
+        notificationType: String = "email"
     ): Mono<NotificationLogEntity> {
         return Mono.fromCallable {
             val logMessage = if (source == "manual") {
-                "[수기발송] $subject\n$message"
+                if (subject != null) {
+                    "[수기발송] $subject\n$message"
+                } else {
+                    "[수기발송] $message"
+                }
             } else if (source == "airflow") {
-                "[Airflow발송] $subject\n$message"
+                if (subject != null) {
+                    "[Airflow발송] $subject\n$message"
+                } else {
+                    "[Airflow발송] $message"
+                }
             } else {
-                "[$source] $subject\n$message"
+                if (subject != null) {
+                    "[$source] $subject\n$message"
+                } else {
+                    "[$source] $message"
+                }
             }
             
             val logEntity = NotificationLogEntity(
                 userEmail = userEmail,
                 symbol = null,
-                notificationType = "email",
+                notificationType = notificationType.lowercase(),
                 message = logMessage,
                 sentAt = LocalDateTime.now(),
                 status = status,

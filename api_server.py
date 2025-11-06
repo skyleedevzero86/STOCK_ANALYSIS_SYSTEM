@@ -73,6 +73,15 @@ class EmailNotificationResponse(BaseModel):
     success: bool = Field(..., description="발송 성공 여부")
     message: str = Field(..., description="응답 메시지")
 
+class SmsNotificationRequest(BaseModel):
+    from_phone: str = Field(..., description="발신번호 (01012345678 형식)")
+    to_phone: str = Field(..., description="수신번호 (01012345678 형식)")
+    message: str = Field(..., description="메시지 내용")
+
+class SmsNotificationResponse(BaseModel):
+    success: bool = Field(..., description="발송 성공 여부")
+    message: str = Field(..., description="응답 메시지")
+
 app = FastAPI(
     title="Stock Analysis API",
     version="1.0.0",
@@ -134,9 +143,14 @@ class StockAnalysisAPI:
             'user': settings.EMAIL_USER,
             'password': settings.EMAIL_PASSWORD
         }
+        solapi_config = {
+            'api_key': settings.SOLAPI_API_KEY,
+            'api_secret': settings.SOLAPI_API_SECRET
+        }
         self.notification_service = NotificationService(
             email_config=email_config,
-            slack_webhook=settings.SLACK_WEBHOOK_URL
+            slack_webhook=settings.SLACK_WEBHOOK_URL,
+            solapi_config=solapi_config
         )
 
     def _load_historical_data(self, symbol: str):
@@ -518,6 +532,109 @@ async def send_email_notification(
     except Exception as e:
         logging.error(f"이메일 발송 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"이메일 발송 오류: {str(e)}")
+
+@app.post("/api/notifications/sms",
+         summary="문자 발송",
+         description="문자(SMS/LMS)를 발송합니다. 요청 본문 또는 쿼리 파라미터로 전달할 수 있습니다.",
+         response_model=SmsNotificationResponse,
+         responses={
+             200: {"description": "문자가 성공적으로 발송되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def send_sms_notification(
+    from_phone: Optional[str] = Query(None, description="발신번호 (01012345678 형식)"),
+    to_phone: Optional[str] = Query(None, description="수신번호 (01012345678 형식)"),
+    message: Optional[str] = Query(None, description="메시지 내용"),
+    request: Optional[SmsNotificationRequest] = Body(None, description="요청 본문")
+):
+    try:
+        if request:
+            from_phone = request.from_phone
+            to_phone = request.to_phone
+            message = request.message
+        
+        if not all([from_phone, to_phone, message]):
+            raise HTTPException(
+                status_code=400,
+                detail="from_phone, to_phone, message는 필수입니다."
+            )
+        
+        from_phone = from_phone.replace("-", "").replace(" ", "")
+        to_phone = to_phone.replace("-", "").replace(" ", "")
+        
+        phone_regex = r'^010\d{8}$'
+        import re
+        if not re.match(phone_regex, from_phone):
+            raise HTTPException(
+                status_code=400,
+                detail="발신번호 형식이 올바르지 않습니다. (01012345678 형식)"
+            )
+        if not re.match(phone_regex, to_phone):
+            raise HTTPException(
+                status_code=400,
+                detail="수신번호 형식이 올바르지 않습니다. (01012345678 형식)"
+            )
+        
+        success = stock_api.notification_service.send_sms(
+            from_phone=from_phone,
+            to_phone=to_phone,
+            message=message
+        )
+        
+        source = "api"
+        if PYMYSQL_AVAILABLE:
+            try:
+                conn = pymysql.connect(
+                    host=settings.MYSQL_HOST,
+                    user=settings.MYSQL_USER,
+                    password=settings.MYSQL_PASSWORD,
+                    database=settings.MYSQL_DATABASE,
+                    port=settings.MYSQL_PORT,
+                    charset='utf8mb4'
+                )
+                cursor = conn.cursor()
+                
+                log_message = f"[API발송] {message}"
+                status = "sent" if success else "failed"
+                error_msg = None if success else "문자 발송에 실패했습니다."
+                
+                cursor.execute("""
+                    INSERT INTO notification_logs 
+                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_phone,
+                    None,
+                    'sms',
+                    log_message,
+                    status,
+                    datetime.now(),
+                    error_msg
+                ))
+                
+                conn.commit()
+                cursor.close()
+                conn.close()
+                logging.info(f"문자 발송 이력 저장 완료: {to_phone} - {status}")
+            except Exception as e:
+                logging.error(f"문자 발송 이력 저장 실패: {str(e)}")
+        
+        if success:
+            return SmsNotificationResponse(
+                success=True,
+                message="문자가 성공적으로 발송되었습니다."
+            )
+        else:
+            return SmsNotificationResponse(
+                success=False,
+                message="문자 발송에 실패했습니다."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"문자 발송 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"문자 발송 오류: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)

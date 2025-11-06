@@ -58,7 +58,8 @@ class NotificationLogService(
         status: String,
         errorMessage: String? = null,
         source: String = "manual",
-        notificationType: String = "email"
+        notificationType: String = "email",
+        symbol: String? = null
     ): Mono<NotificationLogEntity> {
         return Mono.fromCallable {
             val logMessage = if (source == "manual") {
@@ -81,9 +82,15 @@ class NotificationLogService(
                 }
             }
             
+            val finalSymbol = if (source == "manual") {
+                symbol ?: "notice"
+            } else {
+                symbol
+            }
+            
             val logEntity = NotificationLogEntity(
                 userEmail = userEmail,
-                symbol = null,
+                symbol = finalSymbol,
                 notificationType = notificationType.lowercase(),
                 message = logMessage,
                 sentAt = LocalDateTime.now(),

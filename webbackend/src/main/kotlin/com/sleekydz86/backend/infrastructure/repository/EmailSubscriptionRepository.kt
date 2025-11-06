@@ -28,4 +28,7 @@ interface EmailSubscriptionRepository : JpaRepository<EmailSubscriptionEntity, L
 
     @Query("SELECT e FROM EmailSubscriptionEntity e WHERE e.isActive = true AND e.isEmailConsent = true")
     fun findAllActiveWithEmailConsent(): List<EmailSubscriptionEntity>
+
+    @Query("SELECT e FROM EmailSubscriptionEntity e WHERE e.isActive = true AND e.isPhoneConsent = true AND e.phone IS NOT NULL AND e.phone != ''")
+    fun findAllActiveWithPhoneConsent(): List<EmailSubscriptionEntity>
 }

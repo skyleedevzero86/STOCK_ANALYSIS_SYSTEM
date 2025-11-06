@@ -99,6 +99,13 @@ class EmailSubscriptionService(
         }
     }
 
+    fun getActiveSubscriptionsWithPhoneConsent(): Mono<List<EmailSubscription>> {
+        return Mono.fromCallable {
+            emailSubscriptionRepository.findAllActiveWithPhoneConsent()
+                .map { entity: EmailSubscriptionEntity -> entity.toDomain() }
+        }
+    }
+
     fun unsubscribe(email: String): Mono<Boolean> {
         return Mono.fromCallable {
             val subscription = emailSubscriptionRepository.findByEmail(email)

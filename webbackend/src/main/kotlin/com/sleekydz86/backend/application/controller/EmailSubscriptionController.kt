@@ -78,6 +78,27 @@ class EmailSubscriptionController(
             }
     }
 
+    @GetMapping("/phone-consent")
+    fun getPhoneConsentSubscriptions(): Mono<ApiResponse<Map<String, Any>>> {
+        return emailSubscriptionService.getActiveSubscriptionsWithPhoneConsent()
+            .map { subscriptions: List<EmailSubscription> ->
+                val maskedSubscriptions = subscriptions.map { subscription ->
+                    EmailSubscriptionMapper.toPhoneConsentSubscriptionMap(
+                        subscription,
+                        { email: String -> emailSubscriptionService.maskEmail(email) }
+                    )
+                }
+
+                ApiResponseBuilder.success<Map<String, Any>>(
+                    "문자 동의 구독 목록을 성공적으로 조회했습니다.",
+                    mapOf(
+                        "subscriptions" to maskedSubscriptions,
+                        "total" to subscriptions.size
+                    )
+                )
+            }
+    }
+
     @PostMapping("/unsubscribe")
     fun unsubscribe(@RequestParam email: String): Mono<ApiResponse<Nothing?>> {
         return emailSubscriptionService.unsubscribe(email)

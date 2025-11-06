@@ -303,6 +303,106 @@ class AdminController(
             }
     }
 
+    @GetMapping("/check-welcome-email")
+    fun checkWelcomeEmailSent(@RequestParam email: String): Mono<ApiResponse<Map<String, Any>>> {
+        return notificationLogService.getEmailHistoryByUserEmail(email)
+            .map { logs ->
+                val welcomeEmailSent = logs.any { log ->
+                    val message = log["message"] as? String ?: ""
+                    val notificationType = (log["notificationType"] as? String ?: "").lowercase()
+                    notificationType == "email" && 
+                    (message.contains("환영") || message.contains("주식 분석 시스템에 오신 것을 환영합니다"))
+                }
+                ApiResponseBuilder.success(
+                    "환영 메일 발송 여부 확인 완료",
+                    mapOf("sent" to welcomeEmailSent, "email" to email) as Map<String, Any>
+                )
+            }
+            .onErrorResume { error ->
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "확인 실패", null))
+            }
+    }
+
+    @GetMapping("/check-daily-email")
+    fun checkDailyEmailSentToday(@RequestParam email: String): Mono<ApiResponse<Map<String, Any>>> {
+        return notificationLogService.getEmailHistoryByUserEmail(email)
+            .map { logs ->
+                val today = java.time.LocalDate.now()
+                val dailyEmailSentToday = logs.any { log ->
+                    val sentAtStr = log["sentAt"] as? String ?: ""
+                    val message = log["message"] as? String ?: ""
+                    val notificationType = (log["notificationType"] as? String ?: "").lowercase()
+                    
+                    try {
+                        val sentAt = java.time.LocalDateTime.parse(sentAtStr.substring(0, 19))
+                        val sentDate = sentAt.toLocalDate()
+                        notificationType == "email" && 
+                        sentDate == today &&
+                        (message.contains("주식 분석 리포트") || message.contains("일일 주식 분석"))
+                    } catch (e: Exception) {
+                        false
+                    }
+                }
+                ApiResponseBuilder.success(
+                    "일일 분석 메일 발송 여부 확인 완료",
+                    mapOf("sent" to dailyEmailSentToday, "email" to email) as Map<String, Any>
+                )
+            }
+            .onErrorResume { error ->
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "확인 실패", null))
+            }
+    }
+
+    @GetMapping("/check-daily-sms")
+    fun checkDailySmsSentToday(@RequestParam phone: String): Mono<ApiResponse<Map<String, Any>>> {
+        return notificationLogService.getEmailHistoryByUserEmail(phone)
+            .map { logs ->
+                val today = java.time.LocalDate.now()
+                val dailySmsSentToday = logs.any { log ->
+                    val sentAtStr = log["sentAt"] as? String ?: ""
+                    val message = log["message"] as? String ?: ""
+                    val notificationType = (log["notificationType"] as? String ?: "").lowercase()
+                    
+                    try {
+                        val sentAt = java.time.LocalDateTime.parse(sentAtStr.substring(0, 19))
+                        val sentDate = sentAt.toLocalDate()
+                        notificationType == "sms" && 
+                        sentDate == today &&
+                        (message.contains("주식분석") || message.contains("일일 주식 분석"))
+                    } catch (e: Exception) {
+                        false
+                    }
+                }
+                ApiResponseBuilder.success(
+                    "일일 분석 SMS 발송 여부 확인 완료",
+                    mapOf("sent" to dailySmsSentToday, "phone" to phone) as Map<String, Any>
+                )
+            }
+            .onErrorResume { error ->
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "확인 실패", null))
+            }
+    }
+
+    @GetMapping("/check-welcome-sms")
+    fun checkWelcomeSmsSent(@RequestParam phone: String): Mono<ApiResponse<Map<String, Any>>> {
+        return notificationLogService.getEmailHistoryByUserEmail(phone)
+            .map { logs ->
+                val welcomeSmsSent = logs.any { log ->
+                    val message = log["message"] as? String ?: ""
+                    val notificationType = (log["notificationType"] as? String ?: "").lowercase()
+                    notificationType == "sms" && 
+                    (message.contains("환영") || message.contains("주식 분석 시스템에 오신 것을 환영합니다"))
+                }
+                ApiResponseBuilder.success(
+                    "환영 SMS 발송 여부 확인 완료",
+                    mapOf("sent" to welcomeSmsSent, "phone" to phone) as Map<String, Any>
+                )
+            }
+            .onErrorResume { error ->
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "확인 실패", null))
+            }
+    }
+
     @PostMapping("/subscriptions/{id}/send-sms")
     fun sendSms(
         @RequestHeader("Authorization") token: String,
@@ -408,6 +508,37 @@ class AdminController(
                     Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
+    }
+
+    @PostMapping("/save-notification-log")
+    fun saveNotificationLog(@RequestBody request: Map<String, String>): Mono<ApiResponse<Map<String, Any>>> {
+        return Mono.fromCallable {
+            val userEmail = request["userEmail"] ?: ""
+            val subject = request["subject"]
+            val message = request["message"] ?: ""
+            val status = request["status"] ?: "sent"
+            val source = request["source"] ?: "airflow"
+            val notificationType = request["notificationType"] ?: "email"
+            val errorMessage = request["errorMessage"]
+            
+            notificationLogService.saveEmailLog(
+                userEmail = userEmail,
+                subject = subject,
+                message = message,
+                status = status,
+                errorMessage = errorMessage,
+                source = source,
+                notificationType = notificationType
+            ).block()
+            
+            ApiResponseBuilder.success(
+                "알림 로그 저장 완료",
+                mapOf("email" to userEmail) as Map<String, Any>
+            )
+        }
+        .onErrorResume { error ->
+            Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "로그 저장 실패", null))
+        }
     }
 
     @GetMapping("/sms-config")

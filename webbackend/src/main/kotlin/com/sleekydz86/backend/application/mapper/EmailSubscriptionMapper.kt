@@ -27,5 +27,17 @@ object EmailSubscriptionMapper {
             "createdAt" to subscription.createdAt
         )
     }
+
+    fun toPhoneConsentSubscriptionMap(subscription: EmailSubscription, maskEmail: (String) -> String): Map<String, Any> {
+        return mapOf<String, Any>(
+            "id" to (subscription.id ?: 0L),
+            "name" to subscription.name,
+            "email" to maskEmail(subscription.email),
+            "phone" to (subscription.phone ?: ""),
+            "isEmailConsent" to subscription.isEmailConsent,
+            "isPhoneConsent" to subscription.isPhoneConsent,
+            "createdAt" to subscription.createdAt
+        )
+    }
 }
 

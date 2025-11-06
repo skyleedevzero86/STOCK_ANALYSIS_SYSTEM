@@ -381,12 +381,10 @@ async function sendEmail(event) {
     }
 }
 
-async function openSendSmsModal() {
+function openSendSmsModal() {
     const modal = document.getElementById("sendSmsModal");
     const recipientPhoneInput = document.getElementById("recipientPhone");
     const actualRecipientPhoneInput = document.getElementById("actualRecipientPhone");
-    const smsFromInput = document.getElementById("smsFrom");
-    const actualSmsFromInput = document.getElementById("actualSmsFrom");
     
     let actualPhone = "";
     if (userPhone) {
@@ -395,39 +393,6 @@ async function openSendSmsModal() {
     
     recipientPhoneInput.value = maskPhone(actualPhone);
     actualRecipientPhoneInput.value = actualPhone;
-    
-    const adminToken = localStorage.getItem("adminToken");
-    if (adminToken) {
-        try {
-            const response = await fetch("/api/admin/sms-config", {
-                headers: {
-                    Authorization: adminToken,
-                },
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                if (result.success && result.data && result.data.fromPhone) {
-                    const fromPhone = result.data.fromPhone.replace(/-/g, "");
-                    smsFromInput.value = maskPhone(fromPhone);
-                    actualSmsFromInput.value = fromPhone;
-                } else {
-                    smsFromInput.value = "발신번호를 불러올 수 없습니다";
-                    actualSmsFromInput.value = "";
-                }
-            } else {
-                smsFromInput.value = "발신번호를 불러올 수 없습니다";
-                actualSmsFromInput.value = "";
-            }
-        } catch (error) {
-            console.error("발신번호 조회 실패:", error);
-            smsFromInput.value = "발신번호를 불러올 수 없습니다";
-            actualSmsFromInput.value = "";
-        }
-    } else {
-        smsFromInput.value = "발신번호를 불러올 수 없습니다";
-        actualSmsFromInput.value = "";
-    }
     
     document.getElementById("smsBody").value = "";
     modal.style.display = "flex";
@@ -446,18 +411,11 @@ async function sendSms(event) {
     }
 
     const recipientPhone = document.getElementById("actualRecipientPhone").value.trim().replace(/-/g, "");
-    const fromPhone = document.getElementById("actualSmsFrom").value.trim().replace(/-/g, "");
     const body = document.getElementById("smsBody").value.trim();
     const maskedRecipientPhone = maskPhone(recipientPhone);
-    const maskedFromPhone = maskPhone(fromPhone);
 
     if (!recipientPhone || !body) {
         alert("전화번호와 메시지 내용을 모두 입력해주세요.");
-        return;
-    }
-
-    if (!fromPhone) {
-        alert("발신번호를 불러올 수 없습니다. 설정을 확인해주세요.");
         return;
     }
 
@@ -466,12 +424,8 @@ async function sendSms(event) {
         alert("올바른 수신자 전화번호 형식이 아닙니다. (01012345678 형식)");
         return;
     }
-    if (!phoneRegex.test(fromPhone)) {
-        alert("올바른 발신번호 형식이 아닙니다. (01012345678 형식)");
-        return;
-    }
 
-    if (!confirm(`다음 전화번호로 문자를 발송하시겠습니까?\n\n수신번호: ${maskedRecipientPhone}\n발신번호: ${maskedFromPhone}`)) {
+    if (!confirm("문자를 발송하시겠습니까?")) {
         return;
     }
 

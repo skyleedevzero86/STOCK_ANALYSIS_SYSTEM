@@ -11,6 +11,7 @@ import com.sleekydz86.backend.infrastructure.client.PythonApiClient
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
+import org.slf4j.LoggerFactory
 
 @RestController
 @RequestMapping("/api/admin")
@@ -20,6 +21,7 @@ class AdminController(
     private val notificationLogService: NotificationLogService,
     private val pythonApiClient: PythonApiClient
 ) {
+    private val logger = LoggerFactory.getLogger(AdminController::class.java)
 
     @PostMapping("/login")
     fun login(@RequestBody request: AdminLoginRequest): Mono<ApiResponse<Map<String, Any>>> {
@@ -150,14 +152,19 @@ class AdminController(
                 if (isValid) {
                     emailSubscriptionService.getSubscriptionById(id)
                         .map { subscription ->
-                            val maskedSubscription = EmailSubscriptionMapper.toMaskedSubscriptionMap(
-                                subscription,
-                                { email: String -> subscription.email },
-                                { phone: String? -> emailSubscriptionService.maskPhone(phone) ?: "" }
+                            val subscriptionMap = mapOf<String, Any>(
+                                "id" to (subscription.id ?: 0L),
+                                "name" to subscription.name,
+                                "email" to emailSubscriptionService.maskEmail(subscription.email),
+                                "phone" to (subscription.phone ?: ""),
+                                "isEmailConsent" to subscription.isEmailConsent,
+                                "isPhoneConsent" to subscription.isPhoneConsent,
+                                "createdAt" to subscription.createdAt,
+                                "isActive" to subscription.isActive
                             )
                             ApiResponseBuilder.success(
                                 "구독자 정보를 성공적으로 조회했습니다.",
-                                maskedSubscription
+                                subscriptionMap
                             )
                         }
                         .onErrorResume { error ->
@@ -307,58 +314,95 @@ class AdminController(
                 if (isValid) {
                     val toPhone = request["toPhone"] ?: ""
                     val message = request["message"] ?: ""
-                    val fromPhone = pythonApiClient.getFromPhone()
                     
                     if (toPhone.isBlank() || message.isBlank()) {
                         return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("전화번호와 메시지는 필수입니다.", null))
                     }
                     
-                    if (fromPhone.isBlank()) {
-                        return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("발신번호가 설정되지 않았습니다. 환경 변수 SOLAPI_FROM_PHONE을 설정해주세요.", null))
-                    }
-                    
-                    pythonApiClient.sendSms(fromPhone, toPhone, message)
-                        .flatMap { success ->
-                            if (success) {
-                                notificationLogService.saveEmailLog(
-                                    userEmail = toPhone,
-                                    subject = null,
-                                    message = message,
-                                    status = "sent",
-                                    source = "manual",
-                                    notificationType = "sms"
-                                ).map {
-                                    ApiResponseBuilder.success<Map<String, Any>>(
-                                        "문자가 성공적으로 발송되었습니다.",
-                                        mapOf("phone" to toPhone) as Map<String, Any>
+                    emailSubscriptionService.getSubscriptionById(id)
+                        .flatMap { subscription ->
+                            pythonApiClient.sendSms(toPhone, message)
+                                .flatMap { success ->
+                                    if (success) {
+                                        notificationLogService.saveEmailLog(
+                                            userEmail = subscription.email,
+                                            subject = null,
+                                            message = message,
+                                            status = "sent",
+                                            source = "manual",
+                                            notificationType = "sms"
+                                        )
+                                    .doOnSuccess { 
+                                        logger.info("문자 발송 이력 저장 완료: $toPhone - sent")
+                                    }
+                                    .doOnError { error ->
+                                        logger.error("문자 발송 이력 저장 실패: $toPhone", error)
+                                    }
+                                    .map {
+                                        ApiResponseBuilder.success<Map<String, Any>>(
+                                            "문자가 성공적으로 발송되었습니다.",
+                                            mapOf("phone" to toPhone) as Map<String, Any>
+                                        )
+                                    }
+                                    .onErrorReturn(
+                                        ApiResponseBuilder.success<Map<String, Any>>(
+                                            "문자가 성공적으로 발송되었습니다.",
+                                            mapOf("phone" to toPhone) as Map<String, Any>
+                                        )
                                     )
-                                }
                             } else {
                                 notificationLogService.saveEmailLog(
-                                    userEmail = toPhone,
+                                    userEmail = subscription.email,
                                     subject = null,
                                     message = message,
                                     status = "failed",
                                     errorMessage = "문자 발송에 실패했습니다.",
                                     source = "manual",
                                     notificationType = "sms"
-                                ).map {
-                                    ApiResponseBuilder.failure<Map<String, Any>>("문자 발송에 실패했습니다.", null)
-                                }
+                                )
+                                    .doOnSuccess { 
+                                        logger.info("문자 발송 이력 저장 완료: ${subscription.email} - failed")
+                                    }
+                                    .doOnError { error ->
+                                        logger.error("문자 발송 이력 저장 실패: ${subscription.email}", error)
+                                    }
+                                    .map {
+                                        ApiResponseBuilder.failure<Map<String, Any>>("문자 발송에 실패했습니다.", null)
+                                    }
+                                    .onErrorReturn(
+                                        ApiResponseBuilder.failure<Map<String, Any>>("문자 발송에 실패했습니다.", null)
+                                    )
                             }
                         }
                         .onErrorResume { error ->
-                            notificationLogService.saveEmailLog(
-                                userEmail = toPhone,
-                                subject = null,
-                                message = message,
-                                status = "failed",
-                                errorMessage = error.message ?: "문자 발송 중 오류 발생",
-                                source = "manual",
-                                notificationType = "sms"
-                            ).map {
-                                ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문자 발송에 실패했습니다.", null)
-                            }
+                            emailSubscriptionService.getSubscriptionById(id)
+                                .flatMap { subscription ->
+                                    notificationLogService.saveEmailLog(
+                                        userEmail = subscription.email,
+                                        subject = null,
+                                        message = message,
+                                        status = "failed",
+                                        errorMessage = error.message ?: "문자 발송 중 오류 발생",
+                                        source = "manual",
+                                        notificationType = "sms"
+                                    )
+                                        .doOnSuccess { 
+                                            logger.info("문자 발송 이력 저장 완료: ${subscription.email} - failed (error)")
+                                        }
+                                        .doOnError { saveError ->
+                                            logger.error("문자 발송 이력 저장 실패: ${subscription.email}", saveError)
+                                        }
+                                        .map {
+                                            ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문자 발송에 실패했습니다.", null)
+                                        }
+                                        .onErrorReturn(
+                                            ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문자 발송에 실패했습니다.", null)
+                                        )
+                                }
+                                .onErrorResume { 
+                                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문자 발송에 실패했습니다.", null))
+                                }
+                        }
                         }
                 } else {
                     Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
@@ -373,10 +417,16 @@ class AdminController(
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
-                    Mono.just(ApiResponseBuilder.success(
-                        "SMS 설정을 성공적으로 조회했습니다.",
-                        mapOf("fromPhone" to pythonApiClient.getFromPhone()) as Map<String, Any>
-                    ))
+                    pythonApiClient.getFromPhone()
+                        .map { fromPhone ->
+                            ApiResponseBuilder.success(
+                                "SMS 설정을 성공적으로 조회했습니다.",
+                                mapOf("fromPhone" to fromPhone) as Map<String, Any>
+                            )
+                        }
+                        .onErrorResume { error ->
+                            Mono.just(ApiResponseBuilder.failure("발신번호 조회에 실패했습니다.", null))
+                        }
                 } else {
                     Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
                 }

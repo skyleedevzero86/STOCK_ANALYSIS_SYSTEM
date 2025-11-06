@@ -645,5 +645,18 @@ async def send_sms_notification(
         logging.error(f"문자 발송 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"문자 발송 오류: {str(e)}")
 
+@app.get("/api/notifications/sms-config",
+         summary="SMS 발신번호 조회",
+         description="설정된 SMS 발신번호를 조회합니다.")
+async def get_sms_config():
+    try:
+        from_phone = settings.SOLAPI_FROM_PHONE
+        return {
+            "fromPhone": from_phone
+        }
+    except Exception as e:
+        logging.error(f"SMS 설정 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SMS 설정 조회 오류: {str(e)}")
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)

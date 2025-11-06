@@ -11,9 +11,7 @@ import java.time.LocalDateTime
 @Component
 class PythonApiClient(
     @Value("\${python.api.base-url:http://localhost:9000}")
-    private val baseUrl: String,
-    @Value("\${solapi.from-phone:}")
-    private val fromPhone: String
+    private val baseUrl: String
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
 
@@ -419,11 +417,10 @@ class PythonApiClient(
             }
     }
 
-    fun sendSms(fromPhone: String, toPhone: String, message: String): Mono<Boolean> {
+    fun sendSms(toPhone: String, message: String): Mono<Boolean> {
         return webClient.post()
             .uri { uriBuilder ->
                 uriBuilder.path("/api/notifications/sms")
-                    .queryParam("from_phone", fromPhone)
                     .queryParam("to_phone", toPhone)
                     .queryParam("message", message)
                     .build()
@@ -439,7 +436,17 @@ class PythonApiClient(
             }
     }
 
-    fun getFromPhone(): String {
-        return fromPhone
+    fun getFromPhone(): Mono<String> {
+        return webClient.get()
+            .uri("/api/notifications/sms-config")
+            .retrieve()
+            .bodyToMono(Map::class.java)
+            .map { response ->
+                (response["fromPhone"] as? String) ?: ""
+            }
+            .onErrorResume { error ->
+                logger.error("발신번호 조회 실패: ${error.message}", error)
+                Mono.just("")
+            }
     }
 }

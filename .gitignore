@@ -5,7 +5,6 @@ Sample/
 __pycache__/
 *.py[codz]
 *$py.class
-config/settings.py
 # C extensions
 *.so
 *.md

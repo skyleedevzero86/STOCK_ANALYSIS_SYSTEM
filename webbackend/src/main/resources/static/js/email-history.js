@@ -46,7 +46,7 @@ async function loadActualEmail() {
             const result = await response.json();
             if (result.success && result.data) {
                 if (result.data.email) {
-                    actualUserEmail = result.data.email;
+                actualUserEmail = result.data.email;
                 }
                 if (result.data.phone) {
                     userPhone = result.data.phone;

@@ -306,11 +306,15 @@ class AdminController(
             .flatMap { isValid ->
                 if (isValid) {
                     val toPhone = request["toPhone"] ?: ""
-                    val fromPhone = request["fromPhone"] ?: ""
                     val message = request["message"] ?: ""
+                    val fromPhone = pythonApiClient.getFromPhone()
                     
-                    if (toPhone.isBlank() || fromPhone.isBlank() || message.isBlank()) {
-                        return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("전화번호와 발신번호, 메시지는 필수입니다.", null))
+                    if (toPhone.isBlank() || message.isBlank()) {
+                        return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("전화번호와 메시지는 필수입니다.", null))
+                    }
+                    
+                    if (fromPhone.isBlank()) {
+                        return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("발신번호가 설정되지 않았습니다. 환경 변수 SOLAPI_FROM_PHONE을 설정해주세요.", null))
                     }
                     
                     pythonApiClient.sendSms(fromPhone, toPhone, message)
@@ -358,6 +362,23 @@ class AdminController(
                         }
                 } else {
                     Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
+                }
+            }
+    }
+
+    @GetMapping("/sms-config")
+    fun getSmsConfig(
+        @RequestHeader("Authorization") token: String
+    ): Mono<ApiResponse<Map<String, Any>>> {
+        return adminService.validateToken(token)
+            .flatMap { isValid ->
+                if (isValid) {
+                    Mono.just(ApiResponseBuilder.success(
+                        "SMS 설정을 성공적으로 조회했습니다.",
+                        mapOf("fromPhone" to pythonApiClient.getFromPhone()) as Map<String, Any>
+                    ))
+                } else {
+                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
                 }
             }
     }

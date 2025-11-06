@@ -285,12 +285,14 @@
           <input
             type="text"
             id="recipientPhone"
-            placeholder="01012345678 (하이픈 제외)"
+            readonly
             style="
               width: 100%;
               padding: 8px;
               border: 1px solid #ddd;
               border-radius: 4px;
+              background: #f5f5f5;
+              cursor: not-allowed;
             "
           />
           <input type="hidden" id="actualRecipientPhone" />
@@ -302,14 +304,17 @@
           <input
             type="text"
             id="smsFrom"
-            placeholder="01012345678 (등록된 발신번호만 사용 가능)"
+            readonly
             style="
               width: 100%;
               padding: 8px;
               border: 1px solid #ddd;
               border-radius: 4px;
+              background: #f5f5f5;
+              cursor: not-allowed;
             "
           />
+          <input type="hidden" id="actualSmsFrom" />
         </div>
         <div style="margin-bottom: 20px">
           <label style="display: block; margin-bottom: 5px; font-weight: bold"

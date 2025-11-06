@@ -63,19 +63,19 @@ class NotificationLogService(
         return Mono.fromCallable {
             val logMessage = if (source == "manual") {
                 if (subject != null) {
-                    "[수기발송] $subject\n$message"
+                "[수기발송] $subject\n$message"
                 } else {
                     "[수기발송] $message"
                 }
             } else if (source == "airflow") {
                 if (subject != null) {
-                    "[Airflow발송] $subject\n$message"
+                "[Airflow발송] $subject\n$message"
                 } else {
                     "[Airflow발송] $message"
                 }
             } else {
                 if (subject != null) {
-                    "[$source] $subject\n$message"
+                "[$source] $subject\n$message"
                 } else {
                     "[$source] $message"
                 }

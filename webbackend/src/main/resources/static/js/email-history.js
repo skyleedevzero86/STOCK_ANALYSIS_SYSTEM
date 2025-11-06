@@ -253,6 +253,18 @@ function maskEmail(email) {
     }
 }
 
+function maskPhone(phone) {
+    if (!phone) return phone;
+    
+    const cleaned = phone.replace(/-/g, "").replace(/\s/g, "");
+    
+    if (cleaned.length <= 4) {
+        return "*".repeat(cleaned.length);
+    } else {
+        return `${cleaned.substring(0, 2)}${"*".repeat(cleaned.length - 4)}${cleaned.substring(cleaned.length - 2)}`;
+    }
+}
+
 function openSendEmailModal() {
     const modal = document.getElementById("sendEmailModal");
     const recipientEmailInput = document.getElementById("recipientEmail");
@@ -369,20 +381,54 @@ async function sendEmail(event) {
     }
 }
 
-function openSendSmsModal() {
+async function openSendSmsModal() {
     const modal = document.getElementById("sendSmsModal");
     const recipientPhoneInput = document.getElementById("recipientPhone");
     const actualRecipientPhoneInput = document.getElementById("actualRecipientPhone");
+    const smsFromInput = document.getElementById("smsFrom");
+    const actualSmsFromInput = document.getElementById("actualSmsFrom");
     
     let actualPhone = "";
     if (userPhone) {
         actualPhone = userPhone.replace(/-/g, "");
     }
     
-    recipientPhoneInput.value = actualPhone;
+    recipientPhoneInput.value = maskPhone(actualPhone);
     actualRecipientPhoneInput.value = actualPhone;
     
-    document.getElementById("smsFrom").value = "";
+    const adminToken = localStorage.getItem("adminToken");
+    if (adminToken) {
+        try {
+            const response = await fetch("/api/admin/sms-config", {
+                headers: {
+                    Authorization: adminToken,
+                },
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data && result.data.fromPhone) {
+                    const fromPhone = result.data.fromPhone.replace(/-/g, "");
+                    smsFromInput.value = maskPhone(fromPhone);
+                    actualSmsFromInput.value = fromPhone;
+                } else {
+                    smsFromInput.value = "발신번호를 불러올 수 없습니다";
+                    actualSmsFromInput.value = "";
+                }
+            } else {
+                smsFromInput.value = "발신번호를 불러올 수 없습니다";
+                actualSmsFromInput.value = "";
+            }
+        } catch (error) {
+            console.error("발신번호 조회 실패:", error);
+            smsFromInput.value = "발신번호를 불러올 수 없습니다";
+            actualSmsFromInput.value = "";
+        }
+    } else {
+        smsFromInput.value = "발신번호를 불러올 수 없습니다";
+        actualSmsFromInput.value = "";
+    }
+    
     document.getElementById("smsBody").value = "";
     modal.style.display = "flex";
 }
@@ -399,12 +445,19 @@ async function sendSms(event) {
         return;
     }
 
-    const recipientPhone = document.getElementById("recipientPhone").value.trim().replace(/-/g, "");
-    const fromPhone = document.getElementById("smsFrom").value.trim().replace(/-/g, "");
+    const recipientPhone = document.getElementById("actualRecipientPhone").value.trim().replace(/-/g, "");
+    const fromPhone = document.getElementById("actualSmsFrom").value.trim().replace(/-/g, "");
     const body = document.getElementById("smsBody").value.trim();
+    const maskedRecipientPhone = maskPhone(recipientPhone);
+    const maskedFromPhone = maskPhone(fromPhone);
 
-    if (!recipientPhone || !fromPhone || !body) {
-        alert("전화번호와 발신번호, 메시지 내용을 모두 입력해주세요.");
+    if (!recipientPhone || !body) {
+        alert("전화번호와 메시지 내용을 모두 입력해주세요.");
+        return;
+    }
+
+    if (!fromPhone) {
+        alert("발신번호를 불러올 수 없습니다. 설정을 확인해주세요.");
         return;
     }
 
@@ -418,7 +471,7 @@ async function sendSms(event) {
         return;
     }
 
-    if (!confirm(`다음 전화번호로 문자를 발송하시겠습니까?\n\n수신번호: ${recipientPhone}\n발신번호: ${fromPhone}`)) {
+    if (!confirm(`다음 전화번호로 문자를 발송하시겠습니까?\n\n수신번호: ${maskedRecipientPhone}\n발신번호: ${maskedFromPhone}`)) {
         return;
     }
 
@@ -439,7 +492,6 @@ async function sendSms(event) {
             },
             body: JSON.stringify({
                 toPhone: recipientPhone,
-                fromPhone: fromPhone,
                 message: body
             }),
         });

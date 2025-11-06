@@ -11,7 +11,9 @@ import java.time.LocalDateTime
 @Component
 class PythonApiClient(
     @Value("\${python.api.base-url:http://localhost:9000}")
-    private val baseUrl: String
+    private val baseUrl: String,
+    @Value("\${solapi.from-phone:}")
+    private val fromPhone: String
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
 
@@ -435,5 +437,9 @@ class PythonApiClient(
                 logger.error("문자 발송 실패: ${error.message}", error)
                 Mono.just(false)
             }
+    }
+
+    fun getFromPhone(): String {
+        return fromPhone
     }
 }

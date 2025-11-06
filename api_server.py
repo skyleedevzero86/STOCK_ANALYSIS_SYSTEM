@@ -554,10 +554,19 @@ async def send_sms_notification(
             to_phone = request.to_phone
             message = request.message
         
-        if not all([from_phone, to_phone, message]):
+        if not to_phone or not message:
             raise HTTPException(
                 status_code=400,
-                detail="from_phone, to_phone, message는 필수입니다."
+                detail="to_phone, message는 필수입니다."
+            )
+        
+        if not from_phone:
+            from_phone = settings.SOLAPI_FROM_PHONE
+        
+        if not from_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="발신번호가 설정되지 않았습니다. 환경 변수 SOLAPI_FROM_PHONE을 설정해주세요."
             )
         
         from_phone = from_phone.replace("-", "").replace(" ", "")

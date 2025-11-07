@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field, ConfigDict
+from contextlib import asynccontextmanager
 import asyncio
 import json
 import logging
@@ -83,6 +84,20 @@ class SmsNotificationResponse(BaseModel):
     success: bool = Field(..., description="발송 성공 여부")
     message: str = Field(..., description="응답 메시지")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        logging.info("Application startup: Initializing services...")
+        yield
+    except asyncio.CancelledError:
+        logging.debug("Application shutdown: Cancelled (likely due to reload)")
+        raise
+    except KeyboardInterrupt:
+        logging.info("Application shutdown: Keyboard interrupt")
+        raise
+    finally:
+        logging.info("Application shutdown: Cleaning up...")
+
 app = FastAPI(
     title="Stock Analysis API",
     version="1.0.0",
@@ -94,7 +109,8 @@ app = FastAPI(
     license_info={
         "name": "Apache 2.0",
         "url": "https://www.apache.org/licenses/LICENSE-2.0"
-    }
+    },
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -134,7 +150,8 @@ class StockAnalysisAPI:
         self.collector = StockDataCollector(
             self.symbols, 
             use_mock_data=settings.USE_MOCK_DATA,
-            use_alpha_vantage=True
+            use_alpha_vantage=True,
+            fallback_to_mock=settings.FALLBACK_TO_MOCK
         )
         self.news_collector = NewsCollector()
         self.analyzer = TechnicalAnalyzer()

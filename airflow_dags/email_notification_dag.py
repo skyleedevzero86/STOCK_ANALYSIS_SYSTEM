@@ -23,7 +23,6 @@ dag = DAG(
     'email_notification_dag',
     default_args=default_args,
     description='주식 분석 이메일 알림 발송',
-    #schedule=''0 9 * * 1-5', # 평일 오전 9시
     schedule='*/1 * * * *',
     catchup=False,
     tags=['stock', 'email', 'notification']
@@ -152,12 +151,12 @@ def send_sms_notification(to_phone, message, source="airflow", user_email=None):
 
 def generate_email_content(analysis_data):
     if not analysis_data:
-        return "분석 데이터가 없습니다."
+        return None
     
     valid_stocks = [s for s in analysis_data if s.get('currentPrice', 0) > 0]
     
     if not valid_stocks:
-        return "유효한 주식 데이터가 없습니다. Python API 서버가 정상적으로 실행 중인지 확인하세요."
+        return None
     
     trend_map = {
         'bullish': '상승',
@@ -290,7 +289,16 @@ def send_daily_analysis_emails():
         logging.warning("분석 데이터가 없습니다. 일일 분석 메일을 발송하지 않습니다.")
         return
     
+    valid_stocks = [s for s in analysis_data if s.get('currentPrice', 0) > 0]
+    if not valid_stocks:
+        logging.warning("유효한 주식 데이터가 없습니다. 일일 분석 메일을 발송하지 않습니다.")
+        return
+    
     email_content = generate_email_content(analysis_data)
+    if not email_content:
+        logging.warning("이메일 내용 생성 실패. 일일 분석 메일을 발송하지 않습니다.")
+        return
+    
     subject = f"주식 분석 리포트 - {datetime.now().strftime('%Y년 %m월 %d일')}"
     
     success_count = 0
@@ -331,6 +339,11 @@ def send_daily_analysis_sms():
     
     if not analysis_data:
         logging.warning("분석 데이터가 없습니다. 일일 분석 SMS를 발송하지 않습니다.")
+        return
+    
+    valid_stocks = [s for s in analysis_data if s.get('currentPrice', 0) > 0]
+    if not valid_stocks:
+        logging.warning("유효한 주식 데이터가 없습니다. 일일 분석 SMS를 발송하지 않습니다.")
         return
     
     sms_content = generate_sms_content(analysis_data)

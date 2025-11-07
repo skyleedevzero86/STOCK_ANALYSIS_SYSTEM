@@ -46,6 +46,9 @@ class WebController {
     @GetMapping("/template-management")
     fun templateManagement(): ResponseEntity<String> = loadHtmlFile("template-management.html")
 
+    @GetMapping("/news-detail")
+    fun newsDetail(): ResponseEntity<String> = loadHtmlFile("news-detail.html")
+
     private fun loadHtmlFile(filename: String): ResponseEntity<String> {
         return try {
             val resource = ClassPathResource("$staticResourcePath$filename")

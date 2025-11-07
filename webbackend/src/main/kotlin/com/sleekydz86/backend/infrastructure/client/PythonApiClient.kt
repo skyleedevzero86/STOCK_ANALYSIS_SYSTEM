@@ -459,15 +459,20 @@ class PythonApiClient(
             publishedAt = newsMap["published_at"] as? String,
             symbol = newsMap["symbol"] as? String ?: "",
             provider = newsMap["provider"] as? String ?: "",
-            sentiment = (newsMap["sentiment"] as? Number)?.toDouble()
+            sentiment = (newsMap["sentiment"] as? Number)?.toDouble(),
+            titleKo = newsMap["title_ko"] as? String,
+            descriptionKo = newsMap["description_ko"] as? String,
+            contentKo = newsMap["content_ko"] as? String,
+            content = newsMap["content"] as? String
         )
     }
 
-    fun getStockNews(symbol: String, includeKorean: Boolean = false): Mono<List<News>> {
+    fun getStockNews(symbol: String, includeKorean: Boolean = false, autoTranslate: Boolean = true): Mono<List<News>> {
         return webClient.get()
             .uri { uriBuilder ->
                 uriBuilder.path("/api/news/{symbol}")
                     .queryParam("include_korean", includeKorean)
+                    .queryParam("auto_translate", autoTranslate)
                     .build(symbol)
             }
             .retrieve()
@@ -476,8 +481,42 @@ class PythonApiClient(
             .collectList()
             .timeout(java.time.Duration.ofSeconds(15))
             .onErrorResume { error ->
-                logger.error("뉴스 조회 실패: ${error.message}", error)
-                Mono.just(emptyList())
+                when (error) {
+                    is java.util.concurrent.TimeoutException,
+                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.net.ConnectException -> {
+                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbol: $symbol)")
+                        Mono.just(emptyList())
+                    }
+                    else -> {
+                        logger.debug("뉴스 조회 실패 (조용히 처리): $symbol - ${error.message}")
+                        Mono.just(emptyList())
+                    }
+                }
+            }
+    }
+    
+    fun getNewsByUrl(url: String): Mono<News> {
+        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+        return webClient.get()
+            .uri("/api/news/detail/{newsId}", encodedUrl)
+            .retrieve()
+            .bodyToMono(Map::class.java)
+            .map(mapToNews)
+            .timeout(java.time.Duration.ofSeconds(10))
+            .onErrorResume { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException,
+                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.net.ConnectException -> {
+                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (url: $url)")
+                        Mono.error(error)
+                    }
+                    else -> {
+                        logger.debug("뉴스 상세 조회 실패 (조용히 처리): $url - ${error.message}")
+                        Mono.error(error)
+                    }
+                }
             }
     }
 
@@ -496,8 +535,18 @@ class PythonApiClient(
             .collectList()
             .timeout(java.time.Duration.ofSeconds(15))
             .onErrorResume { error ->
-                logger.error("뉴스 검색 실패: ${error.message}", error)
-                Mono.just(emptyList())
+                when (error) {
+                    is java.util.concurrent.TimeoutException,
+                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.net.ConnectException -> {
+                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (query: $query)")
+                        Mono.just(emptyList())
+                    }
+                    else -> {
+                        logger.debug("뉴스 검색 실패 (조용히 처리): $query - ${error.message}")
+                        Mono.just(emptyList())
+                    }
+                }
             }
     }
 
@@ -519,8 +568,18 @@ class PythonApiClient(
             }
             .timeout(java.time.Duration.ofSeconds(20))
             .onErrorResume { error ->
-                logger.error("다중 종목 뉴스 조회 실패: ${error.message}", error)
-                Mono.just(emptyMap())
+                when (error) {
+                    is java.util.concurrent.TimeoutException,
+                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.net.ConnectException -> {
+                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbols: $symbolsParam)")
+                        Mono.just(emptyMap())
+                    }
+                    else -> {
+                        logger.debug("다중 종목 뉴스 조회 실패 (조용히 처리): $symbolsParam - ${error.message}")
+                        Mono.just(emptyMap())
+                    }
+                }
             }
     }
 }

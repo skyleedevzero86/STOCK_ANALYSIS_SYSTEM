@@ -8,6 +8,10 @@ data class News(
     val publishedAt: String? = null,
     val symbol: String,
     val provider: String,
-    val sentiment: Double? = null
+    val sentiment: Double? = null,
+    val titleKo: String? = null,
+    val descriptionKo: String? = null,
+    val contentKo: String? = null,
+    val content: String? = null
 )
 

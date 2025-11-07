@@ -59,7 +59,7 @@ class SecurityConfig(
             .authorizeExchange { exchanges ->
                 exchanges
                     .pathMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
-                                 "/email-subscription", "/template-management").permitAll()
+                                 "/email-subscription", "/template-management", "/news-detail").permitAll()
                     .pathMatchers("/css/**", "/js/**", "/*.html", "/*.css", "/*.js",
                                  "/*.png", "/*.jpg", "/*.gif", "/*.ico",
                                  "/*.svg").permitAll()

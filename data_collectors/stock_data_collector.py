@@ -11,11 +11,12 @@ from config.settings import settings
 
 class StockDataCollector:
     
-    def __init__(self, symbols: List[str], use_mock_data: bool = False, use_alpha_vantage: bool = True):
+    def __init__(self, symbols: List[str], use_mock_data: bool = False, use_alpha_vantage: bool = True, fallback_to_mock: bool = True):
         self.symbols = symbols
         self.session = requests.Session()
         self.use_mock_data = use_mock_data
         self.use_alpha_vantage = use_alpha_vantage
+        self.fallback_to_mock = fallback_to_mock
         self.alpha_vantage_api_key = settings.ALPHA_VANTAGE_API_KEY
         self.mock_data_cache = {}
         self.alpha_vantage_cache = {}
@@ -44,37 +45,94 @@ class StockDataCollector:
     
     def get_realtime_data(self, symbol: str) -> Dict:
         if self.use_mock_data:
+            logging.warning(f"Mock 데이터 모드: {symbol}에 대한 모의 데이터를 반환합니다.")
             return self._generate_mock_realtime_data(symbol)
         
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
             
+            if not info or 'currentPrice' not in info:
+                raise ValueError(f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.")
+            
             hist = ticker.history(period="1d", interval="1m")
             if not hist.empty:
-                latest_price = hist['Close'].iloc[-1]
-                volume = hist['Volume'].iloc[-1]
+                latest_price = float(hist['Close'].iloc[-1])
+                volume = int(hist['Volume'].iloc[-1])
             else:
-                latest_price = info.get('currentPrice', 0)
-                volume = info.get('volume', 0)
+                latest_price = float(info.get('currentPrice', 0))
+                volume = int(info.get('volume', 0))
+            
+            if latest_price <= 0:
+                raise ValueError(f"Yahoo Finance에서 {symbol}의 가격이 0입니다.")
+            
+            change = float(info.get('regularMarketChange', 0))
+            change_percent = float(info.get('regularMarketChangePercent', 0))
             
             realtime_data = {
                 'symbol': symbol,
                 'timestamp': datetime.now(),
-                'price': float(latest_price),
-                'volume': int(volume),
-                'change': info.get('regularMarketChange', 0),
-                'change_percent': info.get('regularMarketChangePercent', 0),
-                'market_cap': info.get('marketCap', 0),
-                'pe_ratio': info.get('trailingPE', 0),
-                'high_52w': info.get('fiftyTwoWeekHigh', 0),
-                'low_52w': info.get('fiftyTwoWeekLow', 0)
+                'price': latest_price,
+                'volume': volume,
+                'change': change,
+                'change_percent': change_percent,
+                'market_cap': int(info.get('marketCap', 0)),
+                'pe_ratio': float(info.get('trailingPE', 0)),
+                'high_52w': float(info.get('fiftyTwoWeekHigh', 0)),
+                'low_52w': float(info.get('fiftyTwoWeekLow', 0)),
+                'confidence_score': 0.95
             }
             
+            logging.info(f"Yahoo Finance에서 {symbol} 데이터 수집 성공: ${latest_price:.2f}")
             return realtime_data
             
         except Exception as e:
-            return self._generate_mock_realtime_data(symbol)
+            logging.warning(f"Yahoo Finance에서 {symbol} 데이터 수집 실패: {str(e)}")
+            
+            if self.use_alpha_vantage:
+                try:
+                    logging.info(f"Alpha Vantage로 {symbol} 데이터 수집 시도...")
+                    alpha_data = self.get_alpha_vantage_global_quote(symbol)
+                    
+                    if alpha_data and alpha_data.get('price', 0) > 0:
+                        realtime_data = {
+                            'symbol': symbol,
+                            'timestamp': datetime.now(),
+                            'price': float(alpha_data['price']),
+                            'volume': int(alpha_data.get('volume', 0)),
+                            'change': float(alpha_data.get('change', 0)),
+                            'change_percent': float(alpha_data.get('change_percent', 0)),
+                            'market_cap': 0,
+                            'pe_ratio': 0,
+                            'high_52w': float(alpha_data.get('high', 0)),
+                            'low_52w': float(alpha_data.get('low', 0)),
+                            'confidence_score': 0.85
+                        }
+                        logging.info(f"Alpha Vantage에서 {symbol} 데이터 수집 성공: ${alpha_data['price']:.2f}")
+                        return realtime_data
+                    else:
+                        logging.warning(f"Alpha Vantage에서 {symbol} 데이터를 가져올 수 없습니다.")
+                except Exception as alpha_e:
+                    logging.error(f"Alpha Vantage에서 {symbol} 데이터 수집 실패: {str(alpha_e)}")
+            
+            if self.fallback_to_mock:
+                logging.warning(f"모든 데이터 소스 실패, {symbol}에 대한 모의 데이터를 반환합니다.")
+                return self._generate_mock_realtime_data(symbol)
+            else:
+                logging.error(f"{symbol}에 대한 실제 데이터를 가져올 수 없습니다.")
+                return {
+                    'symbol': symbol,
+                    'timestamp': datetime.now(),
+                    'price': 0.0,
+                    'volume': 0,
+                    'change': 0.0,
+                    'change_percent': 0.0,
+                    'market_cap': 0,
+                    'pe_ratio': 0,
+                    'high_52w': 0,
+                    'low_52w': 0,
+                    'confidence_score': 0.0
+                }
     
     def get_multiple_realtime_data(self) -> List[Dict]:
         results = []

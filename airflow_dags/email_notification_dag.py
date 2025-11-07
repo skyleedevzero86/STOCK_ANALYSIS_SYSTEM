@@ -58,12 +58,27 @@ def get_sms_subscribers():
 def get_stock_analysis():
     try:
         python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-        response = requests.get(f'http://{python_api_host}:9000/api/analysis/all', timeout=10)
+        response = requests.get(f'http://{python_api_host}:9000/api/analysis/all', timeout=30)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            logging.info(f"분석 데이터 조회 성공: {len(data)}개 종목")
+            
+            for stock in data:
+                symbol = stock.get('symbol', 'N/A')
+                price = stock.get('currentPrice', 0)
+                trend = stock.get('trend', 'N/A')
+                signal = stock.get('signals', {}).get('signal', 'N/A') if isinstance(stock.get('signals'), dict) else 'N/A'
+                logging.info(f"  {symbol}: 가격=${price:.2f}, 트렌드={trend}, 신호={signal}")
+            
+            return data
+        else:
+            logging.error(f"주식 분석 데이터 조회 실패: HTTP {response.status_code}")
+            logging.error(f"응답 내용: {response.text[:200]}")
         return []
     except Exception as e:
         logging.error(f"주식 분석 데이터 조회 실패: {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
         return []
 
 def send_email_notification(to_email, subject, body, source="airflow"):
@@ -139,6 +154,23 @@ def generate_email_content(analysis_data):
     if not analysis_data:
         return "분석 데이터가 없습니다."
     
+    valid_stocks = [s for s in analysis_data if s.get('currentPrice', 0) > 0]
+    
+    if not valid_stocks:
+        return "유효한 주식 데이터가 없습니다. Python API 서버가 정상적으로 실행 중인지 확인하세요."
+    
+    trend_map = {
+        'bullish': '상승',
+        'bearish': '하락',
+        'neutral': '중립'
+    }
+    
+    signal_map = {
+        'buy': '매수',
+        'sell': '매도',
+        'hold': '보유'
+    }
+    
     content = f"""
 주식 분석 리포트 - {datetime.now().strftime('%Y년 %m월 %d일')}
 
@@ -146,26 +178,42 @@ def generate_email_content(analysis_data):
 
 """
     
-    for stock in analysis_data[:5]:  
+    for stock in valid_stocks[:5]:  
         symbol = stock.get('symbol', 'N/A')
         price = stock.get('currentPrice', 0)
         change_percent = stock.get('changePercent', 0)
         trend = stock.get('trend', 'neutral')
-        signal = stock.get('signals', {}).get('signal', 'hold')
+        signals = stock.get('signals', {})
         
-        content += f"""
+        if isinstance(signals, dict):
+            signal = signals.get('signal', 'hold')
+        else:
+            signal = 'hold'
+        
+        trend_ko = trend_map.get(trend.lower(), trend)
+        signal_ko = signal_map.get(signal.lower(), signal)
+        
+        if price > 0:
+            content += f"""
 {symbol}
    현재가: ${price:.2f} ({change_percent:+.2f}%)
-   트렌드: {trend}
-   신호: {signal}
+   트렌드: {trend_ko} ({trend})
+   신호: {signal_ko} ({signal})
+"""
+        else:
+            content += f"""
+{symbol}
+   현재가: 데이터 없음
+   트렌드: {trend_ko} ({trend})
+   신호: {signal_ko} ({signal})
 """
     
     content += f"""
 
 === 전체 분석 요약 ===
-• 분석 종목 수: {len(analysis_data)}
-• 상승 종목: {len([s for s in analysis_data if s.get('changePercent', 0) > 0])}
-• 하락 종목: {len([s for s in analysis_data if s.get('changePercent', 0) < 0])}
+• 분석 종목 수: {len(valid_stocks)}/{len(analysis_data)}
+• 상승 종목: {len([s for s in valid_stocks if s.get('changePercent', 0) > 0])}
+• 하락 종목: {len([s for s in valid_stocks if s.get('changePercent', 0) < 0])}
 
 더 자세한 분석은 대시보드에서 확인하세요: http://localhost:8080
 

@@ -19,10 +19,11 @@ class NewsController(
     @GetMapping("/{symbol}")
     fun getStockNews(
         @PathVariable symbol: String,
-        @RequestParam(defaultValue = "false") includeKorean: Boolean
+        @RequestParam(defaultValue = "false") includeKorean: Boolean,
+        @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<List<News>> {
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
-            pythonApiClient.getStockNews(symbol.uppercase(), includeKorean)
+            pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, autoTranslate)
         }
             .timeout(Duration.ofSeconds(15))
             .onErrorResume { error: Throwable ->
@@ -33,6 +34,26 @@ class NewsController(
                         Mono.error(ExternalApiException("Request timeout", error))
                     else ->
                         Mono.error(ExternalApiException("Failed to fetch news for $symbol", error))
+                }
+            }
+    }
+    
+    @GetMapping("/detail/{newsId}")
+    fun getNewsDetail(
+        @PathVariable newsId: String
+    ): Mono<News> {
+        return circuitBreakerManager.executeWithCircuitBreaker("newsDetail") {
+            pythonApiClient.getNewsByUrl(java.net.URLDecoder.decode(newsId, "UTF-8"))
+        }
+            .timeout(Duration.ofSeconds(10))
+            .onErrorResume { error: Throwable ->
+                when (error) {
+                    is CircuitBreakerOpenException ->
+                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
+                    is java.util.concurrent.TimeoutException ->
+                        Mono.error(ExternalApiException("Request timeout", error))
+                    else ->
+                        Mono.error(ExternalApiException("Failed to fetch news detail", error))
                 }
             }
     }

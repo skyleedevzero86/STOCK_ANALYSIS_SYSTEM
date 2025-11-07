@@ -39,12 +39,17 @@ function displayNews(news) {
             ? `<span class="news-sentiment sentiment-${getSentimentClass(item.sentiment)}">${getSentimentText(item.sentiment)}</span>`
             : '';
 
+        const title = item.title_ko || item.title || '';
+        const description = item.description_ko || item.description || '';
+        const encodedUrl = encodeURIComponent(item.url || '');
+        const detailUrl = `/news-detail?url=${encodedUrl}`;
+
         return `
             <div class="news-item">
                 <div class="news-header">
                     <h4 class="news-title">
-                        <a href="${item.url}" target="_blank" rel="noopener noreferrer">
-                            ${item.title}
+                        <a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${encodedUrl}'); return false;">
+                            ${title}
                         </a>
                     </h4>
                     <div class="news-badges">
@@ -52,7 +57,7 @@ function displayNews(news) {
                         ${sentimentBadge}
                     </div>
                 </div>
-                ${item.description ? `<p class="news-description">${item.description}</p>` : ''}
+                ${description ? `<p class="news-description">${description}</p>` : ''}
                 <div class="news-footer">
                     ${item.source ? `<span class="news-source">${item.source}</span>` : ''}
                     ${publishedDate ? `<span class="news-date">${publishedDate}</span>` : ''}
@@ -91,6 +96,10 @@ function stopNewsAutoRefresh() {
         clearInterval(newsRefreshInterval);
         newsRefreshInterval = null;
     }
+}
+
+function openNewsDetail(encodedUrl) {
+    window.location.href = `/news-detail?url=${encodedUrl}`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {

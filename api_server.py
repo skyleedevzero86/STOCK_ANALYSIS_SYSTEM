@@ -681,14 +681,36 @@ class NewsResponse(BaseModel):
          })
 async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
-    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부")
+    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
+    auto_translate: bool = Query(True, description="자동 번역 여부")
 ):
     try:
-        news = stock_api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean)
+        news = stock_api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean, auto_translate=auto_translate)
         return news
     except Exception as e:
         logging.error(f"뉴스 조회 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"뉴스 조회 오류: {str(e)}")
+
+@app.get("/api/news/detail/{news_id}",
+         summary="뉴스 상세보기",
+         description="뉴스 ID로 상세 정보를 조회합니다.")
+async def get_news_detail(
+    news_id: str = Path(..., description="뉴스 ID (URL 인코딩)")
+):
+    try:
+        import urllib.parse
+        decoded_url = urllib.parse.unquote(news_id)
+        
+        news = stock_api.news_collector.get_news_by_url(decoded_url)
+        if not news:
+            raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
+        
+        return news
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"뉴스 상세 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"뉴스 상세 조회 오류: {str(e)}")
 
 @app.get("/api/news",
          summary="뉴스 검색",

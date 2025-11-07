@@ -522,10 +522,11 @@ class NewsResponse(BaseModel):
 async def get_stock_news_enhanced(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
+    auto_translate: bool = Query(True, description="자동 번역 여부"),
     api: StockAnalysisAPI = Depends(get_stock_api)
 ):
     try:
-        news = api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean)
+        news = api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean, auto_translate=auto_translate)
         return news
     except Exception as e:
         error_id = api.error_manager.log_error(
@@ -603,6 +604,43 @@ async def get_multiple_stock_news_enhanced(
         raise HTTPException(
             status_code=500,
             detail=f"Multiple stock news fetch error. Error ID: {error_id}"
+        )
+
+@app.get("/api/news/detail/{news_id}",
+         summary="뉴스 상세보기 (향상된)",
+         description="뉴스 ID로 상세 정보를 조회합니다.",
+         response_model=NewsResponse,
+         responses={
+             200: {"description": "성공적으로 뉴스를 조회했습니다."},
+             404: {"description": "뉴스를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+@error_handler(ErrorSeverity.MEDIUM, ErrorCategory.API)
+async def get_news_detail_enhanced(
+    news_id: str = Path(..., description="뉴스 ID (URL 인코딩)"),
+    api: StockAnalysisAPI = Depends(get_stock_api)
+):
+    try:
+        import urllib.parse
+        decoded_url = urllib.parse.unquote(news_id)
+        
+        news = api.news_collector.get_news_by_url(decoded_url)
+        if not news:
+            raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
+        
+        return news
+    except HTTPException:
+        raise
+    except Exception as e:
+        error_id = api.error_manager.log_error(
+            ErrorSeverity.MEDIUM,
+            ErrorCategory.API,
+            f"Error fetching news detail: {str(e)}",
+            e
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"News detail fetch error. Error ID: {error_id}"
         )
 
 if __name__ == "__main__":

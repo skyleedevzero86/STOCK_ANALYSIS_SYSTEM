@@ -69,6 +69,7 @@ class SecurityConfig(
                     .pathMatchers("/actuator/health").permitAll()
                     .pathMatchers("/api/stocks/**").permitAll()
                     .pathMatchers("/api/cqrs/stocks/**").permitAll()
+                    .pathMatchers("/api/news/**").permitAll()
                     .pathMatchers("/api/admin/check-welcome-email", "/api/admin/check-daily-email", "/api/admin/save-notification-log").permitAll()
                     .pathMatchers("/api/admin/**").hasAnyRole("USER", "ADMIN")
                     .pathMatchers("/api/email-subscriptions/subscribe", "/api/email-subscriptions/unsubscribe", "/api/email-subscriptions/email-consent").permitAll()

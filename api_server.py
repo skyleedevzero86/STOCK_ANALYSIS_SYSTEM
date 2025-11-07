@@ -18,6 +18,7 @@ except ImportError:
     logging.warning("pymysql 모듈이 설치되지 않았습니다. 이메일 발송 이력 저장 기능이 비활성화됩니다.")
 
 from data_collectors.stock_data_collector import StockDataCollector
+from data_collectors.news_collector import NewsCollector
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
 from notification.notification_service import NotificationService
 from config.settings import settings
@@ -135,6 +136,7 @@ class StockAnalysisAPI:
             use_mock_data=settings.USE_MOCK_DATA,
             use_alpha_vantage=True
         )
+        self.news_collector = NewsCollector()
         self.analyzer = TechnicalAnalyzer()
         
         email_config = {
@@ -657,6 +659,82 @@ async def get_sms_config():
     except Exception as e:
         logging.error(f"SMS 설정 조회 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"SMS 설정 조회 오류: {str(e)}")
+
+class NewsResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    title: str = Field(..., description="뉴스 제목")
+    description: Optional[str] = Field(None, description="뉴스 설명")
+    url: str = Field(..., description="뉴스 URL")
+    source: Optional[str] = Field(None, description="뉴스 출처")
+    published_at: Optional[str] = Field(None, description="발행 시간")
+    symbol: str = Field(..., description="관련 종목")
+    provider: str = Field(..., description="뉴스 제공자")
+
+@app.get("/api/news/{symbol}",
+         summary="종목별 뉴스 조회",
+         description="특정 종목에 관련된 뉴스를 조회합니다.",
+         response_model=List[NewsResponse],
+         responses={
+             200: {"description": "성공적으로 뉴스를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_stock_news(
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부")
+):
+    try:
+        news = stock_api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean)
+        return news
+    except Exception as e:
+        logging.error(f"뉴스 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"뉴스 조회 오류: {str(e)}")
+
+@app.get("/api/news",
+         summary="뉴스 검색",
+         description="키워드로 뉴스를 검색합니다.",
+         response_model=List[NewsResponse],
+         responses={
+             200: {"description": "성공적으로 뉴스를 검색했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def search_news(
+    query: str = Query(..., description="검색 키워드", example="Apple"),
+    language: str = Query("en", description="언어 (en/ko)", example="en"),
+    max_results: int = Query(20, description="최대 결과 수", ge=1, le=100)
+):
+    try:
+        news = stock_api.news_collector.search_news(query, language=language, max_results=max_results)
+        return news
+    except Exception as e:
+        logging.error(f"뉴스 검색 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"뉴스 검색 오류: {str(e)}")
+
+@app.get("/api/news/multiple",
+         summary="다중 종목 뉴스 조회",
+         description="여러 종목의 뉴스를 한번에 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 뉴스를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_multiple_stock_news(
+    symbols: str = Query(..., description="종목 심볼들 (쉼표로 구분)", example="AAPL,GOOGL,MSFT"),
+    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부")
+):
+    try:
+        symbol_list = [s.strip().upper() for s in symbols.split(',')]
+        if len(symbol_list) > 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum 10 symbols allowed per request"
+            )
+        news_dict = stock_api.news_collector.get_multiple_stock_news(symbol_list, include_korean=include_korean)
+        return news_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"다중 종목 뉴스 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"다중 종목 뉴스 조회 오류: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)

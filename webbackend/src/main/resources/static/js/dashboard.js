@@ -68,6 +68,9 @@ class StockDashboard {
 
         document.getElementById('symbolSelect').addEventListener('change', (e) => {
             this.currentSymbol = e.target.value;
+            if (typeof window.updateCurrentSymbol === 'function') {
+                window.updateCurrentSymbol(this.currentSymbol);
+            }
             this.loadData();
         });
 
@@ -1023,4 +1026,5 @@ let dashboard;
 
 document.addEventListener("DOMContentLoaded", () => {
     dashboard = new StockDashboard();
+    window.dashboard = dashboard;
 });

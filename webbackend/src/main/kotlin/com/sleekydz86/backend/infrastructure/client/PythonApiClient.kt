@@ -449,4 +449,78 @@ class PythonApiClient(
                 Mono.just("")
             }
     }
+
+    private val mapToNews: (Map<*, *>) -> News = { newsMap ->
+        News(
+            title = newsMap["title"] as? String ?: "",
+            description = newsMap["description"] as? String,
+            url = newsMap["url"] as? String ?: "",
+            source = newsMap["source"] as? String,
+            publishedAt = newsMap["published_at"] as? String,
+            symbol = newsMap["symbol"] as? String ?: "",
+            provider = newsMap["provider"] as? String ?: "",
+            sentiment = (newsMap["sentiment"] as? Number)?.toDouble()
+        )
+    }
+
+    fun getStockNews(symbol: String, includeKorean: Boolean = false): Mono<List<News>> {
+        return webClient.get()
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/news/{symbol}")
+                    .queryParam("include_korean", includeKorean)
+                    .build(symbol)
+            }
+            .retrieve()
+            .bodyToFlux(Map::class.java)
+            .map(mapToNews)
+            .collectList()
+            .timeout(java.time.Duration.ofSeconds(15))
+            .onErrorResume { error ->
+                logger.error("뉴스 조회 실패: ${error.message}", error)
+                Mono.just(emptyList())
+            }
+    }
+
+    fun searchNews(query: String, language: String = "en", maxResults: Int = 20): Mono<List<News>> {
+        return webClient.get()
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/news")
+                    .queryParam("query", query)
+                    .queryParam("language", language)
+                    .queryParam("max_results", maxResults)
+                    .build()
+            }
+            .retrieve()
+            .bodyToFlux(Map::class.java)
+            .map(mapToNews)
+            .collectList()
+            .timeout(java.time.Duration.ofSeconds(15))
+            .onErrorResume { error ->
+                logger.error("뉴스 검색 실패: ${error.message}", error)
+                Mono.just(emptyList())
+            }
+    }
+
+    fun getMultipleStockNews(symbols: List<String>, includeKorean: Boolean = false): Mono<Map<String, List<News>>> {
+        val symbolsParam = symbols.joinToString(",")
+        return webClient.get()
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/news/multiple")
+                    .queryParam("symbols", symbolsParam)
+                    .queryParam("include_korean", includeKorean)
+                    .build()
+            }
+            .retrieve()
+            .bodyToMono(Map::class.java)
+            .map { response ->
+                (response as Map<String, *>).mapValues { entry ->
+                    (entry.value as? List<*>)?.map { it as Map<*, *> }?.map(mapToNews) ?: emptyList()
+                }
+            }
+            .timeout(java.time.Duration.ofSeconds(20))
+            .onErrorResume { error ->
+                logger.error("다중 종목 뉴스 조회 실패: ${error.message}", error)
+                Mono.just(emptyMap())
+            }
+    }
 }

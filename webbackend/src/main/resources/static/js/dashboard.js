@@ -1024,9 +1024,7 @@ class StockDashboard {
 
 let dashboard;
 
-// Welcome Popup Functions
 function initializeWelcomePopup() {
-    // Check if popup should be shown
     if (!shouldShowPopup()) {
         return;
     }
@@ -1034,12 +1032,10 @@ function initializeWelcomePopup() {
     const popup = document.getElementById('welcomePopup');
     if (!popup) return;
     
-    // Show popup after a short delay
     setTimeout(() => {
         popup.classList.add('show');
     }, 500);
     
-    // Initialize popup functionality
     setupPopupNavigation();
     setupPopupCharts();
     setupPopupData();
@@ -1048,19 +1044,16 @@ function initializeWelcomePopup() {
 }
 
 function shouldShowPopup() {
-    // Check if user selected "다시 보지 않기"
     if (localStorage.getItem('hideWelcomePopupForever') === 'true') {
         return false;
     }
     
-    // Check if user selected "오늘 하루 보지 않기"
     const hideToday = localStorage.getItem('hideWelcomePopupToday');
     if (hideToday) {
         const today = new Date().toDateString();
         if (hideToday === today) {
             return false;
         } else {
-            // Clear expired "today" setting
             localStorage.removeItem('hideWelcomePopupToday');
         }
     }
@@ -1078,24 +1071,20 @@ function setupPopupNavigation() {
     const totalSlides = slides.length;
     
     function showSlide(index) {
-        // Update slides
         slides.forEach((slide, i) => {
             slide.classList.toggle('active', i === index);
         });
         
-        // Update dots
         dots.forEach((dot, i) => {
             dot.classList.toggle('active', i === index);
         });
         
-        // Update navigation buttons
         if (prevBtn) prevBtn.disabled = index === 0;
         if (nextBtn) nextBtn.disabled = index === totalSlides - 1;
         
         currentSlide = index;
     }
     
-    // Previous button
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
             if (currentSlide > 0) {
@@ -1104,7 +1093,6 @@ function setupPopupNavigation() {
         });
     }
     
-    // Next button
     if (nextBtn) {
         nextBtn.addEventListener('click', () => {
             if (currentSlide < totalSlides - 1) {
@@ -1113,14 +1101,12 @@ function setupPopupNavigation() {
         });
     }
     
-    // Dot navigation
     dots.forEach((dot, index) => {
         dot.addEventListener('click', () => {
             showSlide(index);
         });
     });
     
-    // Initialize
     showSlide(0);
 }
 
@@ -1132,7 +1118,7 @@ function generateRandomChartData(count) {
     
     for (let i = 0; i < count; i++) {
         currentValue += (Math.random() - 0.5) * 2;
-        values.push(Math.max(0, currentValue)); // Ensure non-negative values
+        values.push(Math.max(0, currentValue));
     }
     
     return { labels, values };
@@ -1161,7 +1147,6 @@ function createIndexChart(canvas) {
     const min = Math.min(...data.values);
     const range = max - min || 1;
     
-    // Draw filled area
     ctx.beginPath();
     data.values.forEach((value, index) => {
         const x = (index / (data.values.length - 1)) * width;
@@ -1178,7 +1163,6 @@ function createIndexChart(canvas) {
     ctx.closePath();
     ctx.fill();
     
-    // Draw line
     ctx.beginPath();
     data.values.forEach((value, index) => {
         const x = (index / (data.values.length - 1)) * width;
@@ -1194,7 +1178,6 @@ function createIndexChart(canvas) {
 }
 
 function setupPopupCharts() {
-    // Create mini charts for index indicators
     const chartIds = ['kospiChart', 'kosdaqChart', 'kospi200Chart', 'sp500Chart', 'dowChart', 'nasdaqChart'];
     
     chartIds.forEach(chartId => {
@@ -1206,10 +1189,7 @@ function setupPopupCharts() {
 }
 
 function setupPopupData() {
-    // Setup sector bubbles for slide 2
     setupPopupSectorBubbles();
-    
-    // Setup popular stocks for slide 3
     setupPopupPopularStocks();
 }
 
@@ -1219,7 +1199,6 @@ function setupPopupSectorBubbles() {
     
     if (!bubbleChart || !stocksList) return;
     
-    // Sample sector data
     const sectors = [
         { name: 'Technology', color: '#e74c3c', size: 100, stocks: [
             { name: 'Apple (AAPL)', price: 175.50, change: 2.83, icon: '🍎' },
@@ -1242,7 +1221,6 @@ function setupPopupSectorBubbles() {
         ]}
     ];
     
-    // Create bubbles
     sectors.forEach((sector, index) => {
         const bubble = document.createElement('div');
         bubble.className = 'bubble';
@@ -1262,7 +1240,6 @@ function setupPopupSectorBubbles() {
         bubbleChart.appendChild(bubble);
     });
     
-    // Display first sector's stocks by default
     if (sectors.length > 0) {
         displaySectorStocks(sectors[0].stocks, stocksList);
     }
@@ -1322,7 +1299,6 @@ function setupPopupClose() {
         });
     }
     
-    // Close on overlay click
     if (popup) {
         popup.addEventListener('click', (e) => {
             if (e.target === popup) {
@@ -1374,6 +1350,5 @@ document.addEventListener("DOMContentLoaded", () => {
     dashboard = new StockDashboard();
     window.dashboard = dashboard;
     
-    // Initialize welcome popup
     initializeWelcomePopup();
 });

@@ -71,7 +71,7 @@
         const apiUrl = `/api/news/detail?url=${encodeURIComponent(decodedUrl)}`;
 
         axios.get(apiUrl, {
-            timeout: 30000
+            timeout: 40000
         })
         .then(response => {
             const news = response.data;
@@ -123,10 +123,18 @@
 
         const title = (news.titleKo || news.title_ko || news.title || '').trim();
         const titleOriginal = (news.titleOriginal || news.title_original || news.title || '').trim();
-        const description = (news.descriptionKo || news.description_ko || news.description || '').trim();
+        let description = (news.descriptionKo || news.description_ko || news.description || '').trim();
         const descriptionOriginal = (news.descriptionOriginal || news.description_original || news.description || '').trim();
         const content = (news.contentKo || news.content_ko || news.content || '').trim();
         const contentOriginal = (news.contentOriginal || news.content_original || news.content || '').trim();
+        
+        if (description === title || description === titleOriginal) {
+            description = '';
+        }
+        
+        if (description && description.length < 50) {
+            description = '';
+        }
         const source = news.source || '';
         const url = news.url || '';
         const publishedAt = formatDate(news.publishedAt || news.published_at || '');
@@ -135,14 +143,16 @@
         const sentimentText = getSentimentText(sentiment);
         const provider = news.provider || '';
         const symbol = news.symbol || '';
+        
+        const providerDisplay = provider && provider.toLowerCase() !== 'google' ? provider : '';
 
         let html = `
             <div class="news-detail-header">
                 <a href="/" class="back-link">← 목록으로 돌아가기</a>
                 <div class="news-meta">
-                    ${provider ? `<span class="news-provider">${provider}</span>` : ''}
+                    ${providerDisplay ? `<span class="news-provider">${providerDisplay}</span>` : ''}
                     ${sentiment !== null && sentiment !== undefined ? `<span class="news-sentiment sentiment-${sentimentClass}">${sentimentText}</span>` : ''}
-                    ${symbol ? `<span class="news-symbol">${symbol}</span>` : ''}
+                    ${symbol ? `<span class="news-symbol">요약</span>` : ''}
                 </div>
             </div>
 
@@ -152,15 +162,16 @@
                     ${titleOriginal && title !== titleOriginal ? `<p class="news-original-title">${titleOriginal}</p>` : ''}
                 </header>
 
+                ${source || publishedAt || url ? `
                 <div class="news-detail-info">
                     ${source ? `<div class="news-source"><strong>출처:</strong> ${source}</div>` : ''}
                     ${publishedAt ? `<div class="news-date"><strong>발행일:</strong> ${publishedAt}</div>` : ''}
                     ${url ? `<div class="news-link"><a href="${url}" target="_blank" rel="noopener noreferrer">원문 보기 →</a></div>` : ''}
                 </div>
+                ` : ''}
 
                 ${description ? `
                     <div class="news-detail-description">
-                        <h2>요약</h2>
                         <p>${description}</p>
                         ${descriptionOriginal && description !== descriptionOriginal ? `<p class="news-original-text">${descriptionOriginal}</p>` : ''}
                     </div>

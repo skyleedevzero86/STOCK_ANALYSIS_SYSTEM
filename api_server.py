@@ -763,7 +763,7 @@ async def get_news_detail(
                 stock_api.news_collector.get_news_by_url,
                 decoded_url
             ),
-            timeout=15.0
+            timeout=25.0
         )
         if not news:
             logging.warning(f"뉴스를 찾을 수 없습니다: {decoded_url[:100]}...")

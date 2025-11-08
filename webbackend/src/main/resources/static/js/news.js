@@ -9,16 +9,27 @@ function updateCurrentSymbol(symbol) {
 
 function loadNews(symbol, includeKorean = false, autoTranslate = true) {
     const newsContainer = document.getElementById('newsContainer');
+    if (!newsContainer) {
+        console.error('newsContainer element not found');
+        return;
+    }
+    
     newsContainer.innerHTML = '<div class="loading">뉴스를 불러오는 중...</div>';
 
     const url = `/api/news/${symbol}?includeKorean=${includeKorean}&autoTranslate=${autoTranslate}`;
     
     axios.get(url, {
-        timeout: 30000
+        timeout: 15000
     })
         .then(response => {
             const news = response.data;
-            displayNews(news);
+            if (Array.isArray(news) && news.length > 0) {
+                displayNews(news);
+            } else {
+                if (newsContainer) {
+                    newsContainer.innerHTML = '<div class="no-data">관련 뉴스가 없습니다.</div>';
+                }
+            }
         })
         .catch(error => {
             let errorMessage = '뉴스를 불러올 수 없습니다.';
@@ -40,12 +51,14 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
                 errorMessage = '네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.';
             }
             
-            newsContainer.innerHTML = `<div class="error">
-                <p>${errorMessage}</p>
-                <button onclick="loadNews('${symbol}', ${includeKorean})" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
-                    다시 시도
-                </button>
-            </div>`;
+            if (newsContainer) {
+                newsContainer.innerHTML = `<div class="error">
+                    <p>${errorMessage}</p>
+                    <button onclick="loadNews('${symbol}', ${includeKorean})" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
+                        다시 시도
+                    </button>
+                </div>`;
+            }
         });
 }
 
@@ -58,6 +71,10 @@ function stripHtmlTags(html) {
 
 function displayNews(news) {
     const newsContainer = document.getElementById('newsContainer');
+    if (!newsContainer) {
+        console.error('newsContainer element not found in displayNews');
+        return;
+    }
     
     if (!news || news.length === 0) {
         newsContainer.innerHTML = '<div class="no-data">관련 뉴스가 없습니다.</div>';
@@ -74,14 +91,45 @@ function displayNews(news) {
         const title = (item.titleKo || item.title_ko || item.title || '').trim();
         const descriptionRaw = (item.descriptionKo || item.description_ko || item.description || '').trim();
         const description = stripHtmlTags(descriptionRaw);
-        const url = item.url || '';
-        const shortId = url ? (typeof createShortNewsId === 'function' ? createShortNewsId(url) : encodeURIComponent(url)) : '';
-        const detailUrl = shortId ? `/news-detail?id=${encodeURIComponent(shortId)}` : '#';
-        const titleLink = shortId ? 
-            `<a href="${detailUrl}" class="news-title-link" data-short-id="${shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}">${title}</a>` :
+        
+        let url = item.url || '';
+        if (!url && descriptionRaw) {
+            const urlMatch = descriptionRaw.match(/href=["']([^"']+)["']/i);
+            if (urlMatch && urlMatch[1]) {
+                url = urlMatch[1];
+            }
+        }
+        
+        let shortId = '';
+        let detailUrl = '#';
+        
+        if (url) {
+            try {
+                if (typeof createShortNewsId === 'function') {
+                    shortId = createShortNewsId(url);
+                } else if (typeof encodeUrlToBase64 === 'function') {
+                    shortId = encodeUrlToBase64(url);
+                } else {
+                    shortId = encodeURIComponent(url);
+                }
+                
+                if (!shortId || shortId.trim() === '') {
+                    shortId = encodeURIComponent(url);
+                }
+                
+                detailUrl = `/news-detail?id=${encodeURIComponent(shortId)}`;
+            } catch (e) {
+                console.warn('Failed to create shortId:', e);
+                shortId = encodeURIComponent(url);
+                detailUrl = `/news-detail?id=${shortId}`;
+            }
+        }
+        
+        const titleLink = url ? 
+            `<a href="${detailUrl}" class="news-title-link" data-short-id="${shortId ? shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;") : ''}" data-url="${url.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}">${title}</a>` :
             `<span>${title}</span>`;
 
-        const dataShortIdAttr = shortId ? `data-short-id="${shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}"` : '';
+        const dataShortIdAttr = url ? `data-short-id="${shortId ? shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;") : encodeURIComponent(url).replace(/'/g, "&apos;").replace(/"/g, "&quot;")}" data-url="${url.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}"` : '';
 
         return `
             <div class="news-item" ${dataShortIdAttr}>
@@ -105,7 +153,7 @@ function displayNews(news) {
 
     newsContainer.innerHTML = newsHTML;
     
-    const newsItems = newsContainer.querySelectorAll('.news-item[data-short-id]');
+    const newsItems = newsContainer.querySelectorAll('.news-item[data-short-id], .news-item[data-url]');
     newsItems.forEach(item => {
         item.style.cursor = 'pointer';
         item.addEventListener('click', function(e) {
@@ -113,11 +161,35 @@ function displayNews(news) {
                 e.target.tagName === 'BUTTON' || e.target.closest('button')) {
                 return;
             }
+            
             const shortId = this.getAttribute('data-short-id');
+            const url = this.getAttribute('data-url');
+            
             if (shortId && shortId.trim() !== '') {
                 e.preventDefault();
                 e.stopPropagation();
                 openNewsDetail(shortId);
+            } else if (url && url.trim() !== '') {
+                e.preventDefault();
+                e.stopPropagation();
+                try {
+                    let generatedShortId = '';
+                    if (typeof createShortNewsId === 'function') {
+                        generatedShortId = createShortNewsId(url);
+                    } else if (typeof encodeUrlToBase64 === 'function') {
+                        generatedShortId = encodeUrlToBase64(url);
+                    } else {
+                        generatedShortId = encodeURIComponent(url);
+                    }
+                    if (generatedShortId && generatedShortId.trim() !== '') {
+                        openNewsDetail(generatedShortId);
+                    } else {
+                        openNewsDetail(encodeURIComponent(url));
+                    }
+                } catch (err) {
+                    console.warn('Error generating shortId from url:', err);
+                    openNewsDetail(encodeURIComponent(url));
+                }
             }
         });
     });
@@ -128,14 +200,51 @@ function displayNews(news) {
         link.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            
             const shortId = this.getAttribute('data-short-id');
+            const url = this.getAttribute('data-url');
+            const href = this.getAttribute('href');
+            
+            console.log('News link clicked:', { shortId, url, href });
+            
             if (shortId && shortId.trim() !== '') {
-                openNewsDetail(shortId);
-            } else {
-                const href = this.getAttribute('href');
-                if (href && href !== '#') {
-                    window.location.href = href;
+                console.log('Opening news detail with shortId:', shortId);
+                const detailUrl = `/news-detail?id=${encodeURIComponent(shortId)}`;
+                console.log('Navigating to:', detailUrl);
+                window.location.href = detailUrl;
+            } 
+            else if (url && url.trim() !== '') {
+                console.log('Opening news detail with url:', url);
+                try {
+                    let encodedUrl;
+                    if (typeof encodeUrlToBase64 === 'function') {
+                        encodedUrl = encodeUrlToBase64(url);
+                    } else if (typeof createShortNewsId === 'function') {
+                        encodedUrl = createShortNewsId(url);
+                    } else {
+                        encodedUrl = encodeURIComponent(url);
+                    }
+                    
+                    if (!encodedUrl || encodedUrl.trim() === '') {
+                        encodedUrl = encodeURIComponent(url);
+                    }
+                    
+                    const detailUrl = `/news-detail?id=${encodeURIComponent(encodedUrl)}`;
+                    console.log('Navigating to:', detailUrl);
+                    window.location.href = detailUrl;
+                } catch (err) {
+                    console.error('Error encoding URL:', err);
+                    const detailUrl = `/news-detail?id=${encodeURIComponent(url)}`;
+                    console.log('Navigating to (fallback):', detailUrl);
+                    window.location.href = detailUrl;
                 }
+            } 
+            else if (href && href !== '#') {
+                console.log('Navigating to href:', href);
+                window.location.href = href;
+            } 
+            else {
+                console.warn('No valid URL found for news item');
             }
         });
     });
@@ -172,9 +281,12 @@ function stopNewsAutoRefresh() {
 
 function openNewsDetail(shortId) {
     if (!shortId || shortId.trim() === '') {
+        console.warn('openNewsDetail: shortId is empty');
         return;
     }
-    window.location.href = `/news-detail?id=${encodeURIComponent(shortId)}`;
+    const detailUrl = `/news-detail?id=${encodeURIComponent(shortId)}`;
+    console.log('openNewsDetail: Navigating to', detailUrl);
+    window.location.href = detailUrl;
 }
 
 window.openNewsDetail = openNewsDetail;

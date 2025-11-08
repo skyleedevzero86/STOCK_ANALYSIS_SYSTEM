@@ -88,7 +88,7 @@ class NewsController(
             }
             pythonApiClient.getNewsByUrl(decodedUrl)
         }
-            .timeout(Duration.ofSeconds(20))
+            .timeout(Duration.ofSeconds(35))
             .doOnError { error ->
                 logger.error("뉴스 상세 조회 실패: url={}, error={}", url.take(100), error.message, error)
             }

@@ -462,13 +462,38 @@ class PythonApiClient(
                         Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(errorMsg))
                     }
             })
-            .bodyToMono(Map::class.java)
-            .map(mapToNews)
-            .timeout(java.time.Duration.ofSeconds(20))
+            .bodyToMono(Any::class.java)
+            .flatMap { response ->
+                try {
+                    val newsMap = when (response) {
+                        is Map<*, *> -> response as Map<String, Any>
+                        is List<*> -> {
+                            if (response.isNotEmpty()) {
+                                val firstItem = response[0]
+                                if (firstItem is Map<*, *>) {
+                                    firstItem as Map<String, Any>
+                                } else {
+                                    throw IllegalArgumentException("배열의 첫 번째 요소가 Map이 아닙니다")
+                                }
+                            } else {
+                                throw IllegalArgumentException("빈 배열이 반환되었습니다")
+                            }
+                        }
+                        else -> throw IllegalArgumentException("예상치 못한 응답 형식: ${response.javaClass}")
+                    }
+                    Mono.just(mapToNews(newsMap))
+                } catch (e: Exception) {
+                    logger.error("뉴스 상세 응답 파싱 오류: url={}, error={}, responseType={}", url.take(100), e.message, response?.javaClass?.simpleName)
+                    Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                        "뉴스 상세 응답 파싱 오류: ${e.message}", e
+                    ))
+                }
+            }
+            .timeout(java.time.Duration.ofSeconds(30))
             .doOnError { error ->
                 when (error) {
                     is java.util.concurrent.TimeoutException -> {
-                        logger.warn("뉴스 상세 조회 타임아웃: url={}, timeout=20초", url.take(100))
+                        logger.warn("뉴스 상세 조회 타임아웃: url={}, timeout=30초", url.take(100))
                     }
                     is java.net.ConnectException -> {
                         logger.warn("Python API 연결 실패: url={}, baseUrl={}", url.take(100), baseUrl)
@@ -485,7 +510,7 @@ class PythonApiClient(
                 when (error) {
                     is java.util.concurrent.TimeoutException -> {
                         Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 요청 시간 초과 (10초). 서버가 응답하지 않습니다.", error
+                            "Python API 요청 시간 초과 (30초). 서버가 응답하지 않습니다.", error
                         ))
                     }
                     is java.net.ConnectException -> {

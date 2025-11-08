@@ -107,12 +107,16 @@ function displayNews(news) {
     
     const newsItems = newsContainer.querySelectorAll('.news-item[data-short-id]');
     newsItems.forEach(item => {
+        item.style.cursor = 'pointer';
         item.addEventListener('click', function(e) {
-            if (e.target.tagName === 'A' || e.target.closest('a') || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+            if (e.target.tagName === 'A' || e.target.closest('a') || 
+                e.target.tagName === 'BUTTON' || e.target.closest('button')) {
                 return;
             }
             const shortId = this.getAttribute('data-short-id');
             if (shortId && shortId.trim() !== '') {
+                e.preventDefault();
+                e.stopPropagation();
                 openNewsDetail(shortId);
             }
         });
@@ -120,12 +124,18 @@ function displayNews(news) {
     
     const titleLinks = newsContainer.querySelectorAll('.news-title-link');
     titleLinks.forEach(link => {
+        link.style.cursor = 'pointer';
         link.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
             const shortId = this.getAttribute('data-short-id');
             if (shortId && shortId.trim() !== '') {
                 openNewsDetail(shortId);
+            } else {
+                const href = this.getAttribute('href');
+                if (href && href !== '#') {
+                    window.location.href = href;
+                }
             }
         });
     });

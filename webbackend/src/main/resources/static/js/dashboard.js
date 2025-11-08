@@ -1025,22 +1025,23 @@ class StockDashboard {
 let dashboard;
 
 function initializeWelcomePopup() {
-    if (!shouldShowPopup()) {
-        return;
-    }
-    
     const popup = document.getElementById('welcomePopup');
     if (!popup) return;
-    
-    setTimeout(() => {
-        popup.classList.add('show');
-    }, 500);
     
     setupPopupNavigation();
     setupPopupCharts();
     setupPopupData();
     setupPopupClose();
     setupPopupCheckboxes();
+    
+    if (!shouldShowPopup()) {
+        popup.style.display = 'none';
+        return;
+    }
+    
+    setTimeout(() => {
+        popup.classList.add('show');
+    }, 500);
 }
 
 function shouldShowPopup() {

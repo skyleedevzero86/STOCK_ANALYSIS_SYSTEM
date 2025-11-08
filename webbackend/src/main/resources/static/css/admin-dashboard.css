@@ -12,7 +12,6 @@
   padding: 24px;
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   border-bottom: 2px solid #60bde6;
 }
 
@@ -52,7 +51,6 @@
   background: #fff;
   padding: 24px;
   border-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   text-align: center;
   transition: all 0.3s ease;
 }
@@ -79,7 +77,6 @@
 .subscriptions-table {
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 

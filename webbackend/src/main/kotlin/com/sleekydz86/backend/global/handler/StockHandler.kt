@@ -73,7 +73,6 @@ class StockHandler(
             }
             .timeout(Duration.ofSeconds(15))
             .onErrorResume { error ->
-                
                 logger.debug("실시간 데이터 조회 오류: symbol=$symbol - ${error.message}")
                 when (error) {
                     is StockNotFoundException -> {
@@ -82,21 +81,14 @@ class StockHandler(
                     is InvalidSymbolException -> {
                         ReactiveExceptionHandler.handleInvalidSymbol(request, error)
                     }
-                    is java.util.concurrent.TimeoutException,
-                    is ExternalApiException,
+                    is java.util.concurrent.TimeoutException -> {
+                        ReactiveExceptionHandler.handleExternalApiError(request, error)
+                    }
+                    is ExternalApiException -> {
+                        ReactiveExceptionHandler.handleExternalApiError(request, error)
+                    }
                     is org.springframework.web.reactive.function.client.WebClientException -> {
-                       
-                        logger.debug("Python API 연결 실패 (조용히 처리): $symbol")
-                        ServerResponse.ok().bodyValue(
-                            com.sleekydz86.backend.domain.model.StockData(
-                                symbol = symbol,
-                                currentPrice = 0.0,
-                                volume = 0L,
-                                changePercent = 0.0,
-                                timestamp = java.time.LocalDateTime.now(),
-                                confidenceScore = 0.0
-                            )
-                        )
+                        ReactiveExceptionHandler.handleExternalApiError(request, error)
                     }
                     is DataProcessingException -> {
                         logger.debug("데이터 처리 예외 발생: symbol=$symbol", error)
@@ -143,37 +135,17 @@ class StockHandler(
                 }
                 .timeout(Duration.ofSeconds(20))
                 .onErrorResume { error ->
-                    
                     when (error) {
                         is StockNotFoundException ->
                             ReactiveExceptionHandler.handleStockNotFound(request, error)
                         is InvalidSymbolException ->
                             ReactiveExceptionHandler.handleInvalidSymbol(request, error)
-                        is java.util.concurrent.TimeoutException,
-                        is ExternalApiException,
-                        is org.springframework.web.reactive.function.client.WebClientException -> {
-                            
-                            logger.debug("Python API 연결 실패 (조용히 처리): $symbol - getAnalysis")
-                            ServerResponse.ok().bodyValue(
-                                com.sleekydz86.backend.domain.model.TechnicalAnalysis(
-                                    symbol = symbol,
-                                    currentPrice = 0.0,
-                                    volume = 0L,
-                                    changePercent = 0.0,
-                                    trend = "neutral",
-                                    trendStrength = 0.0,
-                                    signals = com.sleekydz86.backend.domain.model.TradingSignals(
-                                        signal = "hold",
-                                        confidence = 0.0,
-                                        rsi = null,
-                                        macd = null,
-                                        macdSignal = null
-                                    ),
-                                    anomalies = emptyList(),
-                                    timestamp = java.time.LocalDateTime.now()
-                                )
-                            )
-                        }
+                        is java.util.concurrent.TimeoutException ->
+                            ReactiveExceptionHandler.handleExternalApiError(request, error)
+                        is ExternalApiException ->
+                            ReactiveExceptionHandler.handleExternalApiError(request, error)
+                        is org.springframework.web.reactive.function.client.WebClientException ->
+                            ReactiveExceptionHandler.handleExternalApiError(request, error)
                         is DataProcessingException ->
                             ReactiveExceptionHandler.handleDataProcessingError(request, error)
                         else ->

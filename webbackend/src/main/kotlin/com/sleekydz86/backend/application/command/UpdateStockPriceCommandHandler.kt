@@ -26,7 +26,7 @@ class UpdateStockPriceCommandHandler(
             .then(eventPublisher.publish(event))
             .then(Mono.just(CommandResult(
                 success = true,
-                message = "Stock price updated",
+                message = "주식 가격이 업데이트되었습니다",
                 data = mapOf(
                     "symbol" to command.symbol,
                     "price" to command.price,
@@ -36,7 +36,7 @@ class UpdateStockPriceCommandHandler(
             .onErrorResume { error ->
                 Mono.just(CommandResult(
                     success = false,
-                    message = "Price update failed: ${error.message}"
+                    message = "가격 업데이트 실패: ${error.message}"
                 ))
             }
     }

@@ -27,29 +27,31 @@ class AIEmailService(
                             AIAnalysisRequest(symbol = symbol)
                         ).flatMap { aiResult: AIAnalysisResult ->
                             val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
-                            val emailResults = mutableListOf<String>()
-
-                            emailSubscribers.forEach { subscriber: EmailSubscription ->
-                                val variables = createEmailVariables(subscriber, aiResult, symbol)
-                                val renderedContent = emailTemplateService.renderTemplate(template, variables)
-
-                                sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                    .subscribe { success: Boolean ->
-                                        if (success) {
-                                            emailResults.add("O ${subscriber.email}")
-                                        } else {
-                                            emailResults.add("X ${subscriber.email}")
+                            
+                            Flux.fromIterable(emailSubscribers)
+                                .flatMap { subscriber: EmailSubscription ->
+                                    val variables = createEmailVariables(subscriber, aiResult, symbol)
+                                    val renderedContent = emailTemplateService.renderTemplate(template, variables)
+                                    
+                                    sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
+                                        .map { success: Boolean ->
+                                            if (success) {
+                                                "성공 ${subscriber.email}"
+                                            } else {
+                                                "실패 ${subscriber.email}"
+                                            }
                                         }
-                                    }
-                            }
-
-                            Mono.just(mapOf(
-                                "template" to template.name,
-                                "symbol" to symbol,
-                                "totalSubscribers" to emailSubscribers.size,
-                                "results" to emailResults,
-                                "aiAnalysis" to aiResult.aiSummary
-                            ))
+                                }
+                                .collectList()
+                                .map { results: List<String> ->
+                                    mapOf(
+                                        "template" to template.name,
+                                        "symbol" to symbol,
+                                        "totalSubscribers" to emailSubscribers.size,
+                                        "results" to results,
+                                        "aiAnalysis" to aiResult.aiSummary
+                                    )
+                                }
                         }
                     }
             }
@@ -91,35 +93,38 @@ class AIEmailService(
                 emailSubscriptionService.getAllActiveSubscriptions()
                     .flatMap { subscribers: List<EmailSubscription> ->
                         val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
-                        val allResults = mutableListOf<Map<String, Any>>()
-
-                        symbols.forEach { symbol: String ->
-                            aiAnalysisService.generateAIAnalysis(
-                                AIAnalysisRequest(symbol = symbol)
-                            ).subscribe { aiResult: AIAnalysisResult ->
-                                emailSubscribers.forEach { subscriber: EmailSubscription ->
-                                    val variables = createEmailVariables(subscriber, aiResult, symbol)
-                                    val renderedContent = emailTemplateService.renderTemplate(template, variables)
-
-                                    sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                        .subscribe { success: Boolean ->
-                                            allResults.add(mapOf(
-                                                "symbol" to symbol,
-                                                "subscriber" to subscriber.email,
-                                                "success" to success,
-                                                "aiSummary" to aiResult.aiSummary
-                                            ))
+                        
+                        Flux.fromIterable(symbols)
+                            .flatMap { symbol: String ->
+                                aiAnalysisService.generateAIAnalysis(
+                                    AIAnalysisRequest(symbol = symbol)
+                                ).flatMap { aiResult: AIAnalysisResult ->
+                                    Flux.fromIterable(emailSubscribers)
+                                        .flatMap { subscriber: EmailSubscription ->
+                                            val variables = createEmailVariables(subscriber, aiResult, symbol)
+                                            val renderedContent = emailTemplateService.renderTemplate(template, variables)
+                                            
+                                            sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
+                                                .map { success: Boolean ->
+                                                    mapOf(
+                                                        "symbol" to symbol,
+                                                        "subscriber" to subscriber.email,
+                                                        "success" to success,
+                                                        "aiSummary" to aiResult.aiSummary
+                                                    )
+                                                }
                                         }
                                 }
                             }
-                        }
-
-                        Mono.just(mapOf(
-                            "template" to template.name,
-                            "symbols" to symbols,
-                            "totalSubscribers" to emailSubscribers.size,
-                            "results" to allResults
-                        ))
+                            .collectList()
+                            .map { allResults: List<Map<String, Any>> ->
+                                mapOf(
+                                    "template" to template.name,
+                                    "symbols" to symbols,
+                                    "totalSubscribers" to emailSubscribers.size,
+                                    "results" to allResults
+                                )
+                            }
                     }
             }
     }

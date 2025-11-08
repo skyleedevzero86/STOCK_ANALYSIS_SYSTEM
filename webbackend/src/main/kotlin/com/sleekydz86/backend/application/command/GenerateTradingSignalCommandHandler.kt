@@ -26,7 +26,7 @@ class GenerateTradingSignalCommandHandler(
             .then(eventPublisher.publish(event))
             .then(Mono.just(CommandResult(
                 success = true,
-                message = "Trading signal generated",
+                message = "거래 신호가 생성되었습니다",
                 data = mapOf(
                     "symbol" to command.symbol,
                     "signal" to event.signal,
@@ -36,7 +36,7 @@ class GenerateTradingSignalCommandHandler(
             .onErrorResume { error ->
                 Mono.just(CommandResult(
                     success = false,
-                    message = "Signal generation failed: ${error.message}"
+                    message = "신호 생성 실패: ${error.message}"
                 ))
             }
     }

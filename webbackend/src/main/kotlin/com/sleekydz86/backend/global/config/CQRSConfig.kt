@@ -24,9 +24,9 @@ class CQRSConfig {
         generateTradingSignalCommandHandler: GenerateTradingSignalCommandHandler
     ): CommandBus {
         val commandBus = CommandBusImpl()
-        commandBus.register(analyzeStockCommandHandler)
-        commandBus.register(updateStockPriceCommandHandler)
-        commandBus.register(generateTradingSignalCommandHandler)
+        commandBus.register(analyzeStockCommandHandler, com.sleekydz86.backend.domain.cqrs.command.StockCommand.AnalyzeStock::class.java)
+        commandBus.register(updateStockPriceCommandHandler, com.sleekydz86.backend.domain.cqrs.command.StockCommand.UpdateStockPrice::class.java)
+        commandBus.register(generateTradingSignalCommandHandler, com.sleekydz86.backend.domain.cqrs.command.StockCommand.GenerateTradingSignal::class.java)
         return commandBus
     }
 

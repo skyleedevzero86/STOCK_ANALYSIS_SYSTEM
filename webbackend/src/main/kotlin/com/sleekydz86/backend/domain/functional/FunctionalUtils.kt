@@ -37,16 +37,8 @@ fun <T> Mono<T>.withTimeout(
 
 fun <T> Flux<T>.withLogging(
     logPrefix: String = ""
-): Flux<T> = this.doOnNext {
-    println("$logPrefix: $it")
-}.doOnError {
-    println("$logPrefix 오류: ${it.message}")
-}
+): Flux<T> = this
 
 fun <T> Mono<T>.withLogging(
     logPrefix: String = ""
-): Mono<T> = this.doOnNext {
-    println("$logPrefix: $it")
-}.doOnError {
-    println("$logPrefix 오류: ${it.message}")
-}
+): Mono<T> = this

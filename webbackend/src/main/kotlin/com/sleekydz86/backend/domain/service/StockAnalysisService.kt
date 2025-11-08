@@ -13,57 +13,57 @@ class StockAnalysisService(
     private val stockRepository: StockRepository
 ) {
 
-    val getRealtimeStockData: (String) -> Mono<StockData> = { symbol ->
-        stockRepository.getRealtimeData(symbol)
+    fun getRealtimeStockData(symbol: String): Mono<StockData> {
+        return stockRepository.getRealtimeData(symbol)
             .withErrorHandling()
             .withLogging()
             .withTimeout()
     }
 
-    val getAllRealtimeStockData: () -> Flux<StockData> = {
-        stockRepository.getAllRealtimeData()
+    fun getAllRealtimeStockData(): Flux<StockData> {
+        return stockRepository.getAllRealtimeData()
             .withErrorHandling()
             .withLogging("RealtimeData")
             .withTimeout()
     }
 
-    val getStockAnalysis: (String) -> Mono<TechnicalAnalysis> = { symbol ->
-        stockRepository.getAnalysis(symbol)
+    fun getStockAnalysis(symbol: String): Mono<TechnicalAnalysis> {
+        return stockRepository.getAnalysis(symbol)
             .withErrorHandling()
             .withLogging()
             .withTimeout()
     }
 
-    val getAllStockAnalysis: () -> Flux<TechnicalAnalysis> = {
-        stockRepository.getAllAnalysis()
+    fun getAllStockAnalysis(): Flux<TechnicalAnalysis> {
+        return stockRepository.getAllAnalysis()
             .withErrorHandling()
             .withLogging("Analysis")
             .withTimeout()
     }
 
-    val getStockHistoricalData: (String, Int) -> Mono<HistoricalData> = { symbol, days ->
-        stockRepository.getHistoricalData(symbol, days)
+    fun getStockHistoricalData(symbol: String, days: Int): Mono<HistoricalData> {
+        return stockRepository.getHistoricalData(symbol, days)
             .withErrorHandling()
             .withLogging()
             .withTimeout()
     }
 
-    val getAvailableSymbols: () -> Mono<List<String>> = {
-        stockRepository.getAvailableSymbols()
+    fun getAvailableSymbols(): Mono<List<String>> {
+        return stockRepository.getAvailableSymbols()
             .withErrorHandling()
             .withLogging()
             .withTimeout()
     }
 
-    val getRealtimeAnalysisStream: () -> Flux<TechnicalAnalysis> = {
-        Flux.interval(Duration.ofSeconds(5))
+    fun getRealtimeAnalysisStream(): Flux<TechnicalAnalysis> {
+        return Flux.interval(Duration.ofSeconds(5))
             .flatMap { getAllStockAnalysis() }
             .withErrorHandling()
             .withLogging("RealtimeStream")
     }
 
-    val getRealtimeAnalysisStreamWithRetry: () -> Flux<TechnicalAnalysis> = {
-        getRealtimeAnalysisStream()
+    fun getRealtimeAnalysisStreamWithRetry(): Flux<TechnicalAnalysis> {
+        return getRealtimeAnalysisStream()
             .withRetry(maxAttempts = 3, delay = Duration.ofSeconds(2))
     }
 }

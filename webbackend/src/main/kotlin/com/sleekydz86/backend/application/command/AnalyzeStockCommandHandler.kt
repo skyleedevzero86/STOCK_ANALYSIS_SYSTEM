@@ -18,7 +18,7 @@ class AnalyzeStockCommandHandler(
 
     override fun handle(command: StockCommand.AnalyzeStock): Mono<CommandResult> {
         return stockAnalysisService.getStockAnalysis(command.symbol)
-            .map { analysis ->
+            .flatMap { analysis ->
                 val event = StockEvent.StockAnalyzed(
                     symbol = command.symbol,
                     analysisResult = mapOf(
@@ -32,15 +32,14 @@ class AnalyzeStockCommandHandler(
                     .then(eventPublisher.publish(event))
                     .then(Mono.just(CommandResult(
                         success = true,
-                        message = "Stock analysis completed",
+                        message = "주식 분석이 완료되었습니다",
                         data = analysis
                     )))
             }
-            .flatMap { it }
             .onErrorResume { error ->
                 Mono.just(CommandResult(
                     success = false,
-                    message = "Analysis failed: ${error.message}"
+                    message = "분석 실패: ${error.message}"
                 ))
             }
     }

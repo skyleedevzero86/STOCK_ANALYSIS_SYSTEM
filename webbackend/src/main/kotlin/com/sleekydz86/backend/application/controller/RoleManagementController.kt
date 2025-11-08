@@ -40,7 +40,7 @@ class RoleManagementController(
         }
 
         val permissions = request.permissionIds.mapNotNull { id ->
-            permissionService.findByName("")
+            permissionService.findById(id)
         }.toSet()
 
         val role = Role(
@@ -61,7 +61,7 @@ class RoleManagementController(
         val role = roleService.findByNameWithPermissions(name) ?: return ResponseEntity.notFound().build()
 
         val permissions = request.permissionIds.mapNotNull { id ->
-            permissionService.findByName("")
+            permissionService.findById(id)
         }.toSet()
 
         val updatedRole = role.copy(

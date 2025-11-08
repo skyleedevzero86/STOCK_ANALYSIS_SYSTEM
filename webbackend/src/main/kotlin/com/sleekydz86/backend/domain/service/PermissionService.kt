@@ -48,4 +48,8 @@ class PermissionService(
     fun existsByName(name: String): Boolean {
         return permissionRepository.existsByName(name)
     }
+
+    fun findById(id: Long): Permission? {
+        return permissionRepository.findById(id).orElse(null)
+    }
 }

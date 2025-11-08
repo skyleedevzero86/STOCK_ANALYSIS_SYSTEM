@@ -11,5 +11,5 @@ interface CommandHandler<T : StockCommand> {
 
 interface CommandBus {
     fun <T : StockCommand> send(command: T): Mono<CommandResult>
-    fun register(handler: CommandHandler<*>)
+    fun <T : StockCommand> register(handler: CommandHandler<T>, commandType: Class<T>)
 }

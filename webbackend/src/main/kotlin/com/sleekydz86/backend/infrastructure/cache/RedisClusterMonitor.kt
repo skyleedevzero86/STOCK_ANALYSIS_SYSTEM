@@ -17,6 +17,10 @@ class RedisClusterMonitor(
 
     @Scheduled(fixedRate = 30000)
     fun monitorClusterHealth() {
+        if (!distributedCacheService.isRedisConnected()) {
+            return
+        }
+
         try {
             redisClusterHealthIndicator.health()
                 .let { health ->
@@ -28,18 +32,22 @@ class RedisClusterMonitor(
 
                     redisClusterHealthIndicator.updateClusterInfo(healthInfo)
                         .onErrorResume { error ->
-                            logger.warn("Redis 클러스터 상태 모니터링 실패, 캐시 없이 계속 진행합니다", error)
+                            logger.debug("Redis 클러스터 상태 모니터링 실패", error)
                             Mono.just(false)
                         }
                         .subscribe()
                 }
         } catch (e: Exception) {
-            logger.warn("클러스터 상태 모니터링 오류: ${e.message}", e)
+            logger.debug("클러스터 상태 모니터링 오류: ${e.message}", e)
         }
     }
 
     @Scheduled(fixedRate = 60000)
     fun monitorCacheMetrics() {
+        if (!distributedCacheService.isRedisConnected()) {
+            return
+        }
+
         try {
             cacheManager.getCacheMetrics()
                 .flatMap { metrics ->
@@ -55,40 +63,48 @@ class RedisClusterMonitor(
                         .then(Mono.just(updatedMetrics))
                 }
                 .onErrorResume { error ->
-                    logger.warn("캐시 메트릭 모니터링 실패, 캐시 없이 계속 진행합니다", error)
+                    logger.debug("캐시 메트릭 모니터링 실패", error)
                     Mono.just(mutableMapOf<String, Any>())
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("캐시 메트릭 모니터링 오류: ${e.message}", e)
+            logger.debug("캐시 메트릭 모니터링 오류: ${e.message}", e)
         }
     }
 
     @Scheduled(fixedRate = 300000)
     fun optimizeCache() {
+        if (!distributedCacheService.isRedisConnected()) {
+            return
+        }
+
         try {
             cacheManager.optimizeCache()
                 .onErrorResume { error ->
-                    logger.warn("캐시 최적화 실패, 캐시 없이 계속 진행합니다", error)
+                    logger.debug("캐시 최적화 실패", error)
                     Mono.just(false)
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("캐시 최적화 오류: ${e.message}", e)
+            logger.debug("캐시 최적화 오류: ${e.message}", e)
         }
     }
 
     @Scheduled(fixedRate = 600000)
     fun cleanupExpiredCache() {
+        if (!distributedCacheService.isRedisConnected()) {
+            return
+        }
+
         try {
             cacheManager.clearExpiredCache()
                 .onErrorResume { error ->
-                    logger.warn("캐시 정리 실패, 캐시 없이 계속 진행합니다", error)
+                    logger.debug("캐시 정리 실패", error)
                     Mono.just(0L)
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("캐시 정리 오류: ${e.message}", e)
+            logger.debug("캐시 정리 오류: ${e.message}", e)
         }
     }
 

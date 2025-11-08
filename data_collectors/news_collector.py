@@ -97,7 +97,7 @@ class NewsCollector:
             return []
             
         except Exception as e:
-            logging.error(f"NewsAPI error for {symbol}: {str(e)}")
+            logging.error(f"{symbol}에 대한 NewsAPI 오류: {str(e)}")
             return []
     
     def get_alpha_vantage_news(self, symbol: str) -> List[Dict]:
@@ -131,7 +131,7 @@ class NewsCollector:
             return []
             
         except Exception as e:
-            logging.error(f"Alpha Vantage News error for {symbol}: {str(e)}")
+            logging.error(f"{symbol}에 대한 Alpha Vantage News 오류: {str(e)}")
             return []
     
     def get_yahoo_finance_news(self, symbol: str) -> List[Dict]:
@@ -140,7 +140,7 @@ class NewsCollector:
             response = self.session.get(url, timeout=10)
             
             if response.status_code == 404:
-                logging.debug(f"Yahoo Finance News not found for {symbol}: 404")
+                logging.debug(f"{symbol}에 대한 Yahoo Finance News를 찾을 수 없음: 404")
                 return []
             
             response.raise_for_status()
@@ -176,12 +176,12 @@ class NewsCollector:
             
         except requests.exceptions.HTTPError as e:
             if e.response and e.response.status_code == 404:
-                logging.debug(f"Yahoo Finance News not found for {symbol}")
+                logging.debug(f"{symbol}에 대한 Yahoo Finance News를 찾을 수 없음")
             else:
-                logging.warning(f"Yahoo Finance News HTTP error for {symbol}: {e.response.status_code if e.response else 'Unknown'}")
+                logging.warning(f"{symbol}에 대한 Yahoo Finance News HTTP 오류: {e.response.status_code if e.response else 'Unknown'}")
             return []
         except Exception as e:
-            logging.warning(f"Yahoo Finance News error for {symbol}: {str(e)}")
+            logging.warning(f"{symbol}에 대한 Yahoo Finance News 오류: {str(e)}")
             return []
     
     def get_naver_news(self, query: str, max_results: int = 10) -> List[Dict]:
@@ -230,7 +230,7 @@ class NewsCollector:
             return articles
             
         except Exception as e:
-            logging.error(f"Naver News error for {query}: {str(e)}")
+            logging.error(f"{query}에 대한 Naver News 오류: {str(e)}")
             return []
     
     def get_google_news_rss(self, symbol: str, language: str = 'en') -> List[Dict]:
@@ -280,7 +280,7 @@ class NewsCollector:
             return articles
             
         except Exception as e:
-            logging.error(f"Google News RSS error for {symbol}: {str(e)}")
+            logging.error(f"{symbol}에 대한 Google News RSS 오류: {str(e)}")
             return []
     
     def get_stock_news(self, symbol: str, include_korean: bool = False, auto_translate: bool = True) -> List[Dict]:

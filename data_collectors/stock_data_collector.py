@@ -48,91 +48,156 @@ class StockDataCollector:
             logging.warning(f"Mock 데이터 모드: {symbol}에 대한 모의 데이터를 반환합니다.")
             return self._generate_mock_realtime_data(symbol)
         
-        try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            
-            if not info or 'currentPrice' not in info:
-                raise ValueError(f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.")
-            
-            hist = ticker.history(period="1d", interval="1m")
-            if not hist.empty:
-                latest_price = float(hist['Close'].iloc[-1])
-                volume = int(hist['Volume'].iloc[-1])
-            else:
-                latest_price = float(info.get('currentPrice', 0))
-                volume = int(info.get('volume', 0))
-            
-            if latest_price <= 0:
-                raise ValueError(f"Yahoo Finance에서 {symbol}의 가격이 0입니다.")
-            
-            change = float(info.get('regularMarketChange', 0))
-            change_percent = float(info.get('regularMarketChangePercent', 0))
-            
-            realtime_data = {
+        data_sources = [
+            ('yfinance', self._fetch_yfinance_data),
+            ('alpha_vantage', self._fetch_alpha_vantage_fallback),
+            ('yahoo_direct', self._fetch_yahoo_direct_api)
+        ]
+        
+        last_exception = None
+        
+        for source_name, fetch_func in data_sources:
+            try:
+                if source_name == 'alpha_vantage' and not self.use_alpha_vantage:
+                    continue
+                
+                logging.info(f"{source_name}로 {symbol} 데이터 수집 시도...")
+                result = fetch_func(symbol)
+                
+                if result and result.get('price', 0) > 0:
+                    logging.info(f"{source_name}에서 {symbol} 데이터 수집 성공: ${result['price']:.2f}")
+                    return result
+                else:
+                    raise ValueError(f"{source_name} returned invalid data")
+                    
+            except Exception as e:
+                last_exception = e
+                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 실패: {str(e)}")
+                continue
+        
+        if self.fallback_to_mock:
+            logging.warning(f"모든 데이터 소스 실패, {symbol}에 대한 모의 데이터를 반환합니다.")
+            return self._generate_mock_realtime_data(symbol)
+        else:
+            logging.error(f"{symbol}에 대한 실제 데이터를 가져올 수 없습니다.")
+            return {
                 'symbol': symbol,
                 'timestamp': datetime.now(),
-                'price': latest_price,
-                'volume': volume,
-                'change': change,
-                'change_percent': change_percent,
-                'market_cap': int(info.get('marketCap', 0)),
-                'pe_ratio': float(info.get('trailingPE', 0)),
-                'high_52w': float(info.get('fiftyTwoWeekHigh', 0)),
-                'low_52w': float(info.get('fiftyTwoWeekLow', 0)),
-                'confidence_score': 0.95
+                'price': 0.0,
+                'volume': 0,
+                'change': 0.0,
+                'change_percent': 0.0,
+                'market_cap': 0,
+                'pe_ratio': 0,
+                'high_52w': 0,
+                'low_52w': 0,
+                'confidence_score': 0.0
             }
-            
-            logging.info(f"Yahoo Finance에서 {symbol} 데이터 수집 성공: ${latest_price:.2f}")
-            return realtime_data
-            
-        except Exception as e:
-            logging.warning(f"Yahoo Finance에서 {symbol} 데이터 수집 실패: {str(e)}")
-            
-            if self.use_alpha_vantage:
-                try:
-                    logging.info(f"Alpha Vantage로 {symbol} 데이터 수집 시도...")
-                    alpha_data = self.get_alpha_vantage_global_quote(symbol)
-                    
-                    if alpha_data and alpha_data.get('price', 0) > 0:
-                        realtime_data = {
-                            'symbol': symbol,
-                            'timestamp': datetime.now(),
-                            'price': float(alpha_data['price']),
-                            'volume': int(alpha_data.get('volume', 0)),
-                            'change': float(alpha_data.get('change', 0)),
-                            'change_percent': float(alpha_data.get('change_percent', 0)),
-                            'market_cap': 0,
-                            'pe_ratio': 0,
-                            'high_52w': float(alpha_data.get('high', 0)),
-                            'low_52w': float(alpha_data.get('low', 0)),
-                            'confidence_score': 0.85
-                        }
-                        logging.info(f"Alpha Vantage에서 {symbol} 데이터 수집 성공: ${alpha_data['price']:.2f}")
-                        return realtime_data
-                    else:
-                        logging.warning(f"Alpha Vantage에서 {symbol} 데이터를 가져올 수 없습니다.")
-                except Exception as alpha_e:
-                    logging.error(f"Alpha Vantage에서 {symbol} 데이터 수집 실패: {str(alpha_e)}")
-            
-            if self.fallback_to_mock:
-                logging.warning(f"모든 데이터 소스 실패, {symbol}에 대한 모의 데이터를 반환합니다.")
-                return self._generate_mock_realtime_data(symbol)
-            else:
-                logging.error(f"{symbol}에 대한 실제 데이터를 가져올 수 없습니다.")
-                return {
-                    'symbol': symbol,
-                    'timestamp': datetime.now(),
-                    'price': 0.0,
-                    'volume': 0,
-                    'change': 0.0,
-                    'change_percent': 0.0,
-                    'market_cap': 0,
-                    'pe_ratio': 0,
-                    'high_52w': 0,
-                    'low_52w': 0,
-                    'confidence_score': 0.0
-                }
+    
+    def _fetch_yfinance_data(self, symbol: str) -> Dict:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+        
+        if not info or 'currentPrice' not in info:
+            raise ValueError(f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.")
+        
+        hist = ticker.history(period="1d", interval="1m")
+        if not hist.empty:
+            latest_price = float(hist['Close'].iloc[-1])
+            volume = int(hist['Volume'].iloc[-1])
+        else:
+            latest_price = float(info.get('currentPrice', 0))
+            volume = int(info.get('volume', 0))
+        
+        if latest_price <= 0:
+            raise ValueError(f"Yahoo Finance에서 {symbol}의 가격이 0입니다.")
+        
+        change = float(info.get('regularMarketChange', 0))
+        change_percent = float(info.get('regularMarketChangePercent', 0))
+        
+        return {
+            'symbol': symbol,
+            'timestamp': datetime.now(),
+            'price': latest_price,
+            'volume': volume,
+            'change': change,
+            'change_percent': change_percent,
+            'market_cap': int(info.get('marketCap', 0)),
+            'pe_ratio': float(info.get('trailingPE', 0)),
+            'high_52w': float(info.get('fiftyTwoWeekHigh', 0)),
+            'low_52w': float(info.get('fiftyTwoWeekLow', 0)),
+            'confidence_score': 0.95
+        }
+    
+    def _fetch_alpha_vantage_fallback(self, symbol: str) -> Dict:
+        alpha_data = self.get_alpha_vantage_global_quote(symbol)
+        
+        if alpha_data and alpha_data.get('price', 0) > 0:
+            return {
+                'symbol': symbol,
+                'timestamp': datetime.now(),
+                'price': float(alpha_data['price']),
+                'volume': int(alpha_data.get('volume', 0)),
+                'change': float(alpha_data.get('change', 0)),
+                'change_percent': float(alpha_data.get('change_percent', 0)),
+                'market_cap': 0,
+                'pe_ratio': 0,
+                'high_52w': float(alpha_data.get('high', 0)),
+                'low_52w': float(alpha_data.get('low', 0)),
+                'confidence_score': 0.85
+            }
+        else:
+            raise ValueError("Alpha Vantage returned empty or invalid data")
+    
+    def _fetch_yahoo_direct_api(self, symbol: str) -> Dict:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        params = {
+            'range': '1d',
+            'interval': '1m',
+            'includePrePost': 'true',
+            'useYfid': 'true',
+            'corsDomain': 'finance.yahoo.com'
+        }
+        
+        response = self.session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if 'chart' not in data or not data['chart']['result']:
+            raise ValueError("Invalid Yahoo Finance API response")
+        
+        result = data['chart']['result'][0]
+        meta = result.get('meta', {})
+        timestamps = result.get('timestamp', [])
+        indicators = result.get('indicators', {})
+        
+        if not timestamps or 'quote' not in indicators:
+            raise ValueError("Missing required data in Yahoo Finance API response")
+        
+        quote = indicators['quote'][0]
+        latest_idx = -1
+        
+        price = quote.get('close', [0])[latest_idx] or meta.get('regularMarketPrice', 0)
+        volume = quote.get('volume', [0])[latest_idx] or meta.get('regularMarketVolume', 0)
+        change = meta.get('regularMarketChange', 0)
+        change_percent = meta.get('regularMarketChangePercent', 0)
+        
+        if price <= 0:
+            raise ValueError(f"Invalid price from Yahoo Direct API: {price}")
+        
+        return {
+            'symbol': symbol,
+            'timestamp': datetime.now(),
+            'price': float(price),
+            'volume': int(volume),
+            'change': float(change),
+            'change_percent': float(change_percent),
+            'market_cap': meta.get('marketCap', 0),
+            'pe_ratio': meta.get('trailingPE', 0),
+            'high_52w': meta.get('fiftyTwoWeekHigh', 0),
+            'low_52w': meta.get('fiftyTwoWeekLow', 0),
+            'confidence_score': 0.90
+        }
     
     def get_multiple_realtime_data(self) -> List[Dict]:
         results = []
@@ -392,28 +457,55 @@ class StockDataCollector:
         return all_data
     
     def _generate_mock_realtime_data(self, symbol: str) -> Dict:
+        np.random.seed(hash(symbol) % 2**32)
+        
+        symbol_hash = hash(symbol) % 1000
+        base_price = 50 + (symbol_hash % 500)
+        
         if symbol in self.mock_data_cache:
             base_data = self.mock_data_cache[symbol]
-            price_change = np.random.normal(0, 0.02)
-            new_price = base_data['price'] * (1 + price_change)
-            new_change_percent = base_data['change_percent'] + np.random.normal(0, 0.5)
+            previous_price = base_data['price']
+            previous_change = base_data.get('change_percent', 0)
+            
+            market_trend = np.sin(time.time() / 86400) * 0.1
+            volatility = 0.02 + (symbol_hash % 10) / 1000
+            momentum = previous_change / 100 * 0.3
+            
+            price_change = np.random.normal(market_trend + momentum, volatility)
+            new_price = previous_price * (1 + price_change)
+            new_change_percent = previous_change * 0.7 + price_change * 100 * 0.3
         else:
-            base_price = 100 + hash(symbol) % 200
-            price_change = np.random.normal(0, 0.02)
+            market_trend = np.sin(time.time() / 86400) * 0.1
+            volatility = 0.02 + (symbol_hash % 10) / 1000
+            
+            price_change = np.random.normal(market_trend, volatility)
             new_price = base_price * (1 + price_change)
-            new_change_percent = np.random.normal(0, 2)
+            new_change_percent = price_change * 100
+        
+        volume_base = 1000000 + (symbol_hash % 4000000)
+        volume_multiplier = 1 + abs(new_change_percent / 100) * 5
+        volume = int(volume_base * volume_multiplier)
+        
+        market_cap_base = 1000000000 + symbol_hash * 1000000
+        market_cap = int(new_price * market_cap_base / base_price)
+        
+        pe_ratio = 15 + (symbol_hash % 20) + np.random.normal(0, 2)
+        
+        high_52w = new_price * (1.1 + (symbol_hash % 40) / 100)
+        low_52w = new_price * (0.5 + (symbol_hash % 40) / 100)
         
         mock_data = {
             'symbol': symbol,
             'timestamp': datetime.now(),
-            'price': float(new_price),
-            'volume': int(np.random.randint(1000000, 5000000)),
+            'price': float(max(0.01, new_price)),
+            'volume': max(100000, volume),
             'change': float(new_price * new_change_percent / 100),
             'change_percent': float(new_change_percent),
-            'market_cap': int(new_price * np.random.randint(1000000000, 2000000000)),
-            'pe_ratio': float(np.random.uniform(15, 35)),
-            'high_52w': float(new_price * np.random.uniform(1.1, 1.5)),
-            'low_52w': float(new_price * np.random.uniform(0.5, 0.9))
+            'market_cap': market_cap,
+            'pe_ratio': float(max(5, min(50, pe_ratio))),
+            'high_52w': float(high_52w),
+            'low_52w': float(low_52w),
+            'confidence_score': 0.3
         }
         
         self.mock_data_cache[symbol] = mock_data
@@ -428,9 +520,13 @@ class StockDataCollector:
         
         np.random.seed(hash(symbol) % 2**32)
         
-        base_price = 100 + hash(symbol) % 200
+        symbol_hash = hash(symbol) % 1000
+        base_price = 50 + (symbol_hash % 500)
         
-        price_changes = np.random.randn(len(dates)) * 0.02
+        trend = np.sin(np.linspace(0, 2 * np.pi, len(dates))) * 0.05
+        volatility = 0.02 + (symbol_hash % 10) / 1000
+        
+        price_changes = np.random.normal(trend, volatility, len(dates))
         prices = base_price * np.exp(np.cumsum(price_changes))
         
         opens = prices * (1 + np.random.normal(0, 0.01, len(dates)))
@@ -438,7 +534,10 @@ class StockDataCollector:
         lows = np.minimum(opens, prices) * (1 - np.random.uniform(0, 0.02, len(dates)))
         closes = prices
         
-        volumes = np.random.randint(1000000, 5000000, len(dates))
+        volume_base = 1000000 + (symbol_hash % 4000000)
+        daily_volatility = np.abs(np.diff(prices, prepend=prices[0])) / prices
+        volumes = (volume_base * (1 + daily_volatility * 10 + np.random.normal(0, 0.2, len(dates)))).astype(int)
+        volumes = np.maximum(100000, volumes)
         
         mock_data = pd.DataFrame({
             'date': dates,

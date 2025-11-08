@@ -86,15 +86,15 @@ class SmsNotificationResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.info("Application startup: Initializing services...")
+    logging.info("애플리케이션 시작: 서비스 초기화 중...")
     try:
         yield
     except asyncio.CancelledError:
-        logging.info("Application shutdown: Cancelled")
+        logging.info("애플리케이션 종료: 취소됨")
     except Exception as e:
-        logging.error(f"Application shutdown error: {str(e)}", exc_info=True)
+        logging.error(f"애플리케이션 종료 오류: {str(e)}", exc_info=True)
     finally:
-        logging.info("Application shutdown: Cleaning up...")
+        logging.info("애플리케이션 종료: 정리 중...")
 
 app = FastAPI(
     title="Stock Analysis API",
@@ -298,7 +298,7 @@ class StockAnalysisAPI:
                     analysis = await self.get_analysis(symbol)
                     results.append(analysis)
                 except Exception as e:
-                    logging.error(f"Error analyzing {symbol}: {str(e)}")
+                    logging.error(f"{symbol} 분석 오류: {str(e)}")
                     continue
             return results
         except Exception as e:

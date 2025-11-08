@@ -497,10 +497,23 @@ class PythonApiClient(
     }
     
     fun getNewsByUrl(url: String): Mono<News> {
-        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
         return webClient.get()
-            .uri("/api/news/detail/{newsId}", encodedUrl)
+            .uri { uriBuilder ->
+                uriBuilder.path("/api/news/detail")
+                    .queryParam("url", url)
+                    .build()
+            }
             .retrieve()
+            .onStatus({ status -> status.is4xxClientError || status.is5xxServerError }, { response ->
+                logger.debug("Python API 서버 HTTP 오류: ${response.statusCode()} (url: $url)")
+                response.bodyToMono(String::class.java)
+                    .defaultIfEmpty("")
+                    .flatMap { body ->
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류 (${response.statusCode()}): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
+                        ))
+                    }
+            })
             .bodyToMono(Map::class.java)
             .map(mapToNews)
             .timeout(java.time.Duration.ofSeconds(10))

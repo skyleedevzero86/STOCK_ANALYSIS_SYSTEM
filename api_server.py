@@ -16,7 +16,7 @@ try:
     PYMYSQL_AVAILABLE = True
 except ImportError:
     PYMYSQL_AVAILABLE = False
-    logging.warning("pymysql 모듈이 설치되지 않았습니다. 이메일 발송 이력 저장 기능이 비활성화됩니다.")
+    logging.debug("pymysql 모듈이 설치되지 않았습니다. 이메일 발송 이력 저장 기능이 비활성화됩니다.")
 
 from data_collectors.stock_data_collector import StockDataCollector
 from data_collectors.news_collector import NewsCollector
@@ -86,15 +86,13 @@ class SmsNotificationResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logging.info("Application startup: Initializing services...")
     try:
-        logging.info("Application startup: Initializing services...")
         yield
     except asyncio.CancelledError:
-        logging.debug("Application shutdown: Cancelled (likely due to reload)")
-        raise
-    except KeyboardInterrupt:
-        logging.info("Application shutdown: Keyboard interrupt")
-        raise
+        logging.info("Application shutdown: Cancelled")
+    except Exception as e:
+        logging.error(f"Application shutdown error: {str(e)}", exc_info=True)
     finally:
         logging.info("Application shutdown: Cleaning up...")
 
@@ -698,7 +696,7 @@ class NewsResponse(BaseModel):
          })
 async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
-    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
+    include_korean: bool = Query(True, description="한국어 뉴스 포함 여부"),
     auto_translate: bool = Query(True, description="자동 번역 여부")
 ):
     try:
@@ -708,25 +706,35 @@ async def get_stock_news(
         logging.error(f"뉴스 조회 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"뉴스 조회 오류: {str(e)}")
 
-@app.get("/api/news/detail/{news_id}",
+@app.get("/api/news/detail",
          summary="뉴스 상세보기",
-         description="뉴스 ID로 상세 정보를 조회합니다.")
+         description="뉴스 URL로 상세 정보를 조회합니다.")
 async def get_news_detail(
-    news_id: str = Path(..., description="뉴스 ID (URL 인코딩)")
+    url: str = Query(..., description="뉴스 URL")
 ):
     try:
         import urllib.parse
-        decoded_url = urllib.parse.unquote(news_id)
+        decoded_url = url
+        for _ in range(3):
+            try:
+                decoded_url = urllib.parse.unquote(decoded_url, encoding='utf-8')
+            except Exception:
+                break
+        
+        decoded_url = decoded_url.replace('&amp;', '&')
+        
+        logging.info(f"뉴스 상세 조회 요청: url={url[:100]}..., decoded_url={decoded_url[:100]}...")
         
         news = stock_api.news_collector.get_news_by_url(decoded_url)
         if not news:
+            logging.warning(f"뉴스를 찾을 수 없습니다: {decoded_url[:100]}...")
             raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
         
         return news
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"뉴스 상세 조회 오류: {str(e)}")
+        logging.error(f"뉴스 상세 조회 오류: url={url[:100]}..., error={str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"뉴스 상세 조회 오류: {str(e)}")
 
 @app.get("/api/news",

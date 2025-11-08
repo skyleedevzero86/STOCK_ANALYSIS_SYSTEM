@@ -39,16 +39,17 @@ function displayNews(news) {
             ? `<span class="news-sentiment sentiment-${getSentimentClass(item.sentiment)}">${getSentimentText(item.sentiment)}</span>`
             : '';
 
-        const title = item.title_ko || item.title || '';
-        const description = item.description_ko || item.description || '';
-        const encodedUrl = encodeURIComponent(item.url || '');
-        const detailUrl = `/news-detail?url=${encodedUrl}`;
+        const title = (item.titleKo || item.title_ko || item.title || '').trim();
+        const description = (item.descriptionKo || item.description_ko || item.description || '').trim();
+        const url = item.url || '';
+        const shortId = createShortNewsId(url);
+        const detailUrl = `/news-detail?id=${encodeURIComponent(shortId)}`;
 
         return `
             <div class="news-item">
                 <div class="news-header">
                     <h4 class="news-title">
-                        <a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${encodedUrl}'); return false;">
+                        <a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${shortId}'); return false;">
                             ${title}
                         </a>
                     </h4>
@@ -98,8 +99,8 @@ function stopNewsAutoRefresh() {
     }
 }
 
-function openNewsDetail(encodedUrl) {
-    window.location.href = `/news-detail?url=${encodedUrl}`;
+function openNewsDetail(shortId) {
+    window.location.href = `/news-detail?id=${encodeURIComponent(shortId)}`;
 }
 
 document.addEventListener('DOMContentLoaded', function() {

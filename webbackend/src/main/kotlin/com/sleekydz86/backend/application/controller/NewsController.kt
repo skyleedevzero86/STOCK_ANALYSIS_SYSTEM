@@ -19,7 +19,7 @@ class NewsController(
     @GetMapping("/{symbol}")
     fun getStockNews(
         @PathVariable symbol: String,
-        @RequestParam(defaultValue = "false") includeKorean: Boolean,
+        @RequestParam(defaultValue = "true") includeKorean: Boolean,
         @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<List<News>> {
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
@@ -38,12 +38,17 @@ class NewsController(
             }
     }
     
-    @GetMapping("/detail/{newsId}")
+    @GetMapping("/detail")
     fun getNewsDetail(
-        @PathVariable newsId: String
+        @RequestParam url: String
     ): Mono<News> {
         return circuitBreakerManager.executeWithCircuitBreaker("newsDetail") {
-            pythonApiClient.getNewsByUrl(java.net.URLDecoder.decode(newsId, "UTF-8"))
+            val decodedUrl = try {
+                java.net.URLDecoder.decode(url, "UTF-8")
+            } catch (e: Exception) {
+                url
+            }
+            pythonApiClient.getNewsByUrl(decodedUrl)
         }
             .timeout(Duration.ofSeconds(10))
             .onErrorResume { error: Throwable ->

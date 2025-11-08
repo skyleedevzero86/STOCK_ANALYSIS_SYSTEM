@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
+import reactor.netty.channel.AbortedException
 
 @Order(-2)
 @Component
@@ -23,7 +24,6 @@ class WebFluxExceptionHandler(
 
     override fun handle(exchange: ServerWebExchange, ex: Throwable): Mono<Void> {
         val response = exchange.response
-        val bufferFactory = response.bufferFactory()
 
         val path = try {
             exchange.request.path.toString().takeIf { it.isNotBlank() } ?: exchange.request.uri.path
@@ -31,6 +31,18 @@ class WebFluxExceptionHandler(
             logger.warn("Error extracting path from request: ${e.message}")
             exchange.request.uri?.path ?: "unknown"
         }
+
+        if (ex is AbortedException || ex.cause is AbortedException) {
+            logger.debug("Connection aborted for path: $path (likely during graceful shutdown)")
+            return Mono.empty()
+        }
+
+        if (response.isCommitted) {
+            logger.warn("Response already committed for path: $path, cannot send error response")
+            return Mono.empty()
+        }
+
+        val bufferFactory = response.bufferFactory()
         
         logger.error("Global error handler caught exception for path: $path", ex)
         logger.error("Exception type: ${ex.javaClass.name}, message: ${ex.message}", ex)
@@ -95,16 +107,30 @@ class WebFluxExceptionHandler(
             }
         }
 
-        response.statusCode = HttpStatus.valueOf(errorResponse.status)
-        response.headers.contentType = MediaType.APPLICATION_JSON
-
         return try {
+            response.statusCode = HttpStatus.valueOf(errorResponse.status)
+            response.headers.contentType = MediaType.APPLICATION_JSON
+
             val errorResponseBody = objectMapper.writeValueAsBytes(errorResponse)
             val buffer = bufferFactory.wrap(errorResponseBody)
             response.writeWith(Mono.just(buffer))
+                .onErrorResume { writeError ->
+                    if (writeError is AbortedException || writeError.cause is AbortedException) {
+                        logger.debug("Connection aborted while writing error response for path: $path")
+                        Mono.empty()
+                    } else {
+                        logger.error("Error writing error response for path: $path", writeError)
+                        Mono.empty()
+                    }
+                }
         } catch (e: Exception) {
-            logger.error("Error serializing error response", e)
-            response.writeWith(Mono.empty())
+            if (e is AbortedException || e.cause is AbortedException) {
+                logger.debug("Connection aborted while handling error for path: $path")
+                Mono.empty()
+            } else {
+                logger.error("Error serializing error response for path: $path", e)
+                Mono.empty()
+            }
         }
     }
 }

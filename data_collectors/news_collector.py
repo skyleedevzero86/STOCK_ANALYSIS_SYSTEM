@@ -17,7 +17,7 @@ try:
     GOOGLETRANS_AVAILABLE = True
 except ImportError:
     GOOGLETRANS_AVAILABLE = False
-    logging.warning("googletrans 모듈이 설치되지 않았습니다. 번역 기능이 비활성화됩니다.")
+    logging.debug("googletrans 모듈이 설치되지 않았습니다. 번역 기능이 비활성화됩니다.")
 
 try:
     from transformers import pipeline
@@ -25,7 +25,7 @@ try:
     HUGGINGFACE_AVAILABLE = True
 except ImportError:
     HUGGINGFACE_AVAILABLE = False
-    logging.warning("transformers 모듈이 설치되지 않았습니다. Hugging Face 번역 기능이 비활성화됩니다.")
+    logging.debug("transformers 모듈이 설치되지 않았습니다. Hugging Face 번역 기능이 비활성화됩니다.")
 
 class NewsCollector:
     
@@ -61,7 +61,7 @@ class NewsCollector:
                 logging.warning(f"Hugging Face 번역 모델 초기화 실패: {str(e)}")
                 self.hf_translator = None
         else:
-            logging.info("Hugging Face 번역 모델을 사용할 수 없습니다. googletrans를 사용합니다.")
+            logging.debug("Hugging Face 번역 모델을 사용할 수 없습니다. googletrans를 사용합니다.")
         
     def get_newsapi_news(self, symbol: str, language: str = 'en', page_size: int = 10) -> List[Dict]:
         if not self.newsapi_key:
@@ -138,6 +138,11 @@ class NewsCollector:
         try:
             url = f"https://finance.yahoo.com/quote/{symbol}/news"
             response = self.session.get(url, timeout=10)
+            
+            if response.status_code == 404:
+                logging.debug(f"Yahoo Finance News not found for {symbol}: 404")
+                return []
+            
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -169,8 +174,14 @@ class NewsCollector:
             
             return articles
             
+        except requests.exceptions.HTTPError as e:
+            if e.response and e.response.status_code == 404:
+                logging.debug(f"Yahoo Finance News not found for {symbol}")
+            else:
+                logging.warning(f"Yahoo Finance News HTTP error for {symbol}: {e.response.status_code if e.response else 'Unknown'}")
+            return []
         except Exception as e:
-            logging.error(f"Yahoo Finance News error for {symbol}: {str(e)}")
+            logging.warning(f"Yahoo Finance News error for {symbol}: {str(e)}")
             return []
     
     def get_naver_news(self, query: str, max_results: int = 10) -> List[Dict]:
@@ -281,6 +292,15 @@ class NewsCollector:
         
         all_news = []
         
+        if include_korean:
+            try:
+                korean_query = self._get_korean_symbol_name(symbol)
+                if korean_query:
+                    naver_news = self.get_naver_news(korean_query)
+                    all_news.extend(naver_news)
+            except:
+                pass
+        
         try:
             newsapi_news = self.get_newsapi_news(symbol)
             all_news.extend(newsapi_news)
@@ -307,15 +327,6 @@ class NewsCollector:
             all_news.extend(google_news)
         except:
             pass
-        
-        if include_korean:
-            try:
-                korean_query = self._get_korean_symbol_name(symbol)
-                if korean_query:
-                    naver_news = self.get_naver_news(korean_query)
-                    all_news.extend(naver_news)
-            except:
-                pass
         
         if auto_translate:
             translated_news = []
@@ -417,7 +428,11 @@ class NewsCollector:
                     result = self.hf_translator(text)
                     return result[0]['translation_text']
             except Exception as e:
-                logging.warning(f"Hugging Face 번역 실패, googletrans로 대체: {str(e)}")
+                logging.warning(f"Hugging Face 번역 실패: {str(e)}")
+                if self.translator:
+                    pass
+                else:
+                    return text
         
         if self.translator:
             try:
@@ -429,10 +444,16 @@ class NewsCollector:
                 
                 result = self.translator.translate(text, dest=target_lang)
                 if result and hasattr(result, 'text'):
-                    return result.text
+                    translated = result.text
+                    if translated and translated != text:
+                        return translated
                 return text
             except Exception as e:
-                logging.error(f"googletrans 번역 실패: {str(e)}")
+                logging.warning(f"googletrans 번역 실패: {str(e)}")
+                return text
+        
+        if not self.hf_translator and not self.translator:
+            logging.debug("번역 모듈이 설치되지 않았습니다. 원문을 반환합니다.")
         
         return text
     
@@ -452,7 +473,8 @@ class NewsCollector:
                     translated_news['title_original'] = title
                 else:
                     if self.hf_translator or self.translator:
-                        translated_news['title_ko'] = self.translate_text(title, 'ko')
+                        translated_title = self.translate_text(title, 'ko')
+                        translated_news['title_ko'] = translated_title if translated_title else title
                         translated_news['title_original'] = title
                     else:
                         translated_news['title_ko'] = title
@@ -469,7 +491,8 @@ class NewsCollector:
                     translated_news['description_original'] = description
                 else:
                     if self.hf_translator or self.translator:
-                        translated_news['description_ko'] = self.translate_text(description, 'ko')
+                        translated_desc = self.translate_text(description, 'ko')
+                        translated_news['description_ko'] = translated_desc if translated_desc else description
                         translated_news['description_original'] = description
                     else:
                         translated_news['description_ko'] = description

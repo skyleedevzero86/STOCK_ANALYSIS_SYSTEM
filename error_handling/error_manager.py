@@ -3,8 +3,9 @@ import traceback
 import sys
 import time
 import json
+import re
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Union, Callable, Any
+from typing import Dict, List, Optional, Union, Callable, Any, Tuple
 from dataclasses import dataclass, asdict
 from enum import Enum
 import asyncio
@@ -12,7 +13,9 @@ from functools import wraps
 import smtplib
 from email.mime.text import MimeText
 from email.mime.multipart import MimeMultipart
-from config.settings import settings
+from config.settings import get_settings
+
+settings = get_settings()
 
 class ErrorSeverity(Enum):
     LOW = "low"

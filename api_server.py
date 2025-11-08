@@ -7,9 +7,18 @@ from contextlib import asynccontextmanager
 import asyncio
 import json
 import logging
+import sys
 from datetime import datetime
 from typing import List, Dict, Optional
 import uvicorn
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 try:
     import pymysql
@@ -692,19 +701,42 @@ class NewsResponse(BaseModel):
          response_model=List[NewsResponse],
          responses={
              200: {"description": "성공적으로 뉴스를 조회했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse},
+             503: {"description": "서비스가 일시적으로 사용 불가능합니다.", "model": ErrorResponse}
          })
 async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     include_korean: bool = Query(True, description="한국어 뉴스 포함 여부"),
     auto_translate: bool = Query(True, description="자동 번역 여부")
 ):
+    logging.info(f"뉴스 조회 요청 받음: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
     try:
-        news = stock_api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean, auto_translate=auto_translate)
+        import asyncio
+        logging.info(f"뉴스 수집 시작: {symbol} (타임아웃: 30초)")
+        news = await asyncio.wait_for(
+            asyncio.to_thread(
+                stock_api.news_collector.get_stock_news,
+                symbol.upper(),
+                include_korean=include_korean,
+                auto_translate=auto_translate
+            ),
+            timeout=30.0
+        )
+        logging.info(f"뉴스 수집 완료: {symbol} - {len(news) if news else 0}개")
+        if not news:
+            logging.info(f"뉴스 조회 결과 없음: {symbol}")
+            return []
         return news
+    except asyncio.TimeoutError:
+        logging.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
+        return []
     except Exception as e:
-        logging.error(f"뉴스 조회 오류: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"뉴스 조회 오류: {str(e)}")
+        logging.error(f"뉴스 조회 오류: {symbol} - {str(e)}", exc_info=True)
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            logging.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
+            return []
+        logging.warning(f"뉴스 조회 실패, 빈 리스트 반환: {symbol} - {str(e)}")
+        return []
 
 @app.get("/api/news/detail",
          summary="뉴스 상세보기",
@@ -725,7 +757,14 @@ async def get_news_detail(
         
         logging.info(f"뉴스 상세 조회 요청: url={url[:100]}..., decoded_url={decoded_url[:100]}...")
         
-        news = stock_api.news_collector.get_news_by_url(decoded_url)
+        import asyncio
+        news = await asyncio.wait_for(
+            asyncio.to_thread(
+                stock_api.news_collector.get_news_by_url,
+                decoded_url
+            ),
+            timeout=15.0
+        )
         if not news:
             logging.warning(f"뉴스를 찾을 수 없습니다: {decoded_url[:100]}...")
             raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
@@ -733,8 +772,13 @@ async def get_news_detail(
         return news
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logging.warning(f"뉴스 상세 조회 타임아웃: url={url[:100]}...")
+        raise HTTPException(status_code=503, detail="뉴스 상세 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
     except Exception as e:
         logging.error(f"뉴스 상세 조회 오류: url={url[:100]}..., error={str(e)}", exc_info=True)
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            raise HTTPException(status_code=503, detail="뉴스 상세 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
         raise HTTPException(status_code=500, detail=f"뉴스 상세 조회 오류: {str(e)}")
 
 @app.get("/api/news",
@@ -784,4 +828,6 @@ async def get_multiple_stock_news(
         raise HTTPException(status_code=500, detail=f"다중 종목 뉴스 조회 오류: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    import platform
+    reload_enabled = platform.system() != 'Windows'
+    uvicorn.run(app, host="0.0.0.0", port=9000, reload=reload_enabled)

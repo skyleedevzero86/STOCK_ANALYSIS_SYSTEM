@@ -41,15 +41,24 @@ class NewsController(
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
             pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, autoTranslate)
         }
-            .timeout(Duration.ofSeconds(15))
+            .timeout(Duration.ofSeconds(25))
             .onErrorResume { error: Throwable ->
                 when (error) {
-                    is CircuitBreakerOpenException ->
-                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
-                    is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
-                    else ->
-                        Mono.error(ExternalApiException("Failed to fetch news for $symbol", error))
+                    is CircuitBreakerOpenException -> {
+                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+                            .warn("Circuit breaker open for news: $symbol")
+                        Mono.just(emptyList())
+                    }
+                    is java.util.concurrent.TimeoutException -> {
+                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+                            .warn("Timeout fetching news for: $symbol")
+                        Mono.just(emptyList())
+                    }
+                    else -> {
+                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+                            .error("Error fetching news for $symbol: ${error.message}", error)
+                        Mono.just(emptyList())
+                    }
                 }
             }
     }
@@ -67,23 +76,39 @@ class NewsController(
         @Parameter(description = "뉴스 URL", required = true)
         @RequestParam url: String
     ): Mono<News> {
+        val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        logger.info("뉴스 상세 조회 요청: url={}", url.take(100))
+        
         return circuitBreakerManager.executeWithCircuitBreaker("newsDetail") {
             val decodedUrl = try {
                 java.net.URLDecoder.decode(url, "UTF-8")
             } catch (e: Exception) {
+                logger.warn("URL 디코딩 실패, 원본 URL 사용: url={}, error={}", url.take(100), e.message)
                 url
             }
             pythonApiClient.getNewsByUrl(decodedUrl)
         }
-            .timeout(Duration.ofSeconds(10))
+            .timeout(Duration.ofSeconds(20))
+            .doOnError { error ->
+                logger.error("뉴스 상세 조회 실패: url={}, error={}", url.take(100), error.message, error)
+            }
             .onErrorResume { error: Throwable ->
                 when (error) {
-                    is CircuitBreakerOpenException ->
-                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
-                    is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
-                    else ->
-                        Mono.error(ExternalApiException("Failed to fetch news detail", error))
+                    is CircuitBreakerOpenException -> {
+                        logger.warn("Circuit breaker가 열려있음: newsDetail")
+                        Mono.error(ExternalApiException("서비스가 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요.", error))
+                    }
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("뉴스 상세 조회 타임아웃: url={}", url.take(100))
+                        Mono.error(ExternalApiException("요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.", error))
+                    }
+                    is ExternalApiException -> {
+                        Mono.error(error)
+                    }
+                    else -> {
+                        logger.error("예상치 못한 오류: url={}, error={}", url.take(100), error.message, error)
+                        Mono.error(ExternalApiException("뉴스 상세 정보를 가져오는데 실패했습니다: ${error.message}", error))
+                    }
                 }
             }
     }
@@ -112,11 +137,11 @@ class NewsController(
             .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
-                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
+                        Mono.error(ExternalApiException("서비스가 일시적으로 사용 불가능합니다", error))
                     is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
+                        Mono.error(ExternalApiException("요청 시간이 초과되었습니다", error))
                     else ->
-                        Mono.error(ExternalApiException("Failed to search news", error))
+                        Mono.error(ExternalApiException("뉴스 검색에 실패했습니다", error))
                 }
             }
     }
@@ -138,7 +163,7 @@ class NewsController(
     ): Mono<Map<String, List<News>>> {
         val symbolList = symbols.split(",").map { it.trim().uppercase() }
         if (symbolList.size > 10) {
-            return Mono.error(IllegalArgumentException("Maximum 10 symbols allowed per request"))
+            return Mono.error(IllegalArgumentException("요청당 최대 10개의 심볼만 허용됩니다"))
         }
         return circuitBreakerManager.executeWithCircuitBreaker("multipleNews") {
             pythonApiClient.getMultipleStockNews(symbolList, includeKorean)
@@ -147,11 +172,11 @@ class NewsController(
             .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
-                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
+                        Mono.error(ExternalApiException("서비스가 일시적으로 사용 불가능합니다", error))
                     is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
+                        Mono.error(ExternalApiException("요청 시간이 초과되었습니다", error))
                     else ->
-                        Mono.error(ExternalApiException("Failed to fetch multiple stock news", error))
+                        Mono.error(ExternalApiException("다중 주식 뉴스를 가져오는데 실패했습니다", error))
                 }
             }
     }

@@ -10,6 +10,8 @@ import re
 from bs4 import BeautifulSoup
 from bs4 import XMLParsedAsHTMLWarning
 from config.settings import settings
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FutureTimeoutError
+from functools import wraps
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -27,12 +29,33 @@ except ImportError:
     logging.debug("googletrans 모듈이 설치되지 않았습니다. 번역 기능이 비활성화됩니다.")
 
 try:
-    from transformers import pipeline
+    from transformers import pipeline, T5TokenizerFast
     import torch
     HUGGINGFACE_AVAILABLE = True
 except ImportError:
     HUGGINGFACE_AVAILABLE = False
     logging.debug("transformers 모듈이 설치되지 않았습니다. Hugging Face 번역 기능이 비활성화됩니다.")
+
+def retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = initial_delay
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logging.warning(f"{func.__name__} 실패 (시도 {attempt + 1}/{max_retries}): {str(e)}. {delay}초 후 재시도...")
+                        time.sleep(delay)
+                        delay *= backoff_factor
+                    else:
+                        logging.error(f"{func.__name__} 최종 실패: {str(e)}")
+            raise last_exception
+        return wrapper
+    return decorator
 
 class NewsCollector:
     
@@ -45,6 +68,7 @@ class NewsCollector:
         self.alpha_vantage_api_key = settings.ALPHA_VANTAGE_API_KEY
         self.cache = {}
         self.cache_ttl = 300
+        self.max_workers = 5
         
         if GOOGLETRANS_AVAILABLE:
             try:
@@ -58,12 +82,17 @@ class NewsCollector:
         self.hf_translator = None
         if HUGGINGFACE_AVAILABLE:
             try:
+                tokenizer_name = "paust/pko-t5-base"
+                model_path = "Darong/BlueT"
+                tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
                 self.hf_translator = pipeline(
                     "translation",
-                    model="Helsinki-NLP/opus-mt-tc-big-en-ko",
+                    model=model_path,
+                    tokenizer=tokenizer,
+                    max_length=255,
                     device=0 if torch.cuda.is_available() else -1
                 )
-                logging.info("Hugging Face 번역 모델 로드 완료")
+                logging.info("Hugging Face BlueT 번역 모델 로드 완료")
             except Exception as e:
                 error_msg = str(e)
                 if "401" in error_msg or "Unauthorized" in error_msg:
@@ -76,6 +105,7 @@ class NewsCollector:
         else:
             logging.debug("Hugging Face 번역 모델을 사용할 수 없습니다. googletrans를 사용합니다.")
         
+    @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_newsapi_news(self, symbol: str, language: str = 'en', page_size: int = 10) -> List[Dict]:
         if not self.newsapi_key:
             return []
@@ -90,7 +120,7 @@ class NewsCollector:
                 'apiKey': self.newsapi_key
             }
             
-            response = self.session.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=8)
             response.raise_for_status()
             data = response.json()
             
@@ -109,10 +139,14 @@ class NewsCollector:
                 return articles
             return []
             
+        except requests.exceptions.Timeout:
+            logging.warning(f"NewsAPI 타임아웃: {symbol}")
+            return []
         except Exception as e:
             logging.error(f"{symbol}에 대한 NewsAPI 오류: {str(e)}")
             return []
     
+    @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_alpha_vantage_news(self, symbol: str) -> List[Dict]:
         try:
             url = "https://www.alphavantage.co/query"
@@ -123,7 +157,7 @@ class NewsCollector:
                 'limit': 10
             }
             
-            response = self.session.get(url, params=params, timeout=30)
+            response = self.session.get(url, params=params, timeout=8)
             response.raise_for_status()
             data = response.json()
             
@@ -143,14 +177,18 @@ class NewsCollector:
                 return articles
             return []
             
+        except requests.exceptions.Timeout:
+            logging.warning(f"Alpha Vantage 타임아웃: {symbol}")
+            return []
         except Exception as e:
             logging.error(f"{symbol}에 대한 Alpha Vantage News 오류: {str(e)}")
             return []
     
+    @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_yahoo_finance_news(self, symbol: str) -> List[Dict]:
         try:
             url = f"https://finance.yahoo.com/quote/{symbol}/news"
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=8)
             
             if response.status_code == 404:
                 logging.debug(f"{symbol}에 대한 Yahoo Finance News를 찾을 수 없음: 404")
@@ -187,6 +225,9 @@ class NewsCollector:
             
             return articles
             
+        except requests.exceptions.Timeout:
+            logging.warning(f"Yahoo Finance 타임아웃: {symbol}")
+            return []
         except requests.exceptions.HTTPError as e:
             if e.response and e.response.status_code == 404:
                 logging.debug(f"{symbol}에 대한 Yahoo Finance News를 찾을 수 없음")
@@ -197,6 +238,7 @@ class NewsCollector:
             logging.warning(f"{symbol}에 대한 Yahoo Finance News 오류: {str(e)}")
             return []
     
+    @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_naver_news(self, query: str, max_results: int = 10) -> List[Dict]:
         try:
             url = "https://search.naver.com/search.naver"
@@ -207,7 +249,7 @@ class NewsCollector:
                 'sort': 1
             }
             
-            response = self.session.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=8)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -242,10 +284,14 @@ class NewsCollector:
             
             return articles
             
+        except requests.exceptions.Timeout:
+            logging.warning(f"Naver News 타임아웃: {query}")
+            return []
         except Exception as e:
             logging.error(f"{query}에 대한 Naver News 오류: {str(e)}")
             return []
     
+    @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_google_news_rss(self, symbol: str, language: str = 'en') -> List[Dict]:
         try:
             url = "https://news.google.com/rss"
@@ -256,7 +302,7 @@ class NewsCollector:
                 'ceid': 'US:en' if language == 'en' else 'KR:ko'
             }
             
-            response = self.session.get(url, params=params, timeout=10)
+            response = self.session.get(url, params=params, timeout=8)
             response.raise_for_status()
             
             try:
@@ -292,70 +338,147 @@ class NewsCollector:
             
             return articles
             
+        except requests.exceptions.Timeout:
+            logging.warning(f"Google News RSS 타임아웃: {symbol}")
+            return []
         except Exception as e:
             logging.error(f"{symbol}에 대한 Google News RSS 오류: {str(e)}")
             return []
     
     def get_stock_news(self, symbol: str, include_korean: bool = False, auto_translate: bool = True) -> List[Dict]:
+        start_time = time.time()
+        logging.info(f"뉴스 수집 시작: {symbol} (include_korean={include_korean}, auto_translate={auto_translate})")
+        
         cache_key = f"{symbol}_{include_korean}_{auto_translate}"
         if cache_key in self.cache:
             cached_data, cached_time = self.cache[cache_key]
             if (datetime.now() - cached_time).total_seconds() < self.cache_ttl:
+                logging.info(f"캐시에서 뉴스 반환: {symbol} ({len(cached_data)}개)")
                 return cached_data
         
         all_news = []
         
+        tasks = []
+        
         if include_korean:
+            korean_query = self._get_korean_symbol_name(symbol)
+            if korean_query:
+                tasks.append(('naver', lambda: self.get_naver_news(korean_query)))
+        
+        tasks.append(('newsapi', lambda: self.get_newsapi_news(symbol)))
+        tasks.append(('alphavantage', lambda: self.get_alpha_vantage_news(symbol)))
+        tasks.append(('yahoo', lambda: self.get_yahoo_finance_news(symbol)))
+        tasks.append(('google', lambda: self.get_google_news_rss(symbol)))
+        
+        logging.info(f"뉴스 소스 {len(tasks)}개 시작: {symbol}")
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_source = {}
+            for source_name, task_func in tasks:
+                future = executor.submit(task_func)
+                future_to_source[future] = source_name
+            
+            completed_count = 0
             try:
-                korean_query = self._get_korean_symbol_name(symbol)
-                if korean_query:
-                    naver_news = self.get_naver_news(korean_query)
-                    all_news.extend(naver_news)
-            except:
-                pass
+                for future in as_completed(future_to_source, timeout=15):
+                    source_name = future_to_source[future]
+                    try:
+                        news_list = future.result(timeout=3)
+                        if news_list:
+                            all_news.extend(news_list)
+                            logging.info(f"{source_name}에서 {len(news_list)}개 뉴스 수집 완료: {symbol}")
+                        completed_count += 1
+                    except FutureTimeoutError:
+                        logging.warning(f"{source_name} 뉴스 수집 타임아웃")
+                        completed_count += 1
+                    except Exception as e:
+                        logging.warning(f"{source_name} 뉴스 수집 실패: {str(e)}")
+                        completed_count += 1
+            except FutureTimeoutError:
+                logging.warning(f"뉴스 수집 전체 타임아웃 발생. 완료된 작업만 사용합니다.")
+                for future, source_name in future_to_source.items():
+                    if future.done():
+                        try:
+                            news_list = future.result()
+                            if news_list:
+                                all_news.extend(news_list)
+                                logging.info(f"{source_name}에서 {len(news_list)}개 뉴스 수집 완료 (타임아웃 후): {symbol}")
+                        except Exception:
+                            pass
+            finally:
+                for future in future_to_source.keys():
+                    if not future.done():
+                        future.cancel()
         
-        try:
-            newsapi_news = self.get_newsapi_news(symbol)
-            all_news.extend(newsapi_news)
-            time.sleep(0.5)
-        except:
-            pass
+        collection_time = time.time() - start_time
+        logging.info(f"뉴스 수집 완료: {symbol} - {len(all_news)}개 수집 (소요 시간: {collection_time:.2f}초)")
         
-        try:
-            alpha_news = self.get_alpha_vantage_news(symbol)
-            all_news.extend(alpha_news)
-            time.sleep(0.5)
-        except:
-            pass
-        
-        try:
-            yahoo_news = self.get_yahoo_finance_news(symbol)
-            all_news.extend(yahoo_news)
-            time.sleep(0.5)
-        except:
-            pass
-        
-        try:
-            google_news = self.get_google_news_rss(symbol)
-            all_news.extend(google_news)
-        except:
-            pass
-        
-        if auto_translate:
-            translated_news = []
+        if auto_translate and all_news:
+            translate_start = time.time()
+            if not self.hf_translator and not self.translator:
+                logging.warning(f"번역 모델이 로드되지 않았습니다. 번역을 건너뜁니다: {symbol}")
+                for news in all_news:
+                    news['title_ko'] = news.get('title', '')
+                    news['title_original'] = news.get('title', '')
+            else:
+                logging.info(f"번역 시작: {symbol} - {len(all_news)}개 중 최대 5개만 번역")
+                translated_count = 0
+                failed_count = 0
+                for i, news in enumerate(all_news[:5]):
+                    provider = news.get('provider', '')
+                    if provider in ['newsapi', 'alphavantage', 'yahoo', 'google']:
+                        title = news.get('title', '')
+                        if title and not self._is_korean_text(title):
+                            try:
+                                if self.hf_translator:
+                                    prefix = "E2K: "
+                                    import time as time_module
+                                    translation_start = time_module.time()
+                                    result = self.hf_translator(prefix + title[:200], max_length=255)
+                                    translation_time = time_module.time() - translation_start
+                                    if translation_time > 5:
+                                        logging.warning(f"번역 시간이 오래 걸림: {translation_time:.2f}초 - {title[:50]}...")
+                                    all_news[i]['title_ko'] = result[0]['translation_text']
+                                    all_news[i]['title_original'] = title
+                                    translated_count += 1
+                                    logging.debug(f"번역 성공: {title[:50]}... -> {result[0]['translation_text'][:50]}...")
+                                elif self.translator:
+                                    result = self.translator.translate(title[:200], dest='ko')
+                                    all_news[i]['title_ko'] = result.text
+                                    all_news[i]['title_original'] = title
+                                    translated_count += 1
+                                else:
+                                    all_news[i]['title_ko'] = title
+                                    all_news[i]['title_original'] = title
+                            except Exception as e:
+                                failed_count += 1
+                                logging.warning(f"뉴스 번역 실패 ({failed_count}번째): {str(e)} - {title[:50]}...")
+                                all_news[i]['title_ko'] = title
+                                all_news[i]['title_original'] = title
+                        else:
+                            all_news[i]['title_ko'] = title
+                            all_news[i]['title_original'] = title
+                    else:
+                        all_news[i]['title_ko'] = news.get('title', '')
+                        all_news[i]['title_original'] = news.get('title', '')
+                
+                for i in range(5, len(all_news)):
+                    all_news[i]['title_ko'] = all_news[i].get('title', '')
+                    all_news[i]['title_original'] = all_news[i].get('title', '')
+                
+                translate_time = time.time() - translate_start
+                logging.info(f"번역 완료: {symbol} - {translated_count}개 번역 성공, {failed_count}개 실패 (소요 시간: {translate_time:.2f}초)")
+        else:
             for news in all_news:
-                provider = news.get('provider', '')
-                if provider in ['newsapi', 'alphavantage', 'yahoo', 'google']:
-                    translated = self.translate_news(news, translate_to_korean=True)
-                    translated_news.append(translated)
-                else:
-                    translated_news.append(news)
-            all_news = translated_news
+                news['title_ko'] = news.get('title', '')
+                news['title_original'] = news.get('title', '')
         
         all_news = sorted(all_news, key=lambda x: x.get('published_at', ''), reverse=True)
         
         self.cache[cache_key] = (all_news, datetime.now())
         
+        total_time = time.time() - start_time
+        logging.info(f"{symbol} 뉴스 수집 완료: {len(all_news)}개 (총 소요 시간: {total_time:.2f}초)")
         return all_news
     
     def get_multiple_stock_news(self, symbols: List[str], include_korean: bool = False) -> Dict[str, List[Dict]]:
@@ -425,20 +548,21 @@ class NewsCollector:
         
         if target_lang == 'ko' and self.hf_translator:
             try:
-                if len(text) > 500:
-                    chunks = [text[i:i+500] for i in range(0, len(text), 500)]
+                prefix = "E2K: "
+                if len(text) > 200:
+                    chunks = [text[i:i+200] for i in range(0, len(text), 200)]
                     translated_chunks = []
                     for chunk in chunks:
                         if self._is_korean_text(chunk):
                             translated_chunks.append(chunk)
                         else:
-                            result = self.hf_translator(chunk)
+                            result = self.hf_translator(prefix + chunk)
                             translated_chunks.append(result[0]['translation_text'])
                     return ' '.join(translated_chunks)
                 else:
                     if self._is_korean_text(text):
                         return text
-                    result = self.hf_translator(text)
+                    result = self.hf_translator(prefix + text)
                     return result[0]['translation_text']
             except Exception as e:
                 logging.warning(f"Hugging Face 번역 실패: {str(e)}")
@@ -471,49 +595,38 @@ class NewsCollector:
         return text
     
     def translate_news(self, news: Dict, translate_to_korean: bool = True) -> Dict:
-        if not translate_to_korean:
-            return news
-        
         translated_news = news.copy()
         
         title = news.get('title', '')
         description = news.get('description', '')
         
         if title:
-            try:
-                if self._is_korean_text(title):
-                    translated_news['title_ko'] = title
-                    translated_news['title_original'] = title
-                else:
-                    if self.hf_translator or self.translator:
-                        translated_title = self.translate_text(title, 'ko')
-                        translated_news['title_ko'] = translated_title if translated_title else title
-                        translated_news['title_original'] = title
-                    else:
-                        translated_news['title_ko'] = title
-                        translated_news['title_original'] = title
-            except Exception as e:
-                logging.warning(f"제목 번역 실패: {str(e)}")
+            translated_news['title_original'] = title
+            if self._is_korean_text(title):
                 translated_news['title_ko'] = title
-                translated_news['title_original'] = title
+            elif translate_to_korean and (self.hf_translator or self.translator):
+                try:
+                    translated_title = self.translate_text(title, 'ko')
+                    translated_news['title_ko'] = translated_title if translated_title and translated_title != title else title
+                except Exception as e:
+                    logging.warning(f"제목 번역 실패: {str(e)}")
+                    translated_news['title_ko'] = title
+            else:
+                translated_news['title_ko'] = title
         
         if description:
-            try:
-                if self._is_korean_text(description):
-                    translated_news['description_ko'] = description
-                    translated_news['description_original'] = description
-                else:
-                    if self.hf_translator or self.translator:
-                        translated_desc = self.translate_text(description, 'ko')
-                        translated_news['description_ko'] = translated_desc if translated_desc else description
-                        translated_news['description_original'] = description
-                    else:
-                        translated_news['description_ko'] = description
-                        translated_news['description_original'] = description
-            except Exception as e:
-                logging.warning(f"설명 번역 실패: {str(e)}")
+            translated_news['description_original'] = description
+            if self._is_korean_text(description):
                 translated_news['description_ko'] = description
-                translated_news['description_original'] = description
+            elif translate_to_korean and (self.hf_translator or self.translator):
+                try:
+                    translated_desc = self.translate_text(description, 'ko')
+                    translated_news['description_ko'] = translated_desc if translated_desc and translated_desc != description else description
+                except Exception as e:
+                    logging.warning(f"설명 번역 실패: {str(e)}")
+                    translated_news['description_ko'] = description
+            else:
+                translated_news['description_ko'] = description
         
         return translated_news
     

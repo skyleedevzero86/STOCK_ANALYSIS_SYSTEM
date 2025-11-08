@@ -10,7 +10,6 @@ import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.ResponseStatusException
 import reactor.core.publisher.Mono
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 import reactor.netty.channel.AbortedException
 
@@ -20,35 +19,24 @@ class WebFluxExceptionHandler(
     private val objectMapper: ObjectMapper
 ) : ErrorWebExceptionHandler {
 
-    private val logger = LoggerFactory.getLogger(WebFluxExceptionHandler::class.java)
-
     override fun handle(exchange: ServerWebExchange, ex: Throwable): Mono<Void> {
         val response = exchange.response
 
         val path = try {
             exchange.request.path.toString().takeIf { it.isNotBlank() } ?: exchange.request.uri.path
         } catch (e: Exception) {
-            logger.warn("요청에서 경로 추출 오류: ${e.message}")
-            exchange.request.uri?.path ?: "unknown"
+            exchange.request.uri?.path ?: "알 수 없음"
         }
 
         if (ex is AbortedException || ex.cause is AbortedException) {
-            logger.debug("연결 중단됨: path=$path (정상 종료 중일 가능성)")
             return Mono.empty()
         }
 
         if (response.isCommitted) {
-            logger.warn("응답이 이미 커밋됨: path=$path, 오류 응답을 보낼 수 없습니다")
             return Mono.empty()
         }
 
         val bufferFactory = response.bufferFactory()
-        
-        logger.error("전역 오류 핸들러가 예외를 처리함: path=$path", ex)
-        logger.error("예외 타입: ${ex.javaClass.name}, 메시지: ${ex.message}", ex)
-        if (ex.cause != null) {
-            logger.error("예외 원인: ${ex.cause?.javaClass?.name}, 메시지: ${ex.cause?.message}", ex.cause)
-        }
 
         val errorResponse = when (ex) {
             is ResponseStatusException -> {
@@ -56,7 +44,7 @@ class WebFluxExceptionHandler(
                     timestamp = LocalDateTime.now(),
                     status = ex.statusCode.value(),
                     error = ex.statusCode.toString(),
-                    message = ex.reason ?: ex.message ?: "Error occurred",
+                    message = ex.reason ?: ex.message ?: "오류가 발생했습니다",
                     path = path
                 )
             }
@@ -64,8 +52,8 @@ class WebFluxExceptionHandler(
                 ErrorResponse(
                     timestamp = LocalDateTime.now(),
                     status = 503,
-                    error = "External API Error",
-                    message = ex.message ?: "External service unavailable",
+                    error = "외부 API 오류",
+                    message = ex.message ?: "외부 서비스를 사용할 수 없습니다",
                     path = path
                 )
             }
@@ -73,8 +61,8 @@ class WebFluxExceptionHandler(
                 ErrorResponse(
                     timestamp = LocalDateTime.now(),
                     status = 500,
-                    error = "Data Processing Error",
-                    message = ex.message ?: "Error processing data",
+                    error = "데이터 처리 오류",
+                    message = ex.message ?: "데이터 처리 중 오류가 발생했습니다",
                     path = path
                 )
             }
@@ -82,8 +70,8 @@ class WebFluxExceptionHandler(
                 ErrorResponse(
                     timestamp = LocalDateTime.now(),
                     status = 400,
-                    error = "Invalid Symbol",
-                    message = ex.message ?: "Invalid stock symbol",
+                    error = "잘못된 심볼",
+                    message = ex.message ?: "유효하지 않은 주식 심볼입니다",
                     path = path
                 )
             }
@@ -91,8 +79,8 @@ class WebFluxExceptionHandler(
                 ErrorResponse(
                     timestamp = LocalDateTime.now(),
                     status = 404,
-                    error = "Stock Not Found",
-                    message = ex.message ?: "Stock not found",
+                    error = "주식을 찾을 수 없음",
+                    message = ex.message ?: "주식을 찾을 수 없습니다",
                     path = path
                 )
             }
@@ -100,8 +88,8 @@ class WebFluxExceptionHandler(
                 ErrorResponse(
                     timestamp = LocalDateTime.now(),
                     status = 500,
-                    error = "Internal Server Error",
-                    message = ex.message ?: ex.javaClass.simpleName ?: "An unexpected error occurred",
+                    error = "내부 서버 오류",
+                    message = ex.message ?: ex.javaClass.simpleName ?: "예상치 못한 오류가 발생했습니다",
                     path = path
                 )
             }
@@ -116,19 +104,15 @@ class WebFluxExceptionHandler(
             response.writeWith(Mono.just(buffer))
                 .onErrorResume { writeError ->
                     if (writeError is AbortedException || writeError.cause is AbortedException) {
-                        logger.debug("오류 응답 작성 중 연결 중단됨: path=$path")
                         Mono.empty()
                     } else {
-                        logger.error("오류 응답 작성 실패: path=$path", writeError)
                         Mono.empty()
                     }
                 }
         } catch (e: Exception) {
             if (e is AbortedException || e.cause is AbortedException) {
-                logger.debug("오류 처리 중 연결 중단됨: path=$path")
                 Mono.empty()
             } else {
-                logger.error("오류 응답 직렬화 실패: path=$path", e)
                 Mono.empty()
             }
         }

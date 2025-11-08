@@ -7,20 +7,46 @@ function updateCurrentSymbol(symbol) {
     loadNews(symbol, includeKorean);
 }
 
-function loadNews(symbol, includeKorean = false) {
+function loadNews(symbol, includeKorean = false, autoTranslate = true) {
     const newsContainer = document.getElementById('newsContainer');
     newsContainer.innerHTML = '<div class="loading">뉴스를 불러오는 중...</div>';
 
-    const url = `/api/news/${symbol}?includeKorean=${includeKorean}`;
+    const url = `/api/news/${symbol}?includeKorean=${includeKorean}&autoTranslate=${autoTranslate}`;
     
-    axios.get(url)
+    axios.get(url, {
+        timeout: 30000
+    })
         .then(response => {
             const news = response.data;
             displayNews(news);
         })
         .catch(error => {
             console.error('뉴스 로드 실패:', error);
-            newsContainer.innerHTML = '<div class="error">뉴스를 불러올 수 없습니다.</div>';
+            let errorMessage = '뉴스를 불러올 수 없습니다.';
+            
+            if (error.response) {
+                const status = error.response.status;
+                const data = error.response.data;
+                
+                if (status === 503) {
+                    errorMessage = data?.message || data?.detail || '서비스가 일시적으로 사용 불가능합니다. 잠시 후 다시 시도해주세요.';
+                } else if (status === 500) {
+                    errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+                } else if (status === 404) {
+                    errorMessage = '요청한 리소스를 찾을 수 없습니다.';
+                }
+            } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                errorMessage = '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+            } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
+                errorMessage = '네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.';
+            }
+            
+            newsContainer.innerHTML = `<div class="error">
+                <p>${errorMessage}</p>
+                <button onclick="loadNews('${symbol}', ${includeKorean})" style="margin-top: 10px; padding: 8px 16px; cursor: pointer;">
+                    다시 시도
+                </button>
+            </div>`;
         });
 }
 
@@ -42,16 +68,17 @@ function displayNews(news) {
         const title = (item.titleKo || item.title_ko || item.title || '').trim();
         const description = (item.descriptionKo || item.description_ko || item.description || '').trim();
         const url = item.url || '';
-        const shortId = createShortNewsId(url);
-        const detailUrl = `/news-detail?id=${encodeURIComponent(shortId)}`;
+        const shortId = url ? createShortNewsId(url) : '';
+        const detailUrl = shortId ? `/news-detail?id=${encodeURIComponent(shortId)}` : '#';
+        const titleLink = shortId ? 
+            `<a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${shortId}'); return false;">${title}</a>` :
+            `<span>${title}</span>`;
 
         return `
             <div class="news-item">
                 <div class="news-header">
                     <h4 class="news-title">
-                        <a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${shortId}'); return false;">
-                            ${title}
-                        </a>
+                        ${titleLink}
                     </h4>
                     <div class="news-badges">
                         ${providerBadge}
@@ -100,6 +127,11 @@ function stopNewsAutoRefresh() {
 }
 
 function openNewsDetail(shortId) {
+    if (!shortId || shortId.trim() === '') {
+        console.error('뉴스 ID가 제공되지 않았습니다.');
+        alert('뉴스 URL이 없어 상세 페이지를 열 수 없습니다.');
+        return;
+    }
     window.location.href = `/news-detail?id=${encodeURIComponent(shortId)}`;
 }
 

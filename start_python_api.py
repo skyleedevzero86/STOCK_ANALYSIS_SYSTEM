@@ -94,12 +94,13 @@ def start_python_api():
     print()
     
     try:
+        import platform
+        reload_flag = [] if platform.system() == 'Windows' else ["--reload"]
         api_process = subprocess.run([
             sys.executable, "-m", "uvicorn", "api_server:app",
             "--host", "0.0.0.0",
-            "--port", "9000",
-            "--reload"
-        ])
+            "--port", "9000"
+        ] + reload_flag)
     except KeyboardInterrupt:
         print("\n" + "-" * 60)
         print("서버가 종료되었습니다.")

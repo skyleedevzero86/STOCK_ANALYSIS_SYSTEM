@@ -13,69 +13,46 @@ class PythonApiClient(
     @Value("\${python.api.base-url:http://localhost:9000}")
     private val baseUrl: String
 ) {
-    private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
-
     private val webClient = WebClient.builder()
         .baseUrl(baseUrl)
         .build()
-    
-    init {
-        logger.debug("PythonApiClient 초기화 완료: baseUrl=$baseUrl")
-        logger.debug("Python API용 WebClient 설정 완료: $baseUrl")
-    }
 
     private val mapToStockData: (Map<*, *>) -> StockData = { data ->
         try {
-            logger.debug("Python API 응답에서 주식 데이터 매핑 중. Keys: ${data.keys}, Data: $data")
-            
             val symbol = (data["symbol"] as? String) ?: throw IllegalArgumentException("Missing or invalid symbol field: $data")
             
             val currentPrice = try {
                 val priceValue = (data["currentPrice"] as? Number) ?: (data["price"] as? Number)
                 if (priceValue == null) {
-                    logger.error("데이터에서 가격 필드가 누락되었거나 null입니다: $data")
                     throw IllegalArgumentException("Missing or invalid price field")
                 }
                 priceValue.toDouble()
             } catch (e: Exception) {
-                logger.error("데이터에서 가격 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid price data format: ${e.message}", e)
             }
             
             val volume = try {
                 val volumeValue = data["volume"]
-                logger.debug("거래량 값: $volumeValue (타입: ${volumeValue?.javaClass?.name})")
                 when (volumeValue) {
                     is Number -> volumeValue.toLong()
-                    null -> {
-                        logger.warn("거래량이 null입니다. 기본값 0L로 설정합니다")
-                        0L
-                    }
-                    else -> {
-                        logger.warn("거래량이 Number 타입이 아닙니다 (타입: ${volumeValue.javaClass.name}). 변환을 시도합니다")
-                        (volumeValue as? Number)?.toLong() ?: 0L
-                    }
+                    null -> 0L
+                    else -> (volumeValue as? Number)?.toLong() ?: 0L
                 }
             } catch (e: Exception) {
-                logger.error("데이터에서 거래량 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid volume data format: ${e.message}", e)
             }
             
             val changePercent = try {
                 val changePercentValue = (data["changePercent"] as? Number) ?: (data["change_percent"] as? Number)
                 if (changePercentValue == null) {
-                    logger.error("데이터에서 변동률 필드가 누락되었거나 null입니다: $data")
                     throw IllegalArgumentException("Missing or invalid changePercent field")
                 }
                 changePercentValue.toDouble()
             } catch (e: Exception) {
-                logger.error("데이터에서 변동률 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid changePercent data format: ${e.message}", e)
             }
             
             val confidenceScore = (data["confidenceScore"] as? Number ?: data["confidence_score"] as? Number)?.toDouble()
-            
-            logger.debug("주식 데이터 매핑 완료: symbol=$symbol, price=$currentPrice, volume=$volume, changePercent=$changePercent")
             
             StockData(
                 symbol = symbol,
@@ -86,8 +63,6 @@ class PythonApiClient(
                 confidenceScore = confidenceScore
             )
         } catch (e: Exception) {
-            logger.error("Python API 응답에서 주식 데이터 매핑 오류. Data: $data", e)
-            logger.error("예외 타입: ${e.javaClass.name}, 메시지: ${e.message}", e)
             if (e is com.sleekydz86.backend.global.exception.DataProcessingException) {
                 throw e
             }
@@ -99,14 +74,10 @@ class PythonApiClient(
     }
 
     val getRealtimeData: (String) -> Mono<StockData> = { symbol ->
-        val url = "$baseUrl/api/realtime/$symbol"
-        logger.debug("실시간 데이터 요청 중: symbol=$symbol, url=$url")
-        
         webClient.get()
             .uri("/api/realtime/{symbol}", symbol)
             .retrieve()
             .onStatus({ status -> status.is5xxServerError || status.is4xxClientError }, { response ->
-                logger.debug("Python API 서버 HTTP 오류: ${response.statusCode()} (symbol: $symbol, url: $url)")
                 response.bodyToMono(String::class.java)
                     .defaultIfEmpty("")
                     .flatMap { body ->
@@ -116,17 +87,11 @@ class PythonApiClient(
                     }
             })
             .bodyToMono(Map::class.java)
-            .doOnNext { data ->
-                logger.debug("Python API로부터 응답 수신: symbol=$symbol, Response keys: ${data.keys}")
-            }
             .flatMap { data ->
                 try {
-                    logger.debug("주식 데이터 파싱 중: symbol=$symbol")
                     val stockData = mapToStockData(data)
-                    logger.debug("주식 데이터 파싱 완료: symbol=$symbol")
                     Mono.just(stockData)
                 } catch (e: Exception) {
-                    logger.debug("주식 데이터 응답 파싱 오류: symbol=$symbol", e)
                     Mono.error(
                         when (e) {
                             is com.sleekydz86.backend.global.exception.DataProcessingException -> e
@@ -140,12 +105,10 @@ class PythonApiClient(
             }
             .timeout(java.time.Duration.ofSeconds(10))
             .onErrorResume { error ->
-                
                 when (error) {
                     is java.util.concurrent.TimeoutException,
                     is org.springframework.web.reactive.function.client.WebClientException,
                     is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbol: $symbol)")
                         Mono.just(
                             StockData(
                                 symbol = symbol,
@@ -158,7 +121,6 @@ class PythonApiClient(
                         )
                     }
                     else -> {
-                        logger.debug("Python API 오류 (더미 데이터 반환): $symbol - ${error.message}")
                         Mono.just(
                             StockData(
                                 symbol = symbol,
@@ -249,14 +211,10 @@ class PythonApiClient(
     }
 
     val getAnalysis: (String) -> Mono<TechnicalAnalysis> = { symbol ->
-        val url = "$baseUrl/api/analysis/$symbol"
-        logger.debug("분석 데이터 요청 중: symbol=$symbol, url=$url")
-        
         webClient.get()
             .uri("/api/analysis/{symbol}", symbol)
             .retrieve()
             .onStatus({ status -> status.is5xxServerError || status.is4xxClientError }, { response ->
-                logger.debug("Python API 서버 HTTP 오류: ${response.statusCode()} (symbol: $symbol, url: $url)")
                 response.bodyToMono(String::class.java)
                     .defaultIfEmpty("")
                     .flatMap { body ->
@@ -266,18 +224,13 @@ class PythonApiClient(
                     }
             })
             .bodyToMono(Map::class.java)
-            .doOnNext { data ->
-                logger.debug("Python API로부터 분석 응답 수신: symbol=$symbol, Response keys: ${data.keys}")
-            }
             .map(mapToTechnicalAnalysis)
             .timeout(java.time.Duration.ofSeconds(15))
             .onErrorResume { error ->
-                
                 when (error) {
                     is java.util.concurrent.TimeoutException,
                     is org.springframework.web.reactive.function.client.WebClientException,
                     is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbol: $symbol)")
                         Mono.just(
                             TechnicalAnalysis(
                                 symbol = symbol,
@@ -299,7 +252,6 @@ class PythonApiClient(
                         )
                     }
                     else -> {
-                        logger.debug("Python API 오류 (더미 데이터 반환): $symbol - ${error.message}")
                         Mono.just(
                             TechnicalAnalysis(
                                 symbol = symbol,
@@ -332,8 +284,6 @@ class PythonApiClient(
             .map(mapToTechnicalAnalysis)
             .timeout(java.time.Duration.ofSeconds(20))
             .onErrorResume { error ->
-                
-                logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl - getAllAnalysis")
                 Flux.empty()
             }
     }
@@ -371,8 +321,6 @@ class PythonApiClient(
             .map(mapToHistoricalData)
             .timeout(java.time.Duration.ofSeconds(15))
             .onErrorResume { error ->
-               
-                logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbol: $symbol, days: $days)")
                 Mono.just(
                     HistoricalData(
                         symbol = symbol,
@@ -391,8 +339,6 @@ class PythonApiClient(
             .map { data -> data["symbols"] as List<String> }
             .timeout(java.time.Duration.ofSeconds(10))
             .onErrorResume { error ->
-               
-                logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl - getSymbols")
                 Mono.just(listOf("AAPL", "GOOGL", "MSFT", "TSLA", "AMZN", "NVDA"))
             }
     }
@@ -412,7 +358,6 @@ class PythonApiClient(
                 response["success"] as? Boolean ?: false
             }
             .onErrorResume { error ->
-                logger.error("이메일 발송 실패: ${error.message}", error)
                 Mono.just(false)
             }
     }
@@ -431,7 +376,6 @@ class PythonApiClient(
                 response["success"] as? Boolean ?: false
             }
             .onErrorResume { error ->
-                logger.error("문자 발송 실패: ${error.message}", error)
                 Mono.just(false)
             }
     }
@@ -445,7 +389,6 @@ class PythonApiClient(
                 (response["fromPhone"] as? String) ?: ""
             }
             .onErrorResume { error ->
-                logger.error("발신번호 조회 실패: ${error.message}", error)
                 Mono.just("")
             }
     }
@@ -476,27 +419,33 @@ class PythonApiClient(
                     .build(symbol)
             }
             .retrieve()
+            .onStatus({ status -> status.is4xxClientError || status.is5xxServerError }, { response ->
+                response.bodyToMono(String::class.java)
+                    .defaultIfEmpty("")
+                    .flatMap { body ->
+                        val statusCode = response.statusCode().value()
+                        org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
+                            .warn("Python API error ($statusCode): $body for $symbol")
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류 ($statusCode): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
+                        ))
+                    }
+            })
             .bodyToFlux(Map::class.java)
             .map(mapToNews)
             .collectList()
-            .timeout(java.time.Duration.ofSeconds(15))
+            .timeout(java.time.Duration.ofSeconds(25))
             .onErrorResume { error ->
-                when (error) {
-                    is java.util.concurrent.TimeoutException,
-                    is org.springframework.web.reactive.function.client.WebClientException,
-                    is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbol: $symbol)")
-                        Mono.just(emptyList())
-                    }
-                    else -> {
-                        logger.debug("뉴스 조회 실패 (조용히 처리): $symbol - ${error.message}")
-                        Mono.just(emptyList())
-                    }
-                }
+                org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
+                    .warn("Error fetching news for $symbol: ${error.message}, returning empty list", error)
+                Mono.just(emptyList())
             }
     }
     
     fun getNewsByUrl(url: String): Mono<News> {
+        val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
+        logger.info("뉴스 상세 조회 요청: url={}", url.take(100))
+        
         return webClient.get()
             .uri { uriBuilder ->
                 uriBuilder.path("/api/news/detail")
@@ -505,28 +454,51 @@ class PythonApiClient(
             }
             .retrieve()
             .onStatus({ status -> status.is4xxClientError || status.is5xxServerError }, { response ->
-                logger.debug("Python API 서버 HTTP 오류: ${response.statusCode()} (url: $url)")
                 response.bodyToMono(String::class.java)
                     .defaultIfEmpty("")
                     .flatMap { body ->
-                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
-                            "Python API 서버 오류 (${response.statusCode()}): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
-                        ))
+                        val errorMsg = "Python API 서버 오류 (${response.statusCode()}): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
+                        logger.warn("Python API 오류 응답: status={}, body={}, url={}", response.statusCode(), body, url.take(100))
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(errorMsg))
                     }
             })
             .bodyToMono(Map::class.java)
             .map(mapToNews)
-            .timeout(java.time.Duration.ofSeconds(10))
-            .onErrorResume { error ->
+            .timeout(java.time.Duration.ofSeconds(20))
+            .doOnError { error ->
                 when (error) {
-                    is java.util.concurrent.TimeoutException,
-                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("뉴스 상세 조회 타임아웃: url={}, timeout=20초", url.take(100))
+                    }
                     is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (url: $url)")
-                        Mono.error(error)
+                        logger.warn("Python API 연결 실패: url={}, baseUrl={}", url.take(100), baseUrl)
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientException -> {
+                        logger.warn("WebClient 오류: url={}, error={}", url.take(100), error.message)
                     }
                     else -> {
-                        logger.debug("뉴스 상세 조회 실패 (조용히 처리): $url - ${error.message}")
+                        logger.warn("뉴스 상세 조회 오류: url={}, error={}", url.take(100), error.message)
+                    }
+                }
+            }
+            .onErrorResume { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 요청 시간 초과 (10초). 서버가 응답하지 않습니다.", error
+                        ))
+                    }
+                    is java.net.ConnectException -> {
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요. (baseUrl: $baseUrl)", error
+                        ))
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientException -> {
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 통신 오류: ${error.message}", error
+                        ))
+                    }
+                    else -> {
                         Mono.error(error)
                     }
                 }
@@ -552,11 +524,9 @@ class PythonApiClient(
                     is java.util.concurrent.TimeoutException,
                     is org.springframework.web.reactive.function.client.WebClientException,
                     is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (query: $query)")
                         Mono.just(emptyList())
                     }
                     else -> {
-                        logger.debug("뉴스 검색 실패 (조용히 처리): $query - ${error.message}")
                         Mono.just(emptyList())
                     }
                 }
@@ -585,11 +555,9 @@ class PythonApiClient(
                     is java.util.concurrent.TimeoutException,
                     is org.springframework.web.reactive.function.client.WebClientException,
                     is java.net.ConnectException -> {
-                        logger.debug("Python API 서버 연결 실패 (조용히 처리): $baseUrl (symbols: $symbolsParam)")
                         Mono.just(emptyMap())
                     }
                     else -> {
-                        logger.debug("다중 종목 뉴스 조회 실패 (조용히 처리): $symbolsParam - ${error.message}")
                         Mono.just(emptyMap())
                     }
                 }

@@ -78,7 +78,6 @@
             displayNewsDetail(news);
         })
         .catch(error => {
-            console.error('뉴스 상세 로드 실패:', error);
             let errorMessage = '뉴스 상세 정보를 불러올 수 없습니다.';
 
             if (error.response) {

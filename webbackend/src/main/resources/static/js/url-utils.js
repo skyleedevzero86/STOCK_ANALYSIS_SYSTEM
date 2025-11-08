@@ -33,11 +33,9 @@ function decodeUrlFromBase64(encoded) {
         const decoded = decodeURIComponent(escape(binaryString));
         return decoded;
     } catch (e) {
-        console.debug('Base64 decode error:', e);
         try {
             return decodeURIComponent(encoded);
         } catch (e2) {
-            console.error('URI decode error:', e2);
             return encoded;
         }
     }
@@ -62,7 +60,6 @@ function decodeShortNewsId(shortId) {
             return decoded;
         }
     } catch (e) {
-        console.debug('Base64 decode failed, trying URI decode:', e);
     }
     
     try {
@@ -71,7 +68,6 @@ function decodeShortNewsId(shortId) {
             return uriDecoded;
         }
     } catch (e2) {
-        console.error('URI decode failed:', e2);
     }
     
     return shortId;

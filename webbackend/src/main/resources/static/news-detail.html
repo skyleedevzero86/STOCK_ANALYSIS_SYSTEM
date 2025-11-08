@@ -12,39 +12,33 @@
     <header class="main-header">
       <div class="header-content">
         <div class="header-logo">
-          <a href="/" aria-label="홈으로 이동">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M8 20 Q8 12 12 8 Q16 12 16 20"
-                stroke="white"
-                stroke-width="2.5"
-                fill="none"
-                stroke-linecap="round"
-              />
-              <path
-                d="M10 20 L14 20"
-                stroke="white"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              />
-            </svg>
-          </a>
+          <a href="/" aria-label="홈으로 이동">실시간 주식 분석 시스템</a>
         </div>
-        <nav class="nav-menu">
-          <a href="/" class="nav-item">홈</a>
-          <a href="/email-subscription.html" class="nav-item">구독신청</a>
-          <a href="/admin-login.html" class="nav-item">로그인</a>
-        </nav>
         <div class="header-actions">
+          <nav class="nav-menu">
+            <a href="/" class="nav-item">홈</a>
+            <a href="/email-subscription.html" class="nav-item">구독신청</a>
+            <a href="/admin-login.html" class="nav-item">로그인</a>
+          </nav>
         </div>
       </div>
     </header>
 
-    <div class="news-detail-container">
-        <div id="newsDetailContent">
-            <div class="loading">뉴스를 불러오는 중...</div>
+    <main id="main-content" role="main">
+      <section class="content-section" aria-labelledby="news-detail-title">
+        <div class="container">
+          <div class="content-header">
+            <h2 id="news-detail-title" class="section-title">뉴스 상세보기</h2>
+          </div>
+
+          <div class="news-detail-container" style="background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <div id="newsDetailContent">
+              <div class="loading">뉴스를 불러오는 중...</div>
+            </div>
+          </div>
         </div>
-    </div>
+      </section>
+    </main>
 
     <footer class="main-footer">
       <div class="footer-content">

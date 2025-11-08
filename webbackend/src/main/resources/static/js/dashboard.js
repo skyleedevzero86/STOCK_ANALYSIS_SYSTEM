@@ -1024,7 +1024,356 @@ class StockDashboard {
 
 let dashboard;
 
+// Welcome Popup Functions
+function initializeWelcomePopup() {
+    // Check if popup should be shown
+    if (!shouldShowPopup()) {
+        return;
+    }
+    
+    const popup = document.getElementById('welcomePopup');
+    if (!popup) return;
+    
+    // Show popup after a short delay
+    setTimeout(() => {
+        popup.classList.add('show');
+    }, 500);
+    
+    // Initialize popup functionality
+    setupPopupNavigation();
+    setupPopupCharts();
+    setupPopupData();
+    setupPopupClose();
+    setupPopupCheckboxes();
+}
+
+function shouldShowPopup() {
+    // Check if user selected "다시 보지 않기"
+    if (localStorage.getItem('hideWelcomePopupForever') === 'true') {
+        return false;
+    }
+    
+    // Check if user selected "오늘 하루 보지 않기"
+    const hideToday = localStorage.getItem('hideWelcomePopupToday');
+    if (hideToday) {
+        const today = new Date().toDateString();
+        if (hideToday === today) {
+            return false;
+        } else {
+            // Clear expired "today" setting
+            localStorage.removeItem('hideWelcomePopupToday');
+        }
+    }
+    
+    return true;
+}
+
+function setupPopupNavigation() {
+    const slides = document.querySelectorAll('.popup-slide');
+    const dots = document.querySelectorAll('.pagination-dot');
+    const prevBtn = document.getElementById('popupPrev');
+    const nextBtn = document.getElementById('popupNext');
+    
+    let currentSlide = 0;
+    const totalSlides = slides.length;
+    
+    function showSlide(index) {
+        // Update slides
+        slides.forEach((slide, i) => {
+            slide.classList.toggle('active', i === index);
+        });
+        
+        // Update dots
+        dots.forEach((dot, i) => {
+            dot.classList.toggle('active', i === index);
+        });
+        
+        // Update navigation buttons
+        if (prevBtn) prevBtn.disabled = index === 0;
+        if (nextBtn) nextBtn.disabled = index === totalSlides - 1;
+        
+        currentSlide = index;
+    }
+    
+    // Previous button
+    if (prevBtn) {
+        prevBtn.addEventListener('click', () => {
+            if (currentSlide > 0) {
+                showSlide(currentSlide - 1);
+            }
+        });
+    }
+    
+    // Next button
+    if (nextBtn) {
+        nextBtn.addEventListener('click', () => {
+            if (currentSlide < totalSlides - 1) {
+                showSlide(currentSlide + 1);
+            }
+        });
+    }
+    
+    // Dot navigation
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', () => {
+            showSlide(index);
+        });
+    });
+    
+    // Initialize
+    showSlide(0);
+}
+
+function generateRandomChartData(count) {
+    const labels = Array.from({ length: count }, (_, i) => '');
+    const baseValue = 100;
+    const values = [];
+    let currentValue = baseValue;
+    
+    for (let i = 0; i < count; i++) {
+        currentValue += (Math.random() - 0.5) * 2;
+        values.push(Math.max(0, currentValue)); // Ensure non-negative values
+    }
+    
+    return { labels, values };
+}
+
+function createIndexChart(canvas) {
+    if (!canvas) return;
+    
+    canvas.style.width = '100%';
+    canvas.style.height = '40px';
+    canvas.width = canvas.offsetWidth || 200;
+    canvas.height = 40;
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    ctx.strokeStyle = '#e74c3c';
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.lineWidth = 2;
+    
+    const data = generateRandomChartData(20);
+    const max = Math.max(...data.values);
+    const min = Math.min(...data.values);
+    const range = max - min || 1;
+    
+    // Draw filled area
+    ctx.beginPath();
+    data.values.forEach((value, index) => {
+        const x = (index / (data.values.length - 1)) * width;
+        const y = height - ((value - min) / range) * height;
+        
+        if (index === 0) {
+            ctx.moveTo(x, height);
+            ctx.lineTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.lineTo(width, height);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw line
+    ctx.beginPath();
+    data.values.forEach((value, index) => {
+        const x = (index / (data.values.length - 1)) * width;
+        const y = height - ((value - min) / range) * height;
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+}
+
+function setupPopupCharts() {
+    // Create mini charts for index indicators
+    const chartIds = ['kospiChart', 'kosdaqChart', 'kospi200Chart', 'sp500Chart', 'dowChart', 'nasdaqChart'];
+    
+    chartIds.forEach(chartId => {
+        const canvas = document.getElementById(chartId);
+        if (canvas) {
+            createIndexChart(canvas);
+        }
+    });
+}
+
+function setupPopupData() {
+    // Setup sector bubbles for slide 2
+    setupPopupSectorBubbles();
+    
+    // Setup popular stocks for slide 3
+    setupPopupPopularStocks();
+}
+
+function setupPopupSectorBubbles() {
+    const bubbleChart = document.getElementById('popupSectorBubbles');
+    const stocksList = document.getElementById('popupSectorStocks');
+    
+    if (!bubbleChart || !stocksList) return;
+    
+    // Sample sector data
+    const sectors = [
+        { name: 'Technology', color: '#e74c3c', size: 100, stocks: [
+            { name: 'Apple (AAPL)', price: 175.50, change: 2.83, icon: '🍎' },
+            { name: 'Google (GOOGL)', price: 142.80, change: 1.25, icon: '🔵' }
+        ]},
+        { name: 'AI/ML', color: '#3498db', size: 80, stocks: [
+            { name: 'Microsoft (MSFT)', price: 378.90, change: 3.15, icon: '⚡' }
+        ]},
+        { name: 'Energy', color: '#2ecc71', size: 75, stocks: [
+            { name: 'Tesla (TSLA)', price: 245.20, change: 1.80, icon: '⛽' }
+        ]},
+        { name: 'Cloud', color: '#f39c12', size: 70, stocks: [
+            { name: 'Amazon (AMZN)', price: 145.30, change: 2.10, icon: '☁️' }
+        ]},
+        { name: 'Semiconductor', color: '#3498db', size: 65, stocks: [
+            { name: 'NVIDIA (NVDA)', price: 485.20, change: 1.50, icon: '💻' }
+        ]},
+        { name: 'Social Media', color: '#e91e63', size: 60, stocks: [
+            { name: 'Meta (META)', price: 312.40, change: 0.95, icon: '📱' }
+        ]}
+    ];
+    
+    // Create bubbles
+    sectors.forEach((sector, index) => {
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = sector.name;
+        bubble.style.width = `${sector.size}px`;
+        bubble.style.height = `${sector.size}px`;
+        bubble.style.backgroundColor = sector.color;
+        bubble.style.left = `${20 + (index % 3) * 30}%`;
+        bubble.style.top = `${20 + Math.floor(index / 3) * 35}%`;
+        bubble.style.transform = 'translate(-50%, -50%)';
+        bubble.style.cursor = 'pointer';
+        
+        bubble.addEventListener('click', () => {
+            displaySectorStocks(sector.stocks, stocksList);
+        });
+        
+        bubbleChart.appendChild(bubble);
+    });
+    
+    // Display first sector's stocks by default
+    if (sectors.length > 0) {
+        displaySectorStocks(sectors[0].stocks, stocksList);
+    }
+}
+
+function displaySectorStocks(stocks, container) {
+    if (!container) return;
+    
+    container.innerHTML = stocks.map(stock => `
+        <div class="sector-stock-item">
+            <div class="sector-stock-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                ${stock.icon}
+            </div>
+            <div class="sector-stock-name">${stock.name}</div>
+            <div class="sector-stock-price">$${stock.price.toFixed(2)}</div>
+            <div class="sector-stock-change ${stock.change >= 0 ? 'positive' : 'negative'}">
+                ${stock.change >= 0 ? '+' : ''}${stock.change.toFixed(2)}%
+            </div>
+        </div>
+    `).join('');
+}
+
+function setupPopupPopularStocks() {
+    const container = document.getElementById('popupPopularStocks');
+    if (!container) return;
+    
+    const popularStocks = [
+        { name: 'Apple (AAPL)', price: 175.50, change: 4.04, changePercent: 2.30, icon: 'AAPL' },
+        { name: 'Google (GOOGL)', price: 142.80, change: 2.57, changePercent: 1.80, icon: 'GOOGL' },
+        { name: 'Microsoft (MSFT)', price: 378.90, change: 9.47, changePercent: 2.50, icon: 'MSFT' },
+        { name: 'NVIDIA (NVDA)', price: 485.20, change: 15.05, changePercent: 3.20, icon: 'NVDA' },
+        { name: 'Meta (META)', price: 312.40, change: 5.94, changePercent: 1.90, icon: 'META' }
+    ];
+    
+    container.innerHTML = popularStocks.map(stock => `
+        <div class="popular-stock-item">
+            <div class="popular-stock-icon">${stock.icon.substring(0, 2)}</div>
+            <div class="popular-stock-info">
+                <div class="popular-stock-name">${stock.name}</div>
+                <div class="popular-stock-price">$${stock.price.toFixed(2)}</div>
+            </div>
+            <div class="popular-stock-change ${stock.change >= 0 ? 'positive' : 'negative'}">
+                ${stock.change >= 0 ? '+' : ''}$${stock.change.toFixed(2)} ${stock.changePercent >= 0 ? '+' : ''}${stock.changePercent.toFixed(2)}%
+            </div>
+            <div class="popular-stock-star">⭐</div>
+        </div>
+    `).join('');
+}
+
+function setupPopupClose() {
+    const closeBtn = document.getElementById('popupClose');
+    const popup = document.getElementById('welcomePopup');
+    
+    if (closeBtn && popup) {
+        closeBtn.addEventListener('click', () => {
+            closePopup();
+        });
+    }
+    
+    // Close on overlay click
+    if (popup) {
+        popup.addEventListener('click', (e) => {
+            if (e.target === popup) {
+                closePopup();
+            }
+        });
+    }
+}
+
+function closePopup() {
+    const popup = document.getElementById('welcomePopup');
+    if (popup) {
+        popup.classList.remove('show');
+        setTimeout(() => {
+            popup.style.display = 'none';
+        }, 300);
+    }
+}
+
+function setupPopupCheckboxes() {
+    const hideToday = document.getElementById('hideToday');
+    const hideForever = document.getElementById('hideForever');
+    
+    if (hideToday) {
+        hideToday.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                const today = new Date().toDateString();
+                localStorage.setItem('hideWelcomePopupToday', today);
+                if (hideForever) hideForever.checked = false;
+            } else {
+                localStorage.removeItem('hideWelcomePopupToday');
+            }
+        });
+    }
+    
+    if (hideForever) {
+        hideForever.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                localStorage.setItem('hideWelcomePopupForever', 'true');
+                if (hideToday) hideToday.checked = false;
+            } else {
+                localStorage.removeItem('hideWelcomePopupForever');
+            }
+        });
+    }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     dashboard = new StockDashboard();
     window.dashboard = dashboard;
+    
+    // Initialize welcome popup
+    initializeWelcomePopup();
 });

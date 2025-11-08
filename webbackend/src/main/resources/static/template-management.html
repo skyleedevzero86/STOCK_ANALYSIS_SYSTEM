@@ -12,55 +12,30 @@
     <header class="main-header">
       <div class="header-content">
         <div class="header-logo">
-          <a href="/" aria-label="홈으로 이동">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M8 20 Q8 12 12 8 Q16 12 16 20"
-                stroke="white"
-                stroke-width="2.5"
-                fill="none"
-                stroke-linecap="round"
-              />
-              <path
-                d="M10 20 L14 20"
-                stroke="white"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              />
-            </svg>
-          </a>
+          <a href="/" aria-label="홈으로 이동">실시간 주식 분석 시스템</a>
         </div>
-        <nav class="nav-menu">
-          <a href="/" class="nav-item">홈</a>
-          <a href="/template-management.html" class="nav-item active">템플릿보기</a>
-          <a href="/api-view.html" class="nav-item">API보기</a>
-          <a href="/admin-dashboard.html" class="nav-item">관리자대시보드</a>
-        </nav>
         <div class="header-actions">
+          <nav class="nav-menu">
+            <a href="/" class="nav-item">홈</a>
+            <a href="/template-management.html" class="nav-item active">템플릿보기</a>
+            <a href="/api-view.html" class="nav-item">API보기</a>
+            <a href="/admin-dashboard.html" class="nav-item">관리자대시보드</a>
+          </nav>
           <button class="icon-btn" onclick="logout()" title="로그아웃">로그아웃</button>
           <button id="symbolSelectBtn" class="icon-btn" title="종목 선택">종목선택</button>
         </div>
       </div>
     </header>
 
-<div class="container">
-    <div class="header">
-        <h1>AI 이메일 템플릿 관리</h1>
-    </div>
+    <main id="main-content" role="main">
+      <section class="content-section" aria-labelledby="template-title">
+        <div class="container">
+          <div class="content-header">
+            <h1 id="template-title" class="section-title">AI 이메일 템플릿 관리</h1>
+          </div>
 
-    <div class="navigation">
-        <a href="/" class="nav-link">메인</a>
-        <a href="/template-management.html" class="nav-link active">템플릿보기</a>
-        <a href="/api-view.html" class="nav-link">API보기</a>
-        <a href="/admin-dashboard.html" class="nav-link">관리자대시보드</a>
-        <button class="nav-link btn-logout-nav" onclick="logout()">로그아웃</button>
-        <button id="symbolSelectBtn" class="nav-link btn-nav">종목선택</button>
-    </div>
-
-<div class="template-container">
-
-    <div class="ai-email-section">
-        <h3>AI 분석 이메일 발송</h3>
+          <div class="ai-email-section" style="background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #2f456e; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #60bde6;">AI 분석 이메일 발송</h3>
         <div class="form-group">
             <label for="templateSelect">템플릿 선택</label>
             <select id="templateSelect" class="form-control">
@@ -92,8 +67,8 @@
         <div id="emailResult" class="result-area" style="display: none"></div>
     </div>
 
-    <div class="template-form">
-        <h3>새 템플릿 생성</h3>
+          <div class="template-form" style="background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #2f456e; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #60bde6;">새 템플릿 생성</h3>
         <form id="templateForm">
             <div class="form-group">
                 <label for="templateName">템플릿 이름</label>
@@ -146,13 +121,14 @@
         </form>
     </div>
 
-    <div class="template-list">
-        <h3>기존 템플릿</h3>
-        <div id="templateList">
+          <div class="template-list" style="background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #2f456e; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #60bde6;">기존 템플릿</h3>
+            <div id="templateList">
+            </div>
+          </div>
         </div>
-    </div>
-</div>
-</div>
+      </section>
+    </main>
 
 <footer class="main-footer">
   <div class="footer-content">

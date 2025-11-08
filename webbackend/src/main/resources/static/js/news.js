@@ -21,7 +21,6 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
             displayNews(news);
         })
         .catch(error => {
-            console.error('뉴스 로드 실패:', error);
             let errorMessage = '뉴스를 불러올 수 없습니다.';
             
             if (error.response) {
@@ -50,6 +49,13 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
         });
 }
 
+function stripHtmlTags(html) {
+    if (!html) return '';
+    const tmp = document.createElement('DIV');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+}
+
 function displayNews(news) {
     const newsContainer = document.getElementById('newsContainer');
     
@@ -58,7 +64,7 @@ function displayNews(news) {
         return;
     }
 
-    const newsHTML = news.map(item => {
+    const newsHTML = news.map((item, index) => {
         const publishedDate = item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('ko-KR') : '';
         const providerBadge = item.provider ? `<span class="news-provider">${item.provider}</span>` : '';
         const sentimentBadge = item.sentiment !== null && item.sentiment !== undefined 
@@ -66,16 +72,19 @@ function displayNews(news) {
             : '';
 
         const title = (item.titleKo || item.title_ko || item.title || '').trim();
-        const description = (item.descriptionKo || item.description_ko || item.description || '').trim();
+        const descriptionRaw = (item.descriptionKo || item.description_ko || item.description || '').trim();
+        const description = stripHtmlTags(descriptionRaw);
         const url = item.url || '';
-        const shortId = url ? createShortNewsId(url) : '';
+        const shortId = url ? (typeof createShortNewsId === 'function' ? createShortNewsId(url) : encodeURIComponent(url)) : '';
         const detailUrl = shortId ? `/news-detail?id=${encodeURIComponent(shortId)}` : '#';
         const titleLink = shortId ? 
-            `<a href="${detailUrl}" onclick="event.preventDefault(); openNewsDetail('${shortId}'); return false;">${title}</a>` :
+            `<a href="${detailUrl}" class="news-title-link" data-short-id="${shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}">${title}</a>` :
             `<span>${title}</span>`;
 
+        const dataShortIdAttr = shortId ? `data-short-id="${shortId.replace(/'/g, "&apos;").replace(/"/g, "&quot;")}"` : '';
+
         return `
-            <div class="news-item">
+            <div class="news-item" ${dataShortIdAttr}>
                 <div class="news-header">
                     <h4 class="news-title">
                         ${titleLink}
@@ -95,6 +104,31 @@ function displayNews(news) {
     }).join('');
 
     newsContainer.innerHTML = newsHTML;
+    
+    const newsItems = newsContainer.querySelectorAll('.news-item[data-short-id]');
+    newsItems.forEach(item => {
+        item.addEventListener('click', function(e) {
+            if (e.target.tagName === 'A' || e.target.closest('a') || e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+                return;
+            }
+            const shortId = this.getAttribute('data-short-id');
+            if (shortId && shortId.trim() !== '') {
+                openNewsDetail(shortId);
+            }
+        });
+    });
+    
+    const titleLinks = newsContainer.querySelectorAll('.news-title-link');
+    titleLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const shortId = this.getAttribute('data-short-id');
+            if (shortId && shortId.trim() !== '') {
+                openNewsDetail(shortId);
+            }
+        });
+    });
 }
 
 function getSentimentClass(sentiment) {
@@ -128,12 +162,12 @@ function stopNewsAutoRefresh() {
 
 function openNewsDetail(shortId) {
     if (!shortId || shortId.trim() === '') {
-        console.error('뉴스 ID가 제공되지 않았습니다.');
-        alert('뉴스 URL이 없어 상세 페이지를 열 수 없습니다.');
         return;
     }
     window.location.href = `/news-detail?id=${encodeURIComponent(shortId)}`;
 }
+
+window.openNewsDetail = openNewsDetail;
 
 document.addEventListener('DOMContentLoaded', function() {
     const includeKoreanCheckbox = document.getElementById('includeKoreanNews');

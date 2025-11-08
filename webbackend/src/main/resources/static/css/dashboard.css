@@ -468,6 +468,10 @@
   transition: all 0.3s ease;
 }
 
+.news-item[data-short-id]:not([data-short-id=""]) {
+  cursor: pointer;
+}
+
 .news-item:hover {
   background: #e8f4f8;
   transform: translateX(4px);

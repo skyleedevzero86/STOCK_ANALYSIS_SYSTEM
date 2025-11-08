@@ -12,60 +12,25 @@
     <header class="main-header">
       <div class="header-content">
         <div class="header-logo">
-          <a href="/" aria-label="홈으로 이동">
-            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M8 20 Q8 12 12 8 Q16 12 16 20"
-                stroke="white"
-                stroke-width="2.5"
-                fill="none"
-                stroke-linecap="round"
-              />
-              <path
-                d="M10 20 L14 20"
-                stroke="white"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              />
-            </svg>
-          </a>
+          <a href="/" aria-label="홈으로 이동">실시간 주식 분석 시스템</a>
         </div>
-        <nav class="nav-menu">
-          <a href="/" class="nav-item">홈</a>
-          <a href="/template-management.html" class="nav-item">템플릿보기</a>
-          <a href="/api-view.html" class="nav-item">API보기</a>
-          <a href="/admin-dashboard.html" class="nav-item">관리자대시보드</a>
-        </nav>
         <div class="header-actions">
+          <nav class="nav-menu">
+            <a href="/" class="nav-item">홈</a>
+            <a href="/template-management.html" class="nav-item">템플릿보기</a>
+            <a href="/api-view.html" class="nav-item">API보기</a>
+            <a href="/admin-dashboard.html" class="nav-item">관리자대시보드</a>
+          </nav>
           <button class="icon-btn" onclick="logout()" title="로그아웃">로그아웃</button>
         </div>
       </div>
     </header>
 
-    <div class="container">
-      <div class="header">
-        <h1>발송 이력</h1>
-        <p id="userEmailDisplay">발송 상세 이력</p>
-      </div>
-
-      <div class="navigation">
-        <a href="/" class="nav-link">메인</a>
-        <a href="/template-management.html" class="nav-link">템플릿보기</a>
-        <a href="/api-view.html" class="nav-link">API보기</a>
-        <a href="/admin-dashboard.html" class="nav-link">관리자대시보드</a>
-        <button class="nav-link btn-logout-nav" onclick="logout()">
-          로그아웃
-        </button>
-      </div>
-
-      <div class="admin-dashboard">
-        <div class="dashboard-header">
-          <h2 id="historyTitle">발송 이력</h2>
-        </div>
-
-        <div class="subscriptions-table">
-          <div class="table-header">
-            <h3>발송 이력</h3>
+    <main id="main-content" role="main">
+      <section class="content-section" aria-labelledby="history-title">
+        <div class="container">
+          <div class="content-header">
+            <h2 id="history-title" class="section-title">발송 이력</h2>
             <div style="display: flex; gap: 10px; align-items: center">
               <select
                 id="pageSizeSelect"
@@ -135,14 +100,17 @@
               </button>
             </div>
           </div>
-          <div class="table-content">
-            <div id="emailHistoryContent">
-              <div class="loading">데이터를 불러오는 중...</div>
+
+          <div class="subscriptions-table" style="background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+            <div class="table-content">
+              <div id="emailHistoryContent">
+                <div class="loading">데이터를 불러오는 중...</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
 
     <div
       id="sendEmailModal"

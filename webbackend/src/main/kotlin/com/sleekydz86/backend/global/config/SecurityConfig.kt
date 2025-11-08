@@ -67,6 +67,7 @@ class SecurityConfig(
                     .pathMatchers("/api/public/**").permitAll()
                     .pathMatchers("/ws/**").permitAll()
                     .pathMatchers("/actuator/health").permitAll()
+                    .pathMatchers("/swagger-ui.html", "/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
                     .pathMatchers("/api/stocks/**").permitAll()
                     .pathMatchers("/api/cqrs/stocks/**").permitAll()
                     .pathMatchers("/api/news/**").permitAll()

@@ -31,9 +31,9 @@ class DistributedCacheService(
                 val isMovedError = error.message?.contains("MOVED") == true || 
                                   error.cause?.message?.contains("MOVED") == true
                 if (isMovedError) {
-                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)")
+                    logger.debug("Redis 클러스터 MOVED 응답: key=$key (자동 처리됨)")
                 } else {
-                    logger.warn("Redis get operation failed for key: $key, falling back to null", error)
+                    logger.warn("Redis get 작업 실패: key=$key, null로 대체합니다", error)
                 }
                 Mono.empty()
             }
@@ -48,10 +48,10 @@ class DistributedCacheService(
                 val isMovedError = error.message?.contains("MOVED") == true || 
                                   error.cause?.message?.contains("MOVED") == true
                 if (isMovedError) {
-                    logger.debug("Redis cluster MOVED response for key: $key (handled automatically)")
+                    logger.debug("Redis 클러스터 MOVED 응답: key=$key (자동 처리됨)")
                     Mono.just(false)
                 } else {
-                    logger.warn("Redis set operation failed for key: $key, continuing without cache", error)
+                    logger.warn("Redis set 작업 실패: key=$key, 캐시 없이 계속 진행합니다", error)
                     Mono.just(false)
                 }
             }
@@ -62,7 +62,7 @@ class DistributedCacheService(
             redisTemplate.opsForValue().setIfAbsent(key, value as Any, ttl.toMillis(), TimeUnit.MILLISECONDS) ?: false
         }
             .onErrorResume { error ->
-                logger.warn("Redis setIfAbsent operation failed for key: $key", error)
+                logger.warn("Redis setIfAbsent 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }
@@ -72,7 +72,7 @@ class DistributedCacheService(
             redisTemplate.delete(key)
         }
             .onErrorResume { error ->
-                logger.warn("Redis delete operation failed for key: $key", error)
+                logger.warn("Redis delete 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }
@@ -87,7 +87,7 @@ class DistributedCacheService(
             }
         }
             .onErrorResume { error ->
-                logger.warn("Redis deletePattern operation failed for pattern: $pattern", error)
+                logger.warn("Redis deletePattern 작업 실패: pattern=$pattern", error)
                 Mono.just(0L)
             }
     }
@@ -97,7 +97,7 @@ class DistributedCacheService(
             redisTemplate.hasKey(key)
         }
             .onErrorResume { error ->
-                logger.warn("Redis exists operation failed for key: $key", error)
+                logger.warn("Redis exists 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }
@@ -107,7 +107,7 @@ class DistributedCacheService(
             redisTemplate.expire(key, ttl.toMillis(), TimeUnit.MILLISECONDS)
         }
             .onErrorResume { error ->
-                logger.warn("Redis expire operation failed for key: $key", error)
+                logger.warn("Redis expire 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }
@@ -122,7 +122,7 @@ class DistributedCacheService(
                     }
             )
             .onErrorResume { error ->
-                logger.warn("Redis getOrSet operation failed for key: $key, falling back to supplier", error)
+                logger.warn("Redis getOrSet 작업 실패: key=$key, supplier로 대체합니다", error)
                 supplier()
             }
     }
@@ -151,7 +151,7 @@ class DistributedCacheService(
                 }
             }
             .onErrorResume { error ->
-                logger.warn("Redis getOrSetFlux operation failed for key: $key, falling back to supplier", error)
+                logger.warn("Redis getOrSetFlux 작업 실패: key=$key, supplier로 대체합니다", error)
                 supplier()
             }
     }
@@ -161,7 +161,7 @@ class DistributedCacheService(
             redisTemplate.opsForValue().increment(key, delta) ?: 0L
         }
             .onErrorResume { error ->
-                logger.warn("Redis increment operation failed for key: $key", error)
+                logger.warn("Redis increment 작업 실패: key=$key", error)
                 Mono.just(0L)
             }
     }
@@ -171,7 +171,7 @@ class DistributedCacheService(
             redisTemplate.opsForValue().increment(key, -delta) ?: 0L
         }
             .onErrorResume { error ->
-                logger.warn("Redis decrement operation failed for key: $key", error)
+                logger.warn("Redis decrement 작업 실패: key=$key", error)
                 Mono.just(0L)
             }
     }
@@ -188,7 +188,7 @@ class DistributedCacheService(
                 }
             }
             .onErrorResume { error ->
-                logger.warn("Redis hashGet operation failed for hashKey: $hashKey, field: $field", error)
+                logger.warn("Redis hashGet 작업 실패: hashKey=$hashKey, field=$field", error)
                 Mono.empty()
             }
     }
@@ -200,7 +200,7 @@ class DistributedCacheService(
             true
         }
             .onErrorResume { error ->
-                logger.warn("Redis hashSet operation failed for hashKey: $hashKey", error)
+                logger.warn("Redis hashSet 작업 실패: hashKey=$hashKey", error)
                 Mono.just(false)
             }
     }
@@ -211,7 +211,7 @@ class DistributedCacheService(
             true
         }
             .onErrorResume { error ->
-                logger.warn("Redis hashDelete operation failed for hashKey: $hashKey", error)
+                logger.warn("Redis hashDelete 작업 실패: hashKey=$hashKey", error)
                 Mono.just(false)
             }
     }
@@ -223,7 +223,7 @@ class DistributedCacheService(
             result ?: 0L
         }
             .onErrorResume { error ->
-                logger.warn("Redis listPush operation failed for key: $key", error)
+                logger.warn("Redis listPush 작업 실패: key=$key", error)
                 Mono.just(0L)
             }
     }
@@ -240,7 +240,7 @@ class DistributedCacheService(
                 }
             }
             .onErrorResume { error ->
-                logger.warn("Redis listPop operation failed for key: $key", error)
+                logger.warn("Redis listPop 작업 실패: key=$key", error)
                 Mono.empty()
             }
     }
@@ -253,7 +253,7 @@ class DistributedCacheService(
                 Flux.fromIterable(values.map { objectMapper.convertValue(it, type) })
             }
             .onErrorResume { error ->
-                logger.warn("Redis listRange operation failed for key: $key", error)
+                logger.warn("Redis listRange 작업 실패: key=$key", error)
                 Flux.empty()
             }
     }
@@ -265,7 +265,7 @@ class DistributedCacheService(
             (result ?: 0L) > 0
         }
             .onErrorResume { error ->
-                logger.warn("Redis setAdd operation failed for key: $key", error)
+                logger.warn("Redis setAdd 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }
@@ -278,7 +278,7 @@ class DistributedCacheService(
                 Flux.fromIterable(members ?: emptySet())
             }
             .onErrorResume { error ->
-                logger.warn("Redis setMembers operation failed for key: $key", error)
+                logger.warn("Redis setMembers 작업 실패: key=$key", error)
                 Flux.empty()
             }
     }
@@ -289,7 +289,7 @@ class DistributedCacheService(
             (result ?: 0L) > 0
         }
             .onErrorResume { error ->
-                logger.warn("Redis setRemove operation failed for key: $key", error)
+                logger.warn("Redis setRemove 작업 실패: key=$key", error)
                 Mono.just(false)
             }
     }

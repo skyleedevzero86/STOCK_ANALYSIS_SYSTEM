@@ -47,7 +47,7 @@ class RedisClusterConfig {
     fun redisConnectionFactory(): RedisConnectionFactory {
         return try {
             val factory = if (clusterEnabled) {
-                logger.info("Initializing Redis cluster mode with nodes: $clusterNodes")
+                logger.info("Redis 클러스터 모드 초기화 중: nodes=$clusterNodes")
                 val nodes = clusterNodes.split(",").map { it.trim() }
                 val clusterConfig = RedisClusterConfiguration(nodes)
                 clusterConfig.setMaxRedirects(maxRedirects)
@@ -75,22 +75,22 @@ class RedisClusterConfig {
                 
                 LettuceConnectionFactory(clusterConfig, clientConfig)
             } else {
-                logger.info("Initializing Redis standalone mode with host: $redisHost, port: $redisPort")
+                logger.info("Redis 단일 모드 초기화 중: host=$redisHost, port=$redisPort")
                 val standaloneConfig = RedisStandaloneConfiguration(redisHost, redisPort)
                 LettuceConnectionFactory(standaloneConfig)
             }
             
             factory.afterPropertiesSet()
-            logger.info("Redis connection factory initialized successfully")
+            logger.info("Redis 연결 팩토리 초기화 완료")
             factory
         } catch (e: Exception) {
-            logger.warn("Redis connection factory initialization failed, but continuing without Redis: ${e.message}", e)
+            logger.warn("Redis 연결 팩토리 초기화 실패, Redis 없이 계속 진행합니다: ${e.message}", e)
 
             try {
                 val fallbackConfig = RedisStandaloneConfiguration("localhost", 7000)
                 LettuceConnectionFactory(fallbackConfig)
             } catch (ex: Exception) {
-                logger.error("Redis fallback initialization also failed", ex)
+                logger.error("Redis 대체 초기화도 실패했습니다", ex)
                 throw ex
             }
         }
@@ -106,9 +106,9 @@ class RedisClusterConfig {
         template.hashValueSerializer = GenericJackson2JsonRedisSerializer()
         try {
             template.afterPropertiesSet()
-            logger.info("Redis template initialized successfully")
+            logger.info("Redis 템플릿 초기화 완료")
         } catch (e: Exception) {
-            logger.warn("Redis template initialization failed, but continuing without Redis: ${e.message}", e)
+            logger.warn("Redis 템플릿 초기화 실패, Redis 없이 계속 진행합니다: ${e.message}", e)
         }
         return template
     }

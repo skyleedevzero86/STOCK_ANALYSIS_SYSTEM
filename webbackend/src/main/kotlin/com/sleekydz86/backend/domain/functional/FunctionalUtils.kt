@@ -40,7 +40,7 @@ fun <T> Flux<T>.withLogging(
 ): Flux<T> = this.doOnNext {
     println("$logPrefix: $it")
 }.doOnError {
-    println("$logPrefix Error: ${it.message}")
+    println("$logPrefix 오류: ${it.message}")
 }
 
 fun <T> Mono<T>.withLogging(
@@ -48,5 +48,5 @@ fun <T> Mono<T>.withLogging(
 ): Mono<T> = this.doOnNext {
     println("$logPrefix: $it")
 }.doOnError {
-    println("$logPrefix Error: ${it.message}")
+    println("$logPrefix 오류: ${it.message}")
 }

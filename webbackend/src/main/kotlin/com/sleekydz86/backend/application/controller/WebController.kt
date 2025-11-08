@@ -54,7 +54,7 @@ class WebController {
             val resource = ClassPathResource("$staticResourcePath$filename")
             
             if (!resource.exists()) {
-                logger.warn("File not found: $staticResourcePath$filename")
+                logger.warn("파일을 찾을 수 없습니다: $staticResourcePath$filename")
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
                     .body(fallbackHtml)
@@ -62,12 +62,12 @@ class WebController {
 
             val content = resource.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             
-            logger.debug("Successfully loaded file: $filename")
+            logger.debug("파일 로드 완료: $filename")
             ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE + "; charset=UTF-8")
                 .body(content)
         } catch (e: Exception) {
-            logger.error("Error loading file: $staticResourcePath$filename", e)
+            logger.error("파일 로드 오류: $staticResourcePath$filename", e)
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
                 .body(fallbackHtml)

@@ -28,26 +28,26 @@ class WebFluxExceptionHandler(
         val path = try {
             exchange.request.path.toString().takeIf { it.isNotBlank() } ?: exchange.request.uri.path
         } catch (e: Exception) {
-            logger.warn("Error extracting path from request: ${e.message}")
+            logger.warn("요청에서 경로 추출 오류: ${e.message}")
             exchange.request.uri?.path ?: "unknown"
         }
 
         if (ex is AbortedException || ex.cause is AbortedException) {
-            logger.debug("Connection aborted for path: $path (likely during graceful shutdown)")
+            logger.debug("연결 중단됨: path=$path (정상 종료 중일 가능성)")
             return Mono.empty()
         }
 
         if (response.isCommitted) {
-            logger.warn("Response already committed for path: $path, cannot send error response")
+            logger.warn("응답이 이미 커밋됨: path=$path, 오류 응답을 보낼 수 없습니다")
             return Mono.empty()
         }
 
         val bufferFactory = response.bufferFactory()
         
-        logger.error("Global error handler caught exception for path: $path", ex)
-        logger.error("Exception type: ${ex.javaClass.name}, message: ${ex.message}", ex)
+        logger.error("전역 오류 핸들러가 예외를 처리함: path=$path", ex)
+        logger.error("예외 타입: ${ex.javaClass.name}, 메시지: ${ex.message}", ex)
         if (ex.cause != null) {
-            logger.error("Exception cause: ${ex.cause?.javaClass?.name}, message: ${ex.cause?.message}", ex.cause)
+            logger.error("예외 원인: ${ex.cause?.javaClass?.name}, 메시지: ${ex.cause?.message}", ex.cause)
         }
 
         val errorResponse = when (ex) {
@@ -116,19 +116,19 @@ class WebFluxExceptionHandler(
             response.writeWith(Mono.just(buffer))
                 .onErrorResume { writeError ->
                     if (writeError is AbortedException || writeError.cause is AbortedException) {
-                        logger.debug("Connection aborted while writing error response for path: $path")
+                        logger.debug("오류 응답 작성 중 연결 중단됨: path=$path")
                         Mono.empty()
                     } else {
-                        logger.error("Error writing error response for path: $path", writeError)
+                        logger.error("오류 응답 작성 실패: path=$path", writeError)
                         Mono.empty()
                     }
                 }
         } catch (e: Exception) {
             if (e is AbortedException || e.cause is AbortedException) {
-                logger.debug("Connection aborted while handling error for path: $path")
+                logger.debug("오류 처리 중 연결 중단됨: path=$path")
                 Mono.empty()
             } else {
-                logger.error("Error serializing error response for path: $path", e)
+                logger.error("오류 응답 직렬화 실패: path=$path", e)
                 Mono.empty()
             }
         }

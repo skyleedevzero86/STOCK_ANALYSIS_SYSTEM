@@ -20,62 +20,62 @@ class PythonApiClient(
         .build()
     
     init {
-        logger.debug("PythonApiClient initialized with baseUrl: $baseUrl")
-        logger.debug("WebClient configured for Python API at: $baseUrl")
+        logger.debug("PythonApiClient 초기화 완료: baseUrl=$baseUrl")
+        logger.debug("Python API용 WebClient 설정 완료: $baseUrl")
     }
 
     private val mapToStockData: (Map<*, *>) -> StockData = { data ->
         try {
-            logger.debug("Mapping stock data from Python API response. Keys: ${data.keys}, Data: $data")
+            logger.debug("Python API 응답에서 주식 데이터 매핑 중. Keys: ${data.keys}, Data: $data")
             
             val symbol = (data["symbol"] as? String) ?: throw IllegalArgumentException("Missing or invalid symbol field: $data")
             
             val currentPrice = try {
                 val priceValue = (data["currentPrice"] as? Number) ?: (data["price"] as? Number)
                 if (priceValue == null) {
-                    logger.error("Price field missing or null in data: $data")
+                    logger.error("데이터에서 가격 필드가 누락되었거나 null입니다: $data")
                     throw IllegalArgumentException("Missing or invalid price field")
                 }
                 priceValue.toDouble()
             } catch (e: Exception) {
-                logger.error("Error parsing price from data: $data", e)
+                logger.error("데이터에서 가격 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid price data format: ${e.message}", e)
             }
             
             val volume = try {
                 val volumeValue = data["volume"]
-                logger.debug("Volume value: $volumeValue (type: ${volumeValue?.javaClass?.name})")
+                logger.debug("거래량 값: $volumeValue (타입: ${volumeValue?.javaClass?.name})")
                 when (volumeValue) {
                     is Number -> volumeValue.toLong()
                     null -> {
-                        logger.warn("Volume is null, defaulting to 0L")
+                        logger.warn("거래량이 null입니다. 기본값 0L로 설정합니다")
                         0L
                     }
                     else -> {
-                        logger.warn("Volume is not a Number (type: ${volumeValue.javaClass.name}), attempting conversion")
+                        logger.warn("거래량이 Number 타입이 아닙니다 (타입: ${volumeValue.javaClass.name}). 변환을 시도합니다")
                         (volumeValue as? Number)?.toLong() ?: 0L
                     }
                 }
             } catch (e: Exception) {
-                logger.error("Error parsing volume from data: $data", e)
+                logger.error("데이터에서 거래량 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid volume data format: ${e.message}", e)
             }
             
             val changePercent = try {
                 val changePercentValue = (data["changePercent"] as? Number) ?: (data["change_percent"] as? Number)
                 if (changePercentValue == null) {
-                    logger.error("ChangePercent field missing or null in data: $data")
+                    logger.error("데이터에서 변동률 필드가 누락되었거나 null입니다: $data")
                     throw IllegalArgumentException("Missing or invalid changePercent field")
                 }
                 changePercentValue.toDouble()
             } catch (e: Exception) {
-                logger.error("Error parsing changePercent from data: $data", e)
+                logger.error("데이터에서 변동률 파싱 오류: $data", e)
                 throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid changePercent data format: ${e.message}", e)
             }
             
             val confidenceScore = (data["confidenceScore"] as? Number ?: data["confidence_score"] as? Number)?.toDouble()
             
-            logger.debug("Successfully mapped stock data: symbol=$symbol, price=$currentPrice, volume=$volume, changePercent=$changePercent")
+            logger.debug("주식 데이터 매핑 완료: symbol=$symbol, price=$currentPrice, volume=$volume, changePercent=$changePercent")
             
             StockData(
                 symbol = symbol,
@@ -86,8 +86,8 @@ class PythonApiClient(
                 confidenceScore = confidenceScore
             )
         } catch (e: Exception) {
-            logger.error("Error mapping stock data from Python API response. Data: $data", e)
-            logger.error("Exception type: ${e.javaClass.name}, message: ${e.message}", e)
+            logger.error("Python API 응답에서 주식 데이터 매핑 오류. Data: $data", e)
+            logger.error("예외 타입: ${e.javaClass.name}, 메시지: ${e.message}", e)
             if (e is com.sleekydz86.backend.global.exception.DataProcessingException) {
                 throw e
             }
@@ -100,7 +100,7 @@ class PythonApiClient(
 
     val getRealtimeData: (String) -> Mono<StockData> = { symbol ->
         val url = "$baseUrl/api/realtime/$symbol"
-        logger.debug("Requesting realtime data for symbol: $symbol from $url")
+        logger.debug("실시간 데이터 요청 중: symbol=$symbol, url=$url")
         
         webClient.get()
             .uri("/api/realtime/{symbol}", symbol)
@@ -117,16 +117,16 @@ class PythonApiClient(
             })
             .bodyToMono(Map::class.java)
             .doOnNext { data ->
-                logger.debug("Received response from Python API for symbol $symbol. Response keys: ${data.keys}")
+                logger.debug("Python API로부터 응답 수신: symbol=$symbol, Response keys: ${data.keys}")
             }
             .flatMap { data ->
                 try {
-                    logger.debug("Parsing stock data for symbol: $symbol")
+                    logger.debug("주식 데이터 파싱 중: symbol=$symbol")
                     val stockData = mapToStockData(data)
-                    logger.debug("Successfully parsed stock data for symbol: $symbol")
+                    logger.debug("주식 데이터 파싱 완료: symbol=$symbol")
                     Mono.just(stockData)
                 } catch (e: Exception) {
-                    logger.debug("Error parsing stock data response for symbol: $symbol", e)
+                    logger.debug("주식 데이터 응답 파싱 오류: symbol=$symbol", e)
                     Mono.error(
                         when (e) {
                             is com.sleekydz86.backend.global.exception.DataProcessingException -> e
@@ -250,7 +250,7 @@ class PythonApiClient(
 
     val getAnalysis: (String) -> Mono<TechnicalAnalysis> = { symbol ->
         val url = "$baseUrl/api/analysis/$symbol"
-        logger.debug("Requesting analysis data for symbol: $symbol from $url")
+        logger.debug("분석 데이터 요청 중: symbol=$symbol, url=$url")
         
         webClient.get()
             .uri("/api/analysis/{symbol}", symbol)
@@ -267,7 +267,7 @@ class PythonApiClient(
             })
             .bodyToMono(Map::class.java)
             .doOnNext { data ->
-                logger.debug("Received analysis response from Python API for symbol $symbol. Response keys: ${data.keys}")
+                logger.debug("Python API로부터 분석 응답 수신: symbol=$symbol, Response keys: ${data.keys}")
             }
             .map(mapToTechnicalAnalysis)
             .timeout(java.time.Duration.ofSeconds(15))

@@ -50,14 +50,14 @@ class StockHandler(
         val symbol = try {
             request.pathVariable("symbol")
         } catch (e: Exception) {
-            logger.error("Exception extracting symbol from path", e)
+            logger.error("경로에서 심볼 추출 예외 발생", e)
             return ReactiveExceptionHandler.handleInvalidSymbol(
                 request, 
                 InvalidSymbolException("Invalid path parameter")
             )
         }
         
-        logger.debug("Getting realtime data for symbol: $symbol")
+        logger.debug("실시간 데이터 조회 중: symbol=$symbol")
         
         if (symbol.isBlank() || !symbol.matches(Regex("[A-Z]{1,5}"))) {
             return ReactiveExceptionHandler.handleInvalidSymbol(
@@ -68,13 +68,13 @@ class StockHandler(
 
         return stockAnalysisService.getRealtimeStockData(symbol)
             .flatMap { data ->
-                logger.debug("Successfully retrieved data for symbol: $symbol")
+                logger.debug("데이터 조회 완료: symbol=$symbol")
                 ServerResponse.ok().bodyValue(data)
             }
             .timeout(Duration.ofSeconds(15))
             .onErrorResume { error ->
                 
-                logger.debug("Error getting realtime data for symbol: $symbol - ${error.message}")
+                logger.debug("실시간 데이터 조회 오류: symbol=$symbol - ${error.message}")
                 when (error) {
                     is StockNotFoundException -> {
                         ReactiveExceptionHandler.handleStockNotFound(request, error)
@@ -99,11 +99,11 @@ class StockHandler(
                         )
                     }
                     is DataProcessingException -> {
-                        logger.debug("DataProcessingException for symbol: $symbol", error)
+                        logger.debug("데이터 처리 예외 발생: symbol=$symbol", error)
                         ReactiveExceptionHandler.handleDataProcessingError(request, error)
                     }
                     else -> {
-                        logger.debug("Unexpected error type: ${error.javaClass.name}, message: ${error.message}")
+                        logger.debug("예상치 못한 오류 타입: ${error.javaClass.name}, 메시지: ${error.message}")
                         ReactiveExceptionHandler.handleGenericError(request, error)
                     }
                 }

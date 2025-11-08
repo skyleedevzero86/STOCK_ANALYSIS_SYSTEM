@@ -28,13 +28,13 @@ class RedisClusterMonitor(
 
                     redisClusterHealthIndicator.updateClusterInfo(healthInfo)
                         .onErrorResume { error ->
-                            logger.warn("Redis cluster health monitoring failed, continuing without cache", error)
+                            logger.warn("Redis 클러스터 상태 모니터링 실패, 캐시 없이 계속 진행합니다", error)
                             Mono.just(false)
                         }
                         .subscribe()
                 }
         } catch (e: Exception) {
-            logger.warn("Error in cluster health monitoring: ${e.message}", e)
+            logger.warn("클러스터 상태 모니터링 오류: ${e.message}", e)
         }
     }
 
@@ -55,12 +55,12 @@ class RedisClusterMonitor(
                         .then(Mono.just(updatedMetrics))
                 }
                 .onErrorResume { error ->
-                    logger.warn("Cache metrics monitoring failed, continuing without cache", error)
+                    logger.warn("캐시 메트릭 모니터링 실패, 캐시 없이 계속 진행합니다", error)
                     Mono.just(mutableMapOf<String, Any>())
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("Error in cache metrics monitoring: ${e.message}", e)
+            logger.warn("캐시 메트릭 모니터링 오류: ${e.message}", e)
         }
     }
 
@@ -69,12 +69,12 @@ class RedisClusterMonitor(
         try {
             cacheManager.optimizeCache()
                 .onErrorResume { error ->
-                    logger.warn("Cache optimization failed, continuing without cache", error)
+                    logger.warn("캐시 최적화 실패, 캐시 없이 계속 진행합니다", error)
                     Mono.just(false)
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("Error in cache optimization: ${e.message}", e)
+            logger.warn("캐시 최적화 오류: ${e.message}", e)
         }
     }
 
@@ -83,12 +83,12 @@ class RedisClusterMonitor(
         try {
             cacheManager.clearExpiredCache()
                 .onErrorResume { error ->
-                    logger.warn("Cache cleanup failed, continuing without cache", error)
+                    logger.warn("캐시 정리 실패, 캐시 없이 계속 진행합니다", error)
                     Mono.just(0L)
                 }
                 .subscribe()
         } catch (e: Exception) {
-            logger.warn("Error in cache cleanup: ${e.message}", e)
+            logger.warn("캐시 정리 오류: ${e.message}", e)
         }
     }
 

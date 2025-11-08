@@ -22,10 +22,10 @@ class StockWebSocketHandler(
     private val logger = LoggerFactory.getLogger(StockWebSocketHandler::class.java)
 
     override fun handle(session: WebSocketSession): Mono<Void> {
-        logger.info("WebSocket connection attempt from session: ${session.id}")
+        logger.info("WebSocket 연결 시도: session=${session.id}")
         
         return Mono.defer {
-            logger.debug("Starting WebSocket handler for session: ${session.id}")
+            logger.debug("WebSocket 핸들러 시작: session=${session.id}")
 
             val welcomeMessage = createWelcomeMessage()
 
@@ -35,18 +35,18 @@ class StockWebSocketHandler(
                         try {
                             analysis.toJsonMessage()
                         } catch (e: Exception) {
-                            logger.error("Failed to serialize analysis data for session ${session.id}", e)
+                            logger.error("분석 데이터 직렬화 실패: session=${session.id}", e)
                             createErrorMessage("Serialization error: ${e.message ?: "Unknown error"}")
                         }
                     }
                     .onErrorResume { error ->
-                        logger.error("Error in stock analysis stream for session ${session.id}", error)
+                        logger.error("주식 분석 스트림 오류: session=${session.id}", error)
 
                         Flux.interval(Duration.ofSeconds(5))
                             .map { createErrorMessage("Analysis stream error: ${error.message ?: error.javaClass.simpleName}") }
                     }
             } catch (e: Exception) {
-                logger.error("Failed to create analysis stream for session ${session.id}", e)
+                logger.error("분석 스트림 생성 실패: session=${session.id}", e)
 
                 Flux.interval(Duration.ofSeconds(10))
                     .map { createErrorMessage("Analysis service unavailable: ${e.message ?: e.javaClass.simpleName}") }
@@ -58,31 +58,31 @@ class StockWebSocketHandler(
             )
             .map { json -> session.textMessage(json) }
             .doOnError { error ->
-                logger.error("Error in WebSocket message stream for session ${session.id}", error)
+                logger.error("WebSocket 메시지 스트림 오류: session=${session.id}", error)
             }
             
             session.send(messageStream)
                 .doOnSubscribe { 
-                    logger.info("WebSocket session started: ${session.id}")
+                    logger.info("WebSocket 세션 시작됨: session=${session.id}")
                 }
                 .doOnSuccess {
-                    logger.debug("WebSocket session successfully established: ${session.id}")
+                    logger.debug("WebSocket 세션 성공적으로 설정됨: session=${session.id}")
                 }
                 .doOnError { error ->
-                    logger.error("WebSocket send error for session ${session.id}", error)
+                    logger.error("WebSocket 전송 오류: session=${session.id}", error)
                 }
                 .doOnTerminate {
-                    logger.info("WebSocket session terminated: ${session.id}")
+                    logger.info("WebSocket 세션 종료됨: session=${session.id}")
                 }
                 .timeout(Duration.ofMinutes(30))
                 .onErrorResume { error ->
-                    logger.warn("WebSocket timeout for session ${session.id}", error)
+                    logger.warn("WebSocket 타임아웃: session=${session.id}", error)
 
                     Mono.empty()
                 }
         }
         .onErrorResume { error ->
-            logger.error("WebSocket handler error for session ${session.id}", error)
+            logger.error("WebSocket 핸들러 오류: session=${session.id}", error)
 
             try {
                 val errorMessage = createErrorMessage("WebSocket handler error: ${error.message ?: error.javaClass.simpleName}")
@@ -92,7 +92,7 @@ class StockWebSocketHandler(
                         Mono.empty()
                     }
             } catch (e: Exception) {
-                logger.error("Failed to send error message for session ${session.id}", e)
+                logger.error("오류 메시지 전송 실패: session=${session.id}", e)
                 Mono.empty()
             }
         }
@@ -108,7 +108,7 @@ class StockWebSocketHandler(
                 )
             )
         } catch (e: Exception) {
-            logger.error("Failed to create error message JSON", e)
+            logger.error("오류 메시지 JSON 생성 실패", e)
             """{"type":"error","message":"$message","timestamp":${System.currentTimeMillis()}}"""
         }
     }
@@ -123,7 +123,7 @@ class StockWebSocketHandler(
                 )
             )
         } catch (e: Exception) {
-            logger.error("Failed to create welcome message JSON", e)
+            logger.error("환영 메시지 JSON 생성 실패", e)
             """{"type":"welcome","message":"WebSocket connected","timestamp":${System.currentTimeMillis()}}"""
         }
     }

@@ -5,21 +5,37 @@ import com.sleekydz86.backend.global.circuitbreaker.CircuitBreakerManager
 import com.sleekydz86.backend.global.exception.CircuitBreakerOpenException
 import com.sleekydz86.backend.global.exception.ExternalApiException
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
 import java.time.Duration
 
 @RestController
 @RequestMapping("/api/news")
+@Tag(name = "뉴스 API", description = "주식 관련 뉴스 조회 및 검색 API")
 class NewsController(
     private val pythonApiClient: PythonApiClient,
     private val circuitBreakerManager: CircuitBreakerManager
 ) {
 
     @GetMapping("/{symbol}")
+    @Operation(summary = "주식 뉴스 조회", description = "특정 심볼과 관련된 뉴스를 조회합니다")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 뉴스를 조회했습니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
     fun getStockNews(
+        @Parameter(description = "주식 심볼 (예: AAPL, GOOGL)", required = true)
         @PathVariable symbol: String,
+        @Parameter(description = "한글 번역 포함 여부 (기본값: true)", required = false)
         @RequestParam(defaultValue = "true") includeKorean: Boolean,
+        @Parameter(description = "자동 번역 사용 여부 (기본값: true)", required = false)
         @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<List<News>> {
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
@@ -39,7 +55,16 @@ class NewsController(
     }
     
     @GetMapping("/detail")
+    @Operation(summary = "뉴스 상세 조회", description = "URL을 통해 특정 뉴스의 상세 내용을 조회합니다")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 뉴스 상세를 조회했습니다"),
+            ApiResponse(responseCode = "404", description = "뉴스를 찾을 수 없습니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
     fun getNewsDetail(
+        @Parameter(description = "뉴스 URL", required = true)
         @RequestParam url: String
     ): Mono<News> {
         return circuitBreakerManager.executeWithCircuitBreaker("newsDetail") {
@@ -64,9 +89,19 @@ class NewsController(
     }
 
     @GetMapping("/search")
+    @Operation(summary = "뉴스 검색", description = "키워드로 뉴스를 검색합니다")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 뉴스를 검색했습니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
     fun searchNews(
+        @Parameter(description = "검색 키워드", required = true)
         @RequestParam query: String,
+        @Parameter(description = "언어 코드 (기본값: en)", required = false)
         @RequestParam(defaultValue = "en") language: String,
+        @Parameter(description = "최대 결과 수 (1-100, 기본값: 20)", required = false)
         @RequestParam(defaultValue = "20") maxResults: Int
     ): Mono<List<News>> {
         val validMaxResults = if (maxResults in 1..100) maxResults else 20
@@ -87,8 +122,18 @@ class NewsController(
     }
 
     @GetMapping("/multiple")
+    @Operation(summary = "다중 주식 뉴스 조회", description = "여러 심볼의 뉴스를 한 번에 조회합니다 (최대 10개)")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 뉴스를 조회했습니다"),
+            ApiResponse(responseCode = "400", description = "심볼 개수가 10개를 초과합니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
     fun getMultipleStockNews(
+        @Parameter(description = "쉼표로 구분된 심볼 목록 (예: AAPL,GOOGL,MSFT)", required = true)
         @RequestParam symbols: String,
+        @Parameter(description = "한글 번역 포함 여부 (기본값: false)", required = false)
         @RequestParam(defaultValue = "false") includeKorean: Boolean
     ): Mono<Map<String, List<News>>> {
         val symbolList = symbols.split(",").map { it.trim().uppercase() }

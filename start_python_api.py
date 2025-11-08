@@ -6,6 +6,8 @@ import socket
 import signal
 import atexit
 
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
 airflow_process = None
 api_process = None
 

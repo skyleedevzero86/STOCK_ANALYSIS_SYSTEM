@@ -2,6 +2,7 @@ import requests
 import logging
 import time
 import warnings
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
@@ -11,6 +12,12 @@ from bs4 import XMLParsedAsHTMLWarning
 from config.settings import settings
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
+warnings.filterwarnings("ignore", message=".*Xet Storage.*")
+warnings.filterwarnings("ignore", message=".*sacremoses.*")
+warnings.filterwarnings("ignore", message=".*symlinks.*")
 
 try:
     from googletrans import Translator
@@ -53,12 +60,18 @@ class NewsCollector:
             try:
                 self.hf_translator = pipeline(
                     "translation",
-                    model="Helsinki-NLP/opus-mt-en-ko",
+                    model="Helsinki-NLP/opus-mt-tc-big-en-ko",
                     device=0 if torch.cuda.is_available() else -1
                 )
                 logging.info("Hugging Face 번역 모델 로드 완료")
             except Exception as e:
-                logging.warning(f"Hugging Face 번역 모델 초기화 실패: {str(e)}")
+                error_msg = str(e)
+                if "401" in error_msg or "Unauthorized" in error_msg:
+                    logging.warning("Hugging Face Hub 접근 실패. 인터넷 연결 또는 인증 문제일 수 있습니다.")
+                elif "Repository Not Found" in error_msg:
+                    logging.warning("Hugging Face 모델을 찾을 수 없습니다. 모델 이름을 확인하세요.")
+                else:
+                    logging.warning(f"Hugging Face 번역 모델 초기화 실패: {error_msg}")
                 self.hf_translator = None
         else:
             logging.debug("Hugging Face 번역 모델을 사용할 수 없습니다. googletrans를 사용합니다.")
@@ -178,7 +191,7 @@ class NewsCollector:
             if e.response and e.response.status_code == 404:
                 logging.debug(f"{symbol}에 대한 Yahoo Finance News를 찾을 수 없음")
             else:
-                logging.warning(f"{symbol}에 대한 Yahoo Finance News HTTP 오류: {e.response.status_code if e.response else 'Unknown'}")
+                logging.warning(f"{symbol}에 대한 Yahoo Finance News HTTP 오류: {e.response.status_code if e.response else '알 수 없음'}")
             return []
         except Exception as e:
             logging.warning(f"{symbol}에 대한 Yahoo Finance News 오류: {str(e)}")

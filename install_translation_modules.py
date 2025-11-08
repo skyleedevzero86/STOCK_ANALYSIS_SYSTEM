@@ -25,3 +25,4 @@ def install_translation_modules():
 if __name__ == "__main__":
     install_translation_modules()
 
+

@@ -6,6 +6,7 @@ import com.sleekydz86.backend.domain.model.EmailSubscription
 import com.sleekydz86.backend.domain.model.EmailTemplate
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
 import org.springframework.stereotype.Service
+import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -98,7 +99,7 @@ class AIEmailService(
                             .flatMap { symbol: String ->
                                 aiAnalysisService.generateAIAnalysis(
                                     AIAnalysisRequest(symbol = symbol)
-                                ).flatMap { aiResult: AIAnalysisResult ->
+                                ).flatMapMany { aiResult: AIAnalysisResult ->
                                     Flux.fromIterable(emailSubscribers)
                                         .flatMap { subscriber: EmailSubscription ->
                                             val variables = createEmailVariables(subscriber, aiResult, symbol)

@@ -97,7 +97,7 @@ def start_python_api():
         import platform
         reload_flag = [] if platform.system() == 'Windows' else ["--reload"]
         api_process = subprocess.run([
-            sys.executable, "-m", "uvicorn", "api_server:app",
+            sys.executable, "-m", "uvicorn", "api_server_enhanced:app",
             "--host", "0.0.0.0",
             "--port", "9000"
         ] + reload_flag)
@@ -110,12 +110,12 @@ def start_python_api():
         print(" 오류: uvicorn을 찾을 수 없습니다.")
         print("   다음 명령으로 설치하세요: pip install uvicorn[standard]")
         print("\n또는 직접 실행:")
-        print("   python api_server.py")
+        print("   python api_server_enhanced.py")
         cleanup_processes()
     except Exception as e:
         print(f" Python API 서버 실행 중 오류: {str(e)}")
         print("\n대안: 다음 명령으로 직접 실행할 수 있습니다:")
-        print("   python api_server.py")
+        print("   python api_server_enhanced.py")
         cleanup_processes()
 
 if __name__ == "__main__":

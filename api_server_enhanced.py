@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Path, Request, Depends, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Path, Request, Depends, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,16 +20,36 @@ from api_common import (
     NewsResponse,
     PerformanceMetrics,
     ConnectionManager,
-    create_cors_middleware_config
+    create_cors_middleware_config,
+    TechnicalAnalysisResponse,
+    ErrorResponse,
+    EmailNotificationRequest,
+    EmailNotificationResponse,
+    SmsNotificationRequest,
+    SmsNotificationResponse,
+    format_timestamp,
+    safe_float
 )
 
 from data_collectors.performance_optimized_collector import PerformanceOptimizedCollector
+from data_collectors.stock_data_collector import StockDataCollector
 from data_collectors.news_collector import NewsCollector
 from analysis_engine.advanced_analyzer import AdvancedTechnicalAnalyzer
+from analysis_engine.technical_analyzer import TechnicalAnalyzer
+from notification.notification_service import NotificationService
 from security.security_manager import SecurityManager, SecurityConfig
 from error_handling.error_manager import ErrorManager, ErrorSeverity, ErrorCategory, error_handler, ErrorContext
 from config.settings import get_settings
 from config.logging_config import get_logger
+import re
+
+try:
+    import pymysql
+    PYMYSQL_AVAILABLE = True
+except ImportError:
+    PYMYSQL_AVAILABLE = False
+    logger = get_logger(__name__, "stock_analysis.log")
+    logger.debug("pymysql 모듈이 설치되지 않았습니다. 이메일 발송 이력 저장 기능이 비활성화됩니다.")
 
 settings = get_settings()
 logger = get_logger(__name__, "stock_analysis.log")
@@ -119,7 +139,31 @@ async def lifespan(app: FastAPI):
             cache_ttl=300
         )
         
+        app.state.enhanced_collector = StockDataCollector(
+            settings.ANALYSIS_SYMBOLS,
+            use_mock_data=settings.USE_MOCK_DATA,
+            use_alpha_vantage=True,
+            fallback_to_mock=settings.FALLBACK_TO_MOCK
+        )
+        
         app.state.analyzer = AdvancedTechnicalAnalyzer()
+        app.state.basic_analyzer = TechnicalAnalyzer()
+        
+        email_config = {
+            'smtp_server': settings.EMAIL_SMTP_SERVER,
+            'smtp_port': settings.EMAIL_SMTP_PORT,
+            'user': settings.EMAIL_USER,
+            'password': settings.EMAIL_PASSWORD
+        }
+        solapi_config = {
+            'api_key': settings.SOLAPI_API_KEY,
+            'api_secret': settings.SOLAPI_API_SECRET
+        }
+        app.state.notification_service = NotificationService(
+            email_config=email_config,
+            slack_webhook=settings.SLACK_WEBHOOK_URL,
+            solapi_config=solapi_config
+        )
         
         security_config = SecurityConfig(
             jwt_secret=settings.JWT_SECRET,
@@ -482,6 +526,121 @@ class StockAnalysisAPI:
                 status_code=500,
                 detail=f"배치 분석 오류. 오류 ID: {error_id}"
             )
+    
+    def _load_historical_data(self, symbol: str, request: Request):
+        import numpy as np
+        dates = pd.date_range(start=datetime.now() - pd.Timedelta(days=60), end=datetime.now(), freq='D')
+        np.random.seed(hash(symbol) % 2**32)
+        
+        base_price = 100 + hash(symbol) % 200
+        price_changes = np.random.randn(len(dates)) * 2
+        prices = base_price + np.cumsum(price_changes)
+        
+        return pd.DataFrame({
+            'date': dates,
+            'close': prices,
+            'volume': np.random.randint(1000000, 5000000, len(dates))
+        })
+    
+    async def get_basic_analysis(self, symbol: str, request: Request) -> Dict[str, Any]:
+        try:
+            from analysis_engine.technical_analyzer import TechnicalAnalyzer
+            basic_analyzer = request.app.state.basic_analyzer
+            enhanced_collector = request.app.state.enhanced_collector
+            
+            realtime_data = enhanced_collector.get_realtime_data(symbol)
+            if not realtime_data:
+                raise HTTPException(status_code=404, detail=f"종목 데이터를 찾을 수 없습니다: {symbol}")
+            
+            historical_data = self._load_historical_data(symbol, request)
+            
+            if historical_data.empty:
+                raise HTTPException(status_code=404, detail=f"과거 데이터를 찾을 수 없습니다: {symbol}")
+            
+            analyzed_data = basic_analyzer.calculate_all_indicators(historical_data)
+            trend_analysis = basic_analyzer.analyze_trend(analyzed_data)
+            anomalies = basic_analyzer.detect_anomalies(analyzed_data, symbol)
+            signals = basic_analyzer.generate_signals(analyzed_data, symbol)
+            
+            timestamp = format_timestamp(realtime_data.get('timestamp'))
+            
+            return {
+                'symbol': symbol,
+                'currentPrice': realtime_data['price'],
+                'volume': realtime_data.get('volume', 0),
+                'changePercent': realtime_data.get('change_percent', 0),
+                'trend': trend_analysis['trend'],
+                'trendStrength': trend_analysis['strength'],
+                'signals': {
+                    'signal': signals['signal'],
+                    'confidence': signals['confidence'],
+                    'rsi': analyzed_data['rsi_14'].iloc[-1] if 'rsi_14' in analyzed_data.columns and not analyzed_data['rsi_14'].isna().iloc[-1] else None,
+                    'macd': analyzed_data['macd'].iloc[-1] if 'macd' in analyzed_data.columns and not analyzed_data['macd'].isna().iloc[-1] else None,
+                    'macdSignal': analyzed_data['macd_signal'].iloc[-1] if 'macd_signal' in analyzed_data.columns and not analyzed_data['macd_signal'].isna().iloc[-1] else None
+                },
+                'anomalies': [
+                    {
+                        'type': anomaly['type'],
+                        'severity': anomaly['severity'],
+                        'message': anomaly['message'],
+                        'timestamp': datetime.now()
+                    } for anomaly in anomalies
+                ],
+                'timestamp': timestamp
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"분석 오류 ({symbol}): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"분석 오류: {str(e)}")
+    
+    async def get_all_symbols_analysis(self, request: Optional[Request] = None) -> List[Dict[str, Any]]:
+        try:
+            results = []
+            for symbol in settings.ANALYSIS_SYMBOLS:
+                try:
+                    if request:
+                        analysis = await self.get_basic_analysis(symbol, request)
+                    else:
+                        analysis = await self.get_advanced_analysis(symbol)
+                    results.append(analysis)
+                except Exception as e:
+                    logger.error(f"{symbol} 분석 오류: {str(e)}")
+                    continue
+            return results
+        except Exception as e:
+            logger.error(f"전체 종목 분석 오류: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"전체 종목 분석 오류: {str(e)}")
+    
+    async def get_historical_data(self, symbol: str, days: int, request: Request) -> Dict[str, Any]:
+        try:
+            from analysis_engine.technical_analyzer import TechnicalAnalyzer
+            basic_analyzer = request.app.state.basic_analyzer
+            
+            historical_data = self._load_historical_data(symbol, request)
+            analyzed_data = basic_analyzer.calculate_all_indicators(historical_data)
+            
+            chart_data = []
+            for i, row in analyzed_data.iterrows():
+                chart_data.append({
+                    'date': row['date'].isoformat(),
+                    'close': safe_float(row['close'], 0.0),
+                    'volume': int(row['volume']) if not pd.isna(row['volume']) else 0,
+                    'rsi': safe_float(row.get('rsi')) if 'rsi' in row else None,
+                    'macd': safe_float(row.get('macd')) if 'macd' in row else None,
+                    'bb_upper': safe_float(row.get('bb_upper')) if 'bb_upper' in row else None,
+                    'bb_lower': safe_float(row.get('bb_lower')) if 'bb_lower' in row else None,
+                    'sma_20': safe_float(row.get('sma_20')) if 'sma_20' in row else None
+                })
+            
+            return {
+                'symbol': symbol,
+                'data': chart_data,
+                'period': days
+            }
+        except Exception as e:
+            logger.error(f"과거 데이터 조회 오류 ({symbol}): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"과거 데이터 조회 오류: {str(e)}")
 
 def get_stock_api(request: Request) -> StockAnalysisAPI:
     return StockAnalysisAPI(
@@ -557,7 +716,7 @@ async def get_realtime_data(
     result = await api.get_realtime_data_enhanced(symbol)
     return StockDataResponse(**result)
 
-@app.get("/api/analysis/{symbol}",
+@app.get("/api/analysis/advanced/{symbol}",
          summary="고급 기술적 분석 결과",
          description="특정 종목의 고급 기술적 분석 결과를 조회합니다.",
          response_model=AdvancedAnalysisResponse,
@@ -602,6 +761,365 @@ async def get_error_statistics(
 ) -> Dict[str, Any]:
     return api.error_manager.get_error_statistics(hours=hours)
 
+@app.get("/api/symbols",
+         summary="분석 가능한 종목 목록",
+         description="현재 분석 중인 주식 종목들의 목록을 반환합니다.",
+         response_model=Dict[str, List[str]])
+async def get_symbols():
+    return {"symbols": settings.ANALYSIS_SYMBOLS}
+
+@app.get("/api/analysis/all",
+         summary="전체 종목 분석 결과",
+         description="모든 분석 중인 종목의 기술적 분석 결과를 조회합니다.",
+         response_model=List[TechnicalAnalysisResponse],
+         responses={
+             200: {"description": "성공적으로 모든 분석 결과를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_all_analysis(
+    request: Request,
+    api: StockAnalysisAPI = Depends(get_stock_api)
+):
+    return await api.get_all_symbols_analysis(request)
+
+@app.get("/api/analysis/{symbol}",
+         summary="기술적 분석 결과",
+         description="특정 종목의 기술적 분석 결과를 조회합니다.",
+         response_model=TechnicalAnalysisResponse,
+         responses={
+             200: {"description": "성공적으로 분석 결과를 조회했습니다."},
+             404: {"description": "해당 종목의 분석 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_basic_analysis_endpoint(
+    request: Request,
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    api: StockAnalysisAPI = Depends(get_stock_api)
+):
+    result = await api.get_basic_analysis(symbol, request)
+    return TechnicalAnalysisResponse(**result)
+
+@app.get("/api/historical/{symbol}",
+         summary="과거 데이터",
+         description="특정 종목의 과거 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 과거 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 과거 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_historical_data(
+    request: Request,
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    days: int = Query(30, description="조회할 일수", ge=1, le=365),
+    api: StockAnalysisAPI = Depends(get_stock_api)
+):
+    return await api.get_historical_data(symbol, days, request)
+
+@app.get("/api/alpha-vantage/search/{keywords}",
+         summary="Alpha Vantage 종목 검색",
+         description="Alpha Vantage API를 사용하여 종목을 검색합니다.",
+         responses={
+             200: {"description": "성공적으로 종목을 검색했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def search_symbols(
+    request: Request,
+    keywords: str = Path(..., description="검색 키워드", example="Apple")
+):
+    try:
+        enhanced_collector = request.app.state.enhanced_collector
+        return enhanced_collector.search_alpha_vantage_symbols(keywords)
+    except Exception as e:
+        logger.error(f"종목 검색 오류 ({keywords}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"종목 검색 오류: {str(e)}")
+
+@app.get("/api/alpha-vantage/intraday/{symbol}",
+         summary="Alpha Vantage 분별 데이터",
+         description="Alpha Vantage API를 사용하여 분별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 분별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_intraday(
+    request: Request,
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    interval: str = Query("5min", description="시간 간격", example="5min"),
+    outputsize: str = Query("compact", description="출력 크기", example="compact")
+):
+    try:
+        enhanced_collector = request.app.state.enhanced_collector
+        data = enhanced_collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"분별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"분별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"분별 데이터 조회 오류: {str(e)}")
+
+@app.get("/api/alpha-vantage/weekly/{symbol}",
+         summary="Alpha Vantage 주별 데이터",
+         description="Alpha Vantage API를 사용하여 주별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 주별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_weekly(
+    request: Request,
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+):
+    try:
+        enhanced_collector = request.app.state.enhanced_collector
+        data = enhanced_collector.get_alpha_vantage_weekly_data(symbol)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"주별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"주별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"주별 데이터 조회 오류: {str(e)}")
+
+@app.get("/api/alpha-vantage/monthly/{symbol}",
+         summary="Alpha Vantage 월별 데이터",
+         description="Alpha Vantage API를 사용하여 월별 주가 데이터를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 월별 데이터를 조회했습니다."},
+             404: {"description": "해당 종목의 데이터를 찾을 수 없습니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_alpha_vantage_monthly(
+    request: Request,
+    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+):
+    try:
+        enhanced_collector = request.app.state.enhanced_collector
+        data = enhanced_collector.get_alpha_vantage_monthly_data(symbol)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"월별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"월별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"월별 데이터 조회 오류: {str(e)}")
+
+@app.post("/api/notifications/email",
+         summary="이메일 발송",
+         description="이메일을 발송합니다. 요청 본문 또는 쿼리 파라미터로 전달할 수 있습니다.",
+         response_model=EmailNotificationResponse,
+         responses={
+             200: {"description": "이메일이 성공적으로 발송되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def send_email_notification(
+    request: Request,
+    to_email: Optional[str] = Query(None, description="수신자 이메일"),
+    subject: Optional[str] = Query(None, description="이메일 제목"),
+    body: Optional[str] = Query(None, description="이메일 내용"),
+    request_body: Optional[EmailNotificationRequest] = Body(None, description="요청 본문")
+):
+    try:
+        if request_body:
+            to_email = request_body.to_email
+            subject = request_body.subject
+            body = request_body.body
+        
+        if not all([to_email, subject, body]):
+            raise HTTPException(
+                status_code=400,
+                detail="to_email, subject, body는 필수입니다."
+            )
+        
+        notification_service = request.app.state.notification_service
+        success = notification_service.send_email(
+            to_email=to_email,
+            subject=subject,
+            body=body
+        )
+        
+        if PYMYSQL_AVAILABLE:
+            try:
+                conn = pymysql.connect(
+                    host=settings.MYSQL_HOST,
+                    user=settings.MYSQL_USER,
+                    password=settings.MYSQL_PASSWORD,
+                    database=settings.MYSQL_DATABASE,
+                    port=settings.MYSQL_PORT,
+                    charset='utf8mb4'
+                )
+                cursor = conn.cursor()
+                
+                log_message = f"[API발송] {subject}\n{body}"
+                status = "sent" if success else "failed"
+                error_msg = None if success else "이메일 발송에 실패했습니다."
+                
+                cursor.execute("""
+                    INSERT INTO notification_logs 
+                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_email,
+                    None,
+                    'email',
+                    log_message,
+                    status,
+                    datetime.now(),
+                    error_msg
+                ))
+                
+                conn.commit()
+                cursor.close()
+                conn.close()
+                logger.info(f"이메일 발송 이력 저장 완료: {to_email} - {status}")
+            except Exception as e:
+                logger.error(f"이메일 발송 이력 저장 실패: {str(e)}")
+        
+        if success:
+            return EmailNotificationResponse(
+                success=True,
+                message="이메일이 성공적으로 발송되었습니다."
+            )
+        else:
+            return EmailNotificationResponse(
+                success=False,
+                message="이메일 발송에 실패했습니다."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"이메일 발송 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"이메일 발송 오류: {str(e)}")
+
+@app.post("/api/notifications/sms",
+         summary="문자 발송",
+         description="문자(SMS/LMS)를 발송합니다. 요청 본문 또는 쿼리 파라미터로 전달할 수 있습니다.",
+         response_model=SmsNotificationResponse,
+         responses={
+             200: {"description": "문자가 성공적으로 발송되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def send_sms_notification(
+    request: Request,
+    from_phone: Optional[str] = Query(None, description="발신번호 (01012345678 형식)"),
+    to_phone: Optional[str] = Query(None, description="수신번호 (01012345678 형식)"),
+    message: Optional[str] = Query(None, description="메시지 내용"),
+    request_body: Optional[SmsNotificationRequest] = Body(None, description="요청 본문")
+):
+    try:
+        if request_body:
+            from_phone = request_body.from_phone
+            to_phone = request_body.to_phone
+            message = request_body.message
+        
+        if not to_phone or not message:
+            raise HTTPException(
+                status_code=400,
+                detail="to_phone, message는 필수입니다."
+            )
+        
+        if not from_phone:
+            from_phone = settings.SOLAPI_FROM_PHONE
+        
+        if not from_phone:
+            raise HTTPException(
+                status_code=400,
+                detail="발신번호가 설정되지 않았습니다. 환경 변수 SOLAPI_FROM_PHONE을 설정해주세요."
+            )
+        
+        from_phone = from_phone.replace("-", "").replace(" ", "")
+        to_phone = to_phone.replace("-", "").replace(" ", "")
+        
+        phone_regex = r'^010\d{8}$'
+        if not re.match(phone_regex, from_phone):
+            raise HTTPException(
+                status_code=400,
+                detail="발신번호 형식이 올바르지 않습니다. (01012345678 형식)"
+            )
+        if not re.match(phone_regex, to_phone):
+            raise HTTPException(
+                status_code=400,
+                detail="수신번호 형식이 올바르지 않습니다. (01012345678 형식)"
+            )
+        
+        notification_service = request.app.state.notification_service
+        success = notification_service.send_sms(
+            from_phone=from_phone,
+            to_phone=to_phone,
+            message=message
+        )
+        
+        if PYMYSQL_AVAILABLE:
+            try:
+                conn = pymysql.connect(
+                    host=settings.MYSQL_HOST,
+                    user=settings.MYSQL_USER,
+                    password=settings.MYSQL_PASSWORD,
+                    database=settings.MYSQL_DATABASE,
+                    port=settings.MYSQL_PORT,
+                    charset='utf8mb4'
+                )
+                cursor = conn.cursor()
+                
+                log_message = f"[API발송] {message}"
+                status = "sent" if success else "failed"
+                error_msg = None if success else "문자 발송에 실패했습니다."
+                
+                cursor.execute("""
+                    INSERT INTO notification_logs 
+                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    to_phone,
+                    None,
+                    'sms',
+                    log_message,
+                    status,
+                    datetime.now(),
+                    error_msg
+                ))
+                
+                conn.commit()
+                cursor.close()
+                conn.close()
+                logger.info(f"문자 발송 이력 저장 완료: {to_phone} - {status}")
+            except Exception as e:
+                logger.error(f"문자 발송 이력 저장 실패: {str(e)}")
+        
+        if success:
+            return SmsNotificationResponse(
+                success=True,
+                message="문자가 성공적으로 발송되었습니다."
+            )
+        else:
+            return SmsNotificationResponse(
+                success=False,
+                message="문자 발송에 실패했습니다."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"문자 발송 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"문자 발송 오류: {str(e)}")
+
+@app.get("/api/notifications/sms-config",
+         summary="SMS 발신번호 조회",
+         description="설정된 SMS 발신번호를 조회합니다.")
+async def get_sms_config():
+    try:
+        from_phone = settings.SOLAPI_FROM_PHONE
+        return {
+            "fromPhone": from_phone
+        }
+    except Exception as e:
+        logger.error(f"SMS 설정 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SMS 설정 조회 오류: {str(e)}")
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, client_ip: str = "unknown") -> None:
     await manager.connect(websocket, client_ip)
@@ -610,9 +1128,6 @@ async def websocket_endpoint(websocket: WebSocket, client_ip: str = "unknown") -
             data = await websocket.receive_text()
             if data == "ping":
                 await manager.send_personal_message("pong", websocket)
-            elif data == "stats":
-                stats = manager.get_connection_stats()
-                await manager.send_personal_message(json.dumps(stats), websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -629,7 +1144,7 @@ async def websocket_realtime(websocket: WebSocket, client_ip: str = "unknown") -
         )
         while True:
             try:
-                analysis_data = await api.get_batch_analysis(settings.ANALYSIS_SYMBOLS[:5])
+                analysis_data = await api.get_all_symbols_analysis()
                 await manager.send_personal_message(json.dumps(analysis_data, default=str), websocket)
                 await asyncio.sleep(5)
             except Exception as e:
@@ -665,46 +1180,93 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 @app.get("/api/news/{symbol}",
-         summary="종목별 뉴스 조회 (향상된)",
+         summary="종목별 뉴스 조회",
          description="특정 종목에 관련된 뉴스를 조회합니다.",
          response_model=List[NewsResponse],
          responses={
              200: {"description": "성공적으로 뉴스를 조회했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": EnhancedErrorResponse}
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse},
+             503: {"description": "서비스가 일시적으로 사용 불가능합니다.", "model": ErrorResponse}
          })
-@error_handler(ErrorSeverity.MEDIUM, ErrorCategory.API)
-async def get_stock_news_enhanced(
+async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
-    auto_translate: bool = Query(True, description="자동 번역 여부"),
+    auto_translate: bool = Query(False, description="한국어 뉴스 번역 여부"),
     api: StockAnalysisAPI = Depends(get_stock_api)
 ) -> List[NewsResponse]:
+    logger.info(f"뉴스 조회 요청 받음: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
     try:
-        news = api.news_collector.get_stock_news(symbol.upper(), include_korean=include_korean, auto_translate=auto_translate)
-        return [NewsResponse(**item) for item in news]
+        timeout_seconds = 25.0 if auto_translate else 20.0
+        logger.info(f"뉴스 수집 시작: {symbol} (타임아웃: {timeout_seconds}초)")
+        
+        try:
+            news = await asyncio.wait_for(
+                asyncio.to_thread(
+                    api.news_collector.get_stock_news,
+                    symbol.upper(),
+                    include_korean=include_korean,
+                    auto_translate=auto_translate
+                ),
+                timeout=timeout_seconds
+            )
+            logger.info(f"뉴스 수집 완료: {symbol} - {len(news) if news else 0}개")
+            if not news:
+                logger.info(f"뉴스 조회 결과 없음: {symbol}")
+                return []
+            return [NewsResponse(**item) for item in news]
+        except asyncio.TimeoutError:
+            if auto_translate:
+                logger.warning(f"번역 타임아웃: {symbol}, 번역 없이 뉴스 수집 시도")
+                try:
+                    news = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            api.news_collector.get_stock_news,
+                            symbol.upper(),
+                            include_korean=include_korean,
+                            auto_translate=False
+                        ),
+                        timeout=15.0
+                    )
+                    if news:
+                        logger.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
+                        return [NewsResponse(**item) for item in news]
+                except Exception as e:
+                    logger.warning(f"번역 없이 뉴스 수집 실패: {str(e)}")
+            logger.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
+            return []
     except Exception as e:
-        error_id = api.error_manager.log_error(
-            ErrorSeverity.MEDIUM,
-            ErrorCategory.API,
-            f"뉴스 조회 오류: {symbol} - {str(e)}",
-            e
-        )
-        logger.error(f"뉴스 조회 오류: {symbol}, 오류 ID: {error_id}, 오류: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"뉴스 조회 오류. 오류 ID: {error_id}"
-        )
+        logger.error(f"뉴스 조회 오류: {symbol} - {str(e)}", exc_info=True)
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            if auto_translate:
+                try:
+                    news = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            api.news_collector.get_stock_news,
+                            symbol.upper(),
+                            include_korean=include_korean,
+                            auto_translate=False
+                        ),
+                        timeout=15.0
+                    )
+                    if news:
+                        logger.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
+                        return [NewsResponse(**item) for item in news]
+                except Exception as e2:
+                    logger.warning(f"번역 없이 뉴스 수집 실패: {str(e2)}")
+            logger.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
+            return []
+        logger.warning(f"뉴스 조회 실패, 빈 리스트 반환: {symbol} - {str(e)}")
+        return []
 
 @app.get("/api/news",
-         summary="뉴스 검색 (향상된)",
+         summary="뉴스 검색",
          description="키워드로 뉴스를 검색합니다.",
          response_model=List[NewsResponse],
          responses={
              200: {"description": "성공적으로 뉴스를 검색했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": EnhancedErrorResponse}
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
-@error_handler(ErrorSeverity.MEDIUM, ErrorCategory.API)
-async def search_news_enhanced(
+async def search_news(
     query: str = Query(..., description="검색 키워드", example="Apple"),
     language: str = Query("en", description="언어 (en/ko)", example="en"),
     max_results: int = Query(20, description="최대 결과 수", ge=1, le=100),
@@ -714,27 +1276,17 @@ async def search_news_enhanced(
         news = api.news_collector.search_news(query, language=language, max_results=max_results)
         return [NewsResponse(**item) for item in news]
     except Exception as e:
-        error_id = api.error_manager.log_error(
-            ErrorSeverity.MEDIUM,
-            ErrorCategory.API,
-            f"뉴스 검색 오류: {str(e)}",
-            e
-        )
-        logger.error(f"뉴스 검색 오류: {query}, 오류 ID: {error_id}, 오류: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"뉴스 검색 오류. 오류 ID: {error_id}"
-        )
+        logger.error(f"뉴스 검색 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"뉴스 검색 오류: {str(e)}")
 
 @app.get("/api/news/multiple",
-         summary="다중 종목 뉴스 조회 (향상된)",
+         summary="다중 종목 뉴스 조회",
          description="여러 종목의 뉴스를 한번에 조회합니다.",
          responses={
              200: {"description": "성공적으로 뉴스를 조회했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": EnhancedErrorResponse}
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
-@error_handler(ErrorSeverity.MEDIUM, ErrorCategory.API)
-async def get_multiple_stock_news_enhanced(
+async def get_multiple_stock_news(
     symbols: str = Query(..., description="종목 심볼들 (쉼표로 구분)", example="AAPL,GOOGL,MSFT"),
     include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
     api: StockAnalysisAPI = Depends(get_stock_api)
@@ -744,7 +1296,7 @@ async def get_multiple_stock_news_enhanced(
         if len(symbol_list) > 10:
             raise HTTPException(
                 status_code=400,
-                detail="요청당 최대 10개 종목까지 허용됩니다"
+                detail="Maximum 10 symbols allowed per request"
             )
         news_dict = api.news_collector.get_multiple_stock_news(symbol_list, include_korean=include_korean)
         return {
@@ -754,61 +1306,59 @@ async def get_multiple_stock_news_enhanced(
     except HTTPException:
         raise
     except Exception as e:
-        error_id = api.error_manager.log_error(
-            ErrorSeverity.MEDIUM,
-            ErrorCategory.API,
-            f"다중 종목 뉴스 조회 오류: {str(e)}",
-            e
-        )
-        logger.error(f"다중 종목 뉴스 조회 오류: {str(e)}, 오류 ID: {error_id}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"다중 종목 뉴스 조회 오류. 오류 ID: {error_id}"
-        )
+        logger.error(f"다중 종목 뉴스 조회 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"다중 종목 뉴스 조회 오류: {str(e)}")
 
-@app.get("/api/news/detail/{news_id}",
-         summary="뉴스 상세보기 (향상된)",
-         description="뉴스 ID로 상세 정보를 조회합니다.",
-         response_model=NewsResponse,
-         responses={
-             200: {"description": "성공적으로 뉴스를 조회했습니다."},
-             404: {"description": "뉴스를 찾을 수 없습니다.", "model": EnhancedErrorResponse},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": EnhancedErrorResponse}
-         })
-@error_handler(ErrorSeverity.MEDIUM, ErrorCategory.API)
-async def get_news_detail_enhanced(
-    news_id: str = Path(..., description="뉴스 ID (URL 인코딩)"),
+@app.get("/api/news/detail",
+         summary="뉴스 상세보기",
+         description="뉴스 URL로 상세 정보를 조회합니다.")
+async def get_news_detail(
+    url: str = Query(..., description="뉴스 URL"),
     api: StockAnalysisAPI = Depends(get_stock_api)
 ) -> NewsResponse:
     try:
         import urllib.parse
-        decoded_url = urllib.parse.unquote(news_id)
+        decoded_url = url
+        for _ in range(3):
+            try:
+                decoded_url = urllib.parse.unquote(decoded_url, encoding='utf-8')
+            except Exception:
+                break
         
-        news = api.news_collector.get_news_by_url(decoded_url)
+        decoded_url = decoded_url.replace('&amp;', '&')
+        
+        logger.info(f"뉴스 상세 조회 요청: url={url[:100]}..., decoded_url={decoded_url[:100]}...")
+        
+        news = await asyncio.wait_for(
+            asyncio.to_thread(
+                api.news_collector.get_news_by_url,
+                decoded_url
+            ),
+            timeout=25.0
+        )
         if not news:
+            logger.warning(f"뉴스를 찾을 수 없습니다: {decoded_url[:100]}...")
             raise HTTPException(status_code=404, detail="뉴스를 찾을 수 없습니다.")
         
         return NewsResponse(**news)
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        logger.warning(f"뉴스 상세 조회 타임아웃: url={url[:100]}...")
+        raise HTTPException(status_code=503, detail="뉴스 상세 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
     except Exception as e:
-        error_id = api.error_manager.log_error(
-            ErrorSeverity.MEDIUM,
-            ErrorCategory.API,
-            f"뉴스 상세 조회 오류: {str(e)}",
-            e
-        )
-        logger.error(f"뉴스 상세 조회 오류: {news_id}, 오류 ID: {error_id}, 오류: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"뉴스 상세 조회 오류. 오류 ID: {error_id}"
-        )
+        logger.error(f"뉴스 상세 조회 오류: url={url[:100]}..., error={str(e)}", exc_info=True)
+        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            raise HTTPException(status_code=503, detail="뉴스 상세 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.")
+        raise HTTPException(status_code=500, detail=f"뉴스 상세 조회 오류: {str(e)}")
+
 
 if __name__ == "__main__":
+    import platform
+    reload_enabled = platform.system() != 'Windows'
     uvicorn.run(
         app, 
         host="0.0.0.0", 
-        port=8001,
-        log_level="info",
-        access_log=True
+        port=9000,
+        reload=reload_enabled
     )

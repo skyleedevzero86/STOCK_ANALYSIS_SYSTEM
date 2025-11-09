@@ -681,7 +681,7 @@ class NewsCollector:
     
     def get_news_by_url(self, url: str) -> Optional[Dict]:
         try:
-            response = self.session.get(url, timeout=10)
+            response = self.session.get(url, timeout=15)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -826,23 +826,45 @@ class NewsCollector:
             description_ko = None
             content_ko = None
             try:
+                translate_timeout = 5.0
+                start_time = time.time()
+                
                 if self._is_korean_text(title):
                     title_ko = title
                 else:
-                    title_ko = self.translate_text(title, 'ko') if (self.hf_translator or self.translator) else title
+                    if (self.hf_translator or self.translator) and (time.time() - start_time) < translate_timeout:
+                        try:
+                            title_ko = self.translate_text(title[:200], 'ko')
+                        except Exception as e:
+                            logging.debug(f"제목 번역 실패: {str(e)}")
+                            title_ko = title
+                    else:
+                        title_ko = title
                 
-                if description:
+                if description and (time.time() - start_time) < translate_timeout:
                     if self._is_korean_text(description):
                         description_ko = description
                     else:
-                        description_ko = self.translate_text(description, 'ko') if (self.hf_translator or self.translator) else description
+                        if (self.hf_translator or self.translator):
+                            try:
+                                description_ko = self.translate_text(description[:300], 'ko')
+                            except Exception as e:
+                                logging.debug(f"설명 번역 실패: {str(e)}")
+                                description_ko = description
+                        else:
+                            description_ko = description
+                else:
+                    description_ko = description
                 
-                if content:
-                    content_preview = content[:500] if len(content) > 500 else content
+                if content and (time.time() - start_time) < translate_timeout:
+                    content_preview = content[:300] if len(content) > 300 else content
                     if self._is_korean_text(content_preview):
                         content_ko = content_preview
                     else:
-                        content_ko = self.translate_text(content_preview, 'ko') if (self.hf_translator or self.translator) else content_preview
+                        content_ko = None
+                else:
+                    content_ko = None
+                    
             except Exception as e:
                 logging.warning(f"뉴스 번역 실패: {str(e)}")
                 title_ko = title

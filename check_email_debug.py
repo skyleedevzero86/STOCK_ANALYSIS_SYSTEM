@@ -105,7 +105,7 @@ def check_python_api():
     except requests.exceptions.ConnectionError:
         print("✗ Python API 서버에 연결할 수 없습니다.")
         print("  → Python API 서버를 시작하세요:")
-        print("    - python api_server.py")
+        print("    - python api_server_enhanced.py")
         return False
     except Exception as e:
         print(f"✗ 오류 발생: {str(e)}")
@@ -235,7 +235,7 @@ def main():
         print("\n권장사항:")
         print("  1. 모든 서버를 실행하세요:")
         print("     - Spring Boot: ./start_spring_boot.sh 또는 start_spring_boot.bat")
-        print("     - Python API: python api_server.py")
+        print("     - Python API: python api_server_enhanced.py")
         print("     - Airflow: airflow webserver --port 8081 & airflow scheduler")
         print("  2. 이메일 설정을 확인하세요 (.env 파일)")
         print("  3. 네트워크 연결을 확인하세요 (방화벽, Docker 네트워크 등)")

@@ -11,8 +11,12 @@ from enum import Enum
 import asyncio
 from functools import wraps
 import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+try:
+    from email.mime.text import MIMEText as MimeText
+    from email.mime.multipart import MIMEMultipart as MimeMultipart
+except ImportError:
+    from email.mime.text import MimeText
+    from email.mime.multipart import MimeMultipart
 from collections import defaultdict, deque
 import threading
 from config.settings import get_settings

@@ -70,16 +70,9 @@ class NewsCollector:
         self.cache_ttl = 300
         self.max_workers = 5
         
-        if GOOGLETRANS_AVAILABLE:
-            try:
-                self.translator = Translator()
-            except Exception as e:
-                logging.warning(f"번역기 초기화 실패: {str(e)}")
-                self.translator = None
-        else:
-            self.translator = None
-        
         self.hf_translator = None
+        self.translator = None
+        
         if HUGGINGFACE_AVAILABLE:
             try:
                 tokenizer_name = "paust/pko-t5-base"
@@ -102,8 +95,17 @@ class NewsCollector:
                 else:
                     logging.warning(f"Hugging Face 번역 모델 초기화 실패: {error_msg}")
                 self.hf_translator = None
-        else:
-            logging.debug("Hugging Face 번역 모델을 사용할 수 없습니다. googletrans를 사용합니다.")
+        
+        if not self.hf_translator and GOOGLETRANS_AVAILABLE:
+            try:
+                self.translator = Translator()
+                logging.info("googletrans 번역기 초기화 완료")
+            except Exception as e:
+                logging.warning(f"googletrans 번역기 초기화 실패: {str(e)}")
+                self.translator = None
+        
+        if not self.hf_translator and not self.translator:
+            logging.warning("번역 모델이 로드되지 않았습니다. 번역 기능이 비활성화됩니다.")
         
     @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_newsapi_news(self, symbol: str, language: str = 'en', page_size: int = 10) -> List[Dict]:
@@ -413,6 +415,10 @@ class NewsCollector:
         collection_time = time.time() - start_time
         logging.info(f"뉴스 수집 완료: {symbol} - {len(all_news)}개 수집 (소요 시간: {collection_time:.2f}초)")
         
+        if not all_news:
+            logging.info(f"뉴스가 없습니다: {symbol}")
+            return []
+        
         if auto_translate and all_news:
             translate_start = time.time()
             if not self.hf_translator and not self.translator:
@@ -420,51 +426,77 @@ class NewsCollector:
                 for news in all_news:
                     news['title_ko'] = news.get('title', '')
                     news['title_original'] = news.get('title', '')
+                    news['description_ko'] = news.get('description', '')
+                    news['description_original'] = news.get('description', '')
             else:
-                logging.info(f"번역 시작: {symbol} - {len(all_news)}개 중 최대 5개만 번역")
+                for news in all_news:
+                    news['title_ko'] = news.get('title', '')
+                    news['title_original'] = news.get('title', '')
+                    news['description_ko'] = news.get('description', '')
+                    news['description_original'] = news.get('description', '')
+                
+                max_translate = min(3, len(all_news))
+                timeout_seconds = 3 if len(all_news) <= 3 else 5
+                logging.info(f"번역 시작: {symbol} - {max_translate}개 번역 시도 (전체 {len(all_news)}개 중, 타임아웃: {timeout_seconds}초)")
                 translated_count = 0
                 failed_count = 0
-                for i, news in enumerate(all_news[:5]):
-                    provider = news.get('provider', '')
+                
+                def translate_news_item(news_item, index):
+                    provider = news_item.get('provider', '')
                     if provider in ['newsapi', 'alphavantage', 'yahoo', 'google']:
-                        title = news.get('title', '')
+                        title = news_item.get('title', '')
+                        
                         if title and not self._is_korean_text(title):
                             try:
                                 if self.hf_translator:
                                     prefix = "E2K: "
-                                    import time as time_module
-                                    translation_start = time_module.time()
-                                    result = self.hf_translator(prefix + title[:200], max_length=255)
-                                    translation_time = time_module.time() - translation_start
-                                    if translation_time > 5:
-                                        logging.warning(f"번역 시간이 오래 걸림: {translation_time:.2f}초 - {title[:50]}...")
-                                    all_news[i]['title_ko'] = result[0]['translation_text']
-                                    all_news[i]['title_original'] = title
-                                    translated_count += 1
-                                    logging.debug(f"번역 성공: {title[:50]}... -> {result[0]['translation_text'][:50]}...")
+                                    result = self.hf_translator(prefix + title[:80], max_length=120)
+                                    translated_title = result[0]['translation_text'] if isinstance(result, list) and len(result) > 0 else result.get('translation_text', title)
+                                    all_news[index]['title_ko'] = translated_title
+                                    all_news[index]['title_original'] = title
+                                    return True
                                 elif self.translator:
-                                    result = self.translator.translate(title[:200], dest='ko')
-                                    all_news[i]['title_ko'] = result.text
-                                    all_news[i]['title_original'] = title
-                                    translated_count += 1
-                                else:
-                                    all_news[i]['title_ko'] = title
-                                    all_news[i]['title_original'] = title
-                            except Exception as e:
-                                failed_count += 1
-                                logging.warning(f"뉴스 번역 실패 ({failed_count}번째): {str(e)} - {title[:50]}...")
-                                all_news[i]['title_ko'] = title
-                                all_news[i]['title_original'] = title
-                        else:
-                            all_news[i]['title_ko'] = title
-                            all_news[i]['title_original'] = title
-                    else:
-                        all_news[i]['title_ko'] = news.get('title', '')
-                        all_news[i]['title_original'] = news.get('title', '')
+                                    result = self.translator.translate(title[:150], dest='ko')
+                                    translated_title = result.text if hasattr(result, 'text') else str(result)
+                                    all_news[index]['title_ko'] = translated_title
+                                    all_news[index]['title_original'] = title
+                                    return True
+                            except Exception:
+                                pass
+                    return False
                 
-                for i in range(5, len(all_news)):
+                if max_translate > 0:
+                    with ThreadPoolExecutor(max_workers=min(2, max_translate)) as executor:
+                        future_to_index = {}
+                        for i in range(max_translate):
+                            future = executor.submit(translate_news_item, all_news[i], i)
+                            future_to_index[future] = i
+                        
+                        completed_futures = set()
+                        try:
+                            for future in as_completed(future_to_index, timeout=timeout_seconds):
+                                completed_futures.add(future)
+                                try:
+                                    success = future.result(timeout=0.3)
+                                    if success:
+                                        translated_count += 1
+                                except Exception:
+                                    failed_count += 1
+                        except FutureTimeoutError:
+                            logging.warning(f"번역 타임아웃: {symbol} - 완료된 번역만 사용")
+                        
+                        for future in future_to_index:
+                            if future not in completed_futures:
+                                try:
+                                    future.cancel()
+                                except:
+                                    pass
+                
+                for i in range(max_translate, len(all_news)):
                     all_news[i]['title_ko'] = all_news[i].get('title', '')
                     all_news[i]['title_original'] = all_news[i].get('title', '')
+                    all_news[i]['description_ko'] = all_news[i].get('description', '')
+                    all_news[i]['description_original'] = all_news[i].get('description', '')
                 
                 translate_time = time.time() - translate_start
                 logging.info(f"번역 완료: {symbol} - {translated_count}개 번역 성공, {failed_count}개 실패 (소요 시간: {translate_time:.2f}초)")
@@ -472,6 +504,8 @@ class NewsCollector:
             for news in all_news:
                 news['title_ko'] = news.get('title', '')
                 news['title_original'] = news.get('title', '')
+                news['description_ko'] = news.get('description', '')
+                news['description_original'] = news.get('description', '')
         
         all_news = sorted(all_news, key=lambda x: x.get('published_at', ''), reverse=True)
         

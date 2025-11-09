@@ -1,8 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query, Path, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.openapi.utils import get_openapi
-from pydantic import BaseModel, Field, ConfigDict
 from contextlib import asynccontextmanager
 import asyncio
 import json
@@ -11,6 +8,26 @@ import sys
 from datetime import datetime
 from typing import List, Dict, Optional
 import uvicorn
+import pandas as pd
+import numpy as np
+import re
+
+from api_common import (
+    StockDataResponse,
+    TradingSignalsResponse,
+    AnomalyResponse,
+    TechnicalAnalysisResponse,
+    ErrorResponse,
+    EmailNotificationRequest,
+    EmailNotificationResponse,
+    SmsNotificationRequest,
+    SmsNotificationResponse,
+    NewsResponse,
+    ConnectionManager,
+    create_cors_middleware_config,
+    format_timestamp,
+    safe_float
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,69 +50,9 @@ from analysis_engine.technical_analyzer import TechnicalAnalyzer
 from notification.notification_service import NotificationService
 from config.settings import settings
 
-class StockDataResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    symbol: str = Field(..., description="주식 심볼", example="AAPL")
-    currentPrice: float = Field(..., description="현재 가격", example=150.25, alias="price")
-    volume: int = Field(..., description="거래량", example=1000000)
-    changePercent: float = Field(..., description="변동률 (%)", example=2.5, alias="change_percent")
-    timestamp: datetime = Field(..., description="데이터 수집 시간")
-    confidenceScore: Optional[float] = Field(None, description="데이터 신뢰도", example=0.95, alias="confidence_score")
-
-class TradingSignalsResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    signal: str = Field(..., description="매매 신호")
-    confidence: float = Field(..., description="신뢰도")
-    rsi: Optional[float] = Field(None, description="RSI 값")
-    macd: Optional[float] = Field(None, description="MACD 값")
-    macdSignal: Optional[float] = Field(None, description="MACD 시그널", alias="macd_signal")
-
-class AnomalyResponse(BaseModel):
-    type: str = Field(..., description="이상 패턴 타입")
-    severity: str = Field(..., description="심각도")
-    message: str = Field(..., description="메시지")
-    timestamp: datetime = Field(..., description="발생 시간")
-
-class TechnicalAnalysisResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    symbol: str = Field(..., description="주식 심볼")
-    currentPrice: float = Field(..., description="현재 가격", alias="current_price")
-    volume: int = Field(..., description="거래량")
-    changePercent: float = Field(..., description="변동률", alias="change_percent")
-    trend: str = Field(..., description="트렌드 (bullish/bearish/neutral)")
-    trendStrength: float = Field(..., description="트렌드 강도 (0-1)", alias="trend_strength")
-    signals: TradingSignalsResponse = Field(..., description="매매 신호")
-    anomalies: List[AnomalyResponse] = Field(..., description="이상 패턴 목록")
-    timestamp: datetime = Field(..., description="분석 시간")
-
-class ErrorResponse(BaseModel):
-    error: str = Field(..., description="오류 메시지")
-    detail: str = Field(..., description="상세 오류 정보")
-
-class EmailNotificationRequest(BaseModel):
-    to_email: str = Field(..., description="수신자 이메일")
-    subject: str = Field(..., description="이메일 제목")
-    body: str = Field(..., description="이메일 내용")
-
-class EmailNotificationResponse(BaseModel):
-    success: bool = Field(..., description="발송 성공 여부")
-    message: str = Field(..., description="응답 메시지")
-
-class SmsNotificationRequest(BaseModel):
-    from_phone: str = Field(..., description="발신번호 (01012345678 형식)")
-    to_phone: str = Field(..., description="수신번호 (01012345678 형식)")
-    message: str = Field(..., description="메시지 내용")
-
-class SmsNotificationResponse(BaseModel):
-    success: bool = Field(..., description="발송 성공 여부")
-    message: str = Field(..., description="응답 메시지")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logging.info("애플리케이션 시작: 서비스 초기화 중...")
+    logging.info("애플리케이션 시작: 서비스 초기화 중")
     try:
         yield
     except asyncio.CancelledError:
@@ -103,7 +60,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.error(f"애플리케이션 종료 오류: {str(e)}", exc_info=True)
     finally:
-        logging.info("애플리케이션 종료: 정리 중...")
+        logging.info("애플리케이션 종료: 정리 중")
 
 app = FastAPI(
     title="Stock Analysis API",
@@ -120,36 +77,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+cors_config = create_cors_middleware_config()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    **cors_config
 )
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except:
-                self.active_connections.remove(connection)
-
-manager = ConnectionManager()
+manager = ConnectionManager(enable_metadata=False)
 
 class StockAnalysisAPI:
     def __init__(self):
@@ -180,9 +114,6 @@ class StockAnalysisAPI:
         )
 
     def _load_historical_data(self, symbol: str):
-        import pandas as pd
-        import numpy as np
-        
         dates = pd.date_range(start=datetime.now() - pd.Timedelta(days=60), end=datetime.now(), freq='D')
         np.random.seed(hash(symbol) % 2**32)
         
@@ -200,16 +131,9 @@ class StockAnalysisAPI:
         try:
             data = self.collector.get_realtime_data(symbol)
             if not data:
-                raise HTTPException(status_code=404, detail=f"Data not found for symbol: {symbol}")
+                raise HTTPException(status_code=404, detail=f"종목 데이터를 찾을 수 없습니다: {symbol}")
             
-            timestamp = data.get('timestamp')
-            if isinstance(timestamp, str):
-                try:
-                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                except:
-                    timestamp = datetime.now()
-            elif timestamp is None:
-                timestamp = datetime.now()
+            timestamp = format_timestamp(data.get('timestamp'))
             
             return {
                 'symbol': data['symbol'],
@@ -219,8 +143,11 @@ class StockAnalysisAPI:
                 'timestamp': timestamp,
                 'confidenceScore': data.get('confidence_score', 0.95)
             }
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logging.error(f"실시간 데이터 조회 오류 ({symbol}): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"실시간 데이터 조회 오류: {str(e)}")
 
     async def get_analysis(self, symbol: str) -> Dict:
         try:
@@ -228,7 +155,7 @@ class StockAnalysisAPI:
             historical_data = self._load_historical_data(symbol)
             
             if historical_data.empty:
-                raise HTTPException(status_code=404, detail=f"Historical data not found for symbol: {symbol}")
+                raise HTTPException(status_code=404, detail=f"과거 데이터를 찾을 수 없습니다: {symbol}")
             
             analyzed_data = self.analyzer.calculate_all_indicators(historical_data)
             trend_analysis = self.analyzer.analyze_trend(analyzed_data)
@@ -259,27 +186,19 @@ class StockAnalysisAPI:
                 ],
                 'timestamp': datetime.now()
             }
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logging.error(f"분석 오류 ({symbol}): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"분석 오류: {str(e)}")
 
     async def get_historical_data(self, symbol: str, days: int = 30) -> Dict:
         try:
             historical_data = self._load_historical_data(symbol)
             analyzed_data = self.analyzer.calculate_all_indicators(historical_data)
             
-            import pandas as pd
-            import numpy as np
-            
             chart_data = []
             for i, row in analyzed_data.iterrows():
-                def safe_float(value, default=None):
-                    if pd.isna(value) or np.isnan(value):
-                        return default
-                    try:
-                        return float(value) if value is not None else default
-                    except (ValueError, TypeError):
-                        return default
-                
                 chart_data.append({
                     'date': row['date'].isoformat(),
                     'close': safe_float(row['close'], 0.0),
@@ -297,7 +216,8 @@ class StockAnalysisAPI:
                 'period': days
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logging.error(f"과거 데이터 조회 오류 ({symbol}): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"과거 데이터 조회 오류: {str(e)}")
 
     async def get_all_symbols_analysis(self) -> List[Dict]:
         try:
@@ -311,7 +231,8 @@ class StockAnalysisAPI:
                     continue
             return results
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logging.error(f"전체 종목 분석 오류: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"전체 종목 분석 오류: {str(e)}")
 
 stock_api = StockAnalysisAPI()
 
@@ -398,7 +319,11 @@ async def get_historical_data(
 async def search_symbols(
     keywords: str = Path(..., description="검색 키워드", example="Apple")
 ):
-    return stock_api.collector.search_alpha_vantage_symbols(keywords)
+    try:
+        return stock_api.collector.search_alpha_vantage_symbols(keywords)
+    except Exception as e:
+        logging.error(f"종목 검색 오류 ({keywords}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"종목 검색 오류: {str(e)}")
 
 @app.get("/api/alpha-vantage/intraday/{symbol}",
          summary="Alpha Vantage 분별 데이터",
@@ -413,10 +338,16 @@ async def get_alpha_vantage_intraday(
     interval: str = Query("5min", description="시간 간격", example="5min"),
     outputsize: str = Query("compact", description="출력 크기", example="compact")
 ):
-    data = stock_api.collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
-    if data.empty:
-        raise HTTPException(status_code=404, detail=f"Intraday data not found for symbol: {symbol}")
-    return data.to_dict('records')
+    try:
+        data = stock_api.collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"분별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"분별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"분별 데이터 조회 오류: {str(e)}")
 
 @app.get("/api/alpha-vantage/weekly/{symbol}",
          summary="Alpha Vantage 주별 데이터",
@@ -429,10 +360,16 @@ async def get_alpha_vantage_intraday(
 async def get_alpha_vantage_weekly(
     symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
-    data = stock_api.collector.get_alpha_vantage_weekly_data(symbol)
-    if data.empty:
-        raise HTTPException(status_code=404, detail=f"Weekly data not found for symbol: {symbol}")
-    return data.to_dict('records')
+    try:
+        data = stock_api.collector.get_alpha_vantage_weekly_data(symbol)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"주별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"주별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"주별 데이터 조회 오류: {str(e)}")
 
 @app.get("/api/alpha-vantage/monthly/{symbol}",
          summary="Alpha Vantage 월별 데이터",
@@ -445,29 +382,35 @@ async def get_alpha_vantage_weekly(
 async def get_alpha_vantage_monthly(
     symbol: str = Path(..., description="주식 심볼", example="AAPL")
 ):
-    data = stock_api.collector.get_alpha_vantage_monthly_data(symbol)
-    if data.empty:
-        raise HTTPException(status_code=404, detail=f"Monthly data not found for symbol: {symbol}")
-    return data.to_dict('records')
+    try:
+        data = stock_api.collector.get_alpha_vantage_monthly_data(symbol)
+        if data.empty:
+            raise HTTPException(status_code=404, detail=f"월별 데이터를 찾을 수 없습니다: {symbol}")
+        return data.to_dict('records')
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"월별 데이터 조회 오류 ({symbol}): {str(e)}")
+        raise HTTPException(status_code=500, detail=f"월별 데이터 조회 오류: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+    await manager.connect(websocket, "unknown")
     try:
         while True:
             data = await websocket.receive_text()
             if data == "ping":
-                await websocket.send_text("pong")
+                await manager.send_personal_message("pong", websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
 @app.websocket("/ws/realtime")
 async def websocket_realtime(websocket: WebSocket):
-    await manager.connect(websocket)
+    await manager.connect(websocket, "unknown")
     try:
         while True:
             analysis_data = await stock_api.get_all_symbols_analysis()
-            await websocket.send_text(json.dumps(analysis_data))
+            await manager.send_personal_message(json.dumps(analysis_data, default=str), websocket)
             await asyncio.sleep(5)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
@@ -505,7 +448,6 @@ async def send_email_notification(
             body=body
         )
         
-        source = "api"
         if PYMYSQL_AVAILABLE:
             try:
                 conn = pymysql.connect(
@@ -599,7 +541,6 @@ async def send_sms_notification(
         to_phone = to_phone.replace("-", "").replace(" ", "")
         
         phone_regex = r'^010\d{8}$'
-        import re
         if not re.match(phone_regex, from_phone):
             raise HTTPException(
                 status_code=400,
@@ -617,7 +558,6 @@ async def send_sms_notification(
             message=message
         )
         
-        source = "api"
         if PYMYSQL_AVAILABLE:
             try:
                 conn = pymysql.connect(
@@ -684,17 +624,6 @@ async def get_sms_config():
         logging.error(f"SMS 설정 조회 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"SMS 설정 조회 오류: {str(e)}")
 
-class NewsResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    title: str = Field(..., description="뉴스 제목")
-    description: Optional[str] = Field(None, description="뉴스 설명")
-    url: str = Field(..., description="뉴스 URL")
-    source: Optional[str] = Field(None, description="뉴스 출처")
-    published_at: Optional[str] = Field(None, description="발행 시간")
-    symbol: str = Field(..., description="관련 종목")
-    provider: str = Field(..., description="뉴스 제공자")
-
 @app.get("/api/news/{symbol}",
          summary="종목별 뉴스 조회",
          description="특정 종목에 관련된 뉴스를 조회합니다.",
@@ -706,33 +635,68 @@ class NewsResponse(BaseModel):
          })
 async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
-    include_korean: bool = Query(True, description="한국어 뉴스 포함 여부"),
-    auto_translate: bool = Query(True, description="자동 번역 여부")
+    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
+    auto_translate: bool = Query(False, description="한국어 뉴스 번역 여부")
 ):
     logging.info(f"뉴스 조회 요청 받음: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
     try:
-        import asyncio
-        logging.info(f"뉴스 수집 시작: {symbol} (타임아웃: 30초)")
-        news = await asyncio.wait_for(
-            asyncio.to_thread(
-                stock_api.news_collector.get_stock_news,
-                symbol.upper(),
-                include_korean=include_korean,
-                auto_translate=auto_translate
-            ),
-            timeout=30.0
-        )
-        logging.info(f"뉴스 수집 완료: {symbol} - {len(news) if news else 0}개")
-        if not news:
-            logging.info(f"뉴스 조회 결과 없음: {symbol}")
+        timeout_seconds = 25.0 if auto_translate else 20.0
+        logging.info(f"뉴스 수집 시작: {symbol} (타임아웃: {timeout_seconds}초)")
+        
+        try:
+            news = await asyncio.wait_for(
+                asyncio.to_thread(
+                    stock_api.news_collector.get_stock_news,
+                    symbol.upper(),
+                    include_korean=include_korean,
+                    auto_translate=auto_translate
+                ),
+                timeout=timeout_seconds
+            )
+            logging.info(f"뉴스 수집 완료: {symbol} - {len(news) if news else 0}개")
+            if not news:
+                logging.info(f"뉴스 조회 결과 없음: {symbol}")
+                return []
+            return news
+        except asyncio.TimeoutError:
+            if auto_translate:
+                logging.warning(f"번역 타임아웃: {symbol}, 번역 없이 뉴스 수집 시도")
+                try:
+                    news = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            stock_api.news_collector.get_stock_news,
+                            symbol.upper(),
+                            include_korean=include_korean,
+                            auto_translate=False
+                        ),
+                        timeout=15.0
+                    )
+                    if news:
+                        logging.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
+                        return news
+                except Exception as e:
+                    logging.warning(f"번역 없이 뉴스 수집 실패: {str(e)}")
+            logging.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
             return []
-        return news
-    except asyncio.TimeoutError:
-        logging.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
-        return []
     except Exception as e:
         logging.error(f"뉴스 조회 오류: {symbol} - {str(e)}", exc_info=True)
         if "timeout" in str(e).lower() or "timed out" in str(e).lower():
+            if auto_translate:
+                try:
+                    news = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            stock_api.news_collector.get_stock_news,
+                            symbol.upper(),
+                            include_korean=include_korean,
+                            auto_translate=False
+                        ),
+                        timeout=15.0
+                    )
+                    if news:
+                        logging.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
+                        return news
+                except Exception as e2:
+                    logging.warning(f"번역 없이 뉴스 수집 실패: {str(e2)}")
             logging.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
             return []
         logging.warning(f"뉴스 조회 실패, 빈 리스트 반환: {symbol} - {str(e)}")
@@ -757,7 +721,6 @@ async def get_news_detail(
         
         logging.info(f"뉴스 상세 조회 요청: url={url[:100]}..., decoded_url={decoded_url[:100]}...")
         
-        import asyncio
         news = await asyncio.wait_for(
             asyncio.to_thread(
                 stock_api.news_collector.get_news_by_url,

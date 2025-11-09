@@ -3,11 +3,11 @@ let newsRefreshInterval = null;
 
 function updateCurrentSymbol(symbol) {
     currentSymbol = symbol;
-    const includeKorean = document.getElementById('includeKoreanNews')?.checked || false;
-    loadNews(symbol, includeKorean);
+    const autoTranslate = document.getElementById('includeKoreanNews')?.checked || false;
+    loadNews(symbol, false, autoTranslate);
 }
 
-function loadNews(symbol, includeKorean = false, autoTranslate = true) {
+function loadNews(symbol, includeKorean = false, autoTranslate = false) {
     const newsContainer = document.getElementById('newsContainer');
     if (!newsContainer) {
         console.error('newsContainer element not found');
@@ -19,7 +19,7 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
     const url = `/api/news/${symbol}?includeKorean=${includeKorean}&autoTranslate=${autoTranslate}`;
     
     axios.get(url, {
-        timeout: 15000
+        timeout: 30000
     })
         .then(response => {
             const news = response.data;
@@ -34,7 +34,9 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
         .catch(error => {
             let errorMessage = '뉴스를 불러올 수 없습니다.';
             
-            if (error.response) {
+            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                errorMessage = '뉴스 조회 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
+            } else if (error.response) {
                 const status = error.response.status;
                 const data = error.response.data;
                 
@@ -45,8 +47,6 @@ function loadNews(symbol, includeKorean = false, autoTranslate = true) {
                 } else if (status === 404) {
                     errorMessage = '요청한 리소스를 찾을 수 없습니다.';
                 }
-            } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-                errorMessage = '요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.';
             } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
                 errorMessage = '네트워크 연결에 실패했습니다. 인터넷 연결을 확인해주세요.';
             }
@@ -262,13 +262,13 @@ function getSentimentText(sentiment) {
     return '중립';
 }
 
-function startNewsAutoRefresh(symbol, includeKorean) {
+function startNewsAutoRefresh(symbol, includeKorean = false, autoTranslate = false) {
     if (newsRefreshInterval) {
         clearInterval(newsRefreshInterval);
     }
     
     newsRefreshInterval = setInterval(() => {
-        loadNews(symbol, includeKorean);
+        loadNews(symbol, includeKorean, autoTranslate);
     }, 300000);
 }
 
@@ -297,16 +297,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (includeKoreanCheckbox) {
         includeKoreanCheckbox.addEventListener('change', function() {
-            const includeKorean = this.checked;
-            loadNews(currentSymbol, includeKorean);
-            startNewsAutoRefresh(currentSymbol, includeKorean);
+            const autoTranslate = this.checked;
+            loadNews(currentSymbol, false, autoTranslate);
+            startNewsAutoRefresh(currentSymbol, false, autoTranslate);
         });
     }
 
     if (refreshNewsBtn) {
         refreshNewsBtn.addEventListener('click', function() {
-            const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-            loadNews(currentSymbol, includeKorean);
+            const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+            loadNews(currentSymbol, false, autoTranslate);
         });
     }
 
@@ -316,9 +316,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const newSymbol = window.dashboard?.currentSymbol || 'AAPL';
             if (newSymbol !== currentSymbol) {
                 currentSymbol = newSymbol;
-                const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-                loadNews(newSymbol, includeKorean);
-                startNewsAutoRefresh(newSymbol, includeKorean);
+                const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+                loadNews(newSymbol, false, autoTranslate);
+                startNewsAutoRefresh(newSymbol, false, autoTranslate);
             }
         });
         
@@ -326,17 +326,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const newSymbol = window.dashboard?.currentSymbol || 'AAPL';
             if (newSymbol !== currentSymbol) {
                 currentSymbol = newSymbol;
-                const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-                loadNews(newSymbol, includeKorean);
-                startNewsAutoRefresh(newSymbol, includeKorean);
+                const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+                loadNews(newSymbol, false, autoTranslate);
+                startNewsAutoRefresh(newSymbol, false, autoTranslate);
             }
         }, 1000);
     }
     
     window.updateCurrentSymbol = updateCurrentSymbol;
 
-    const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-    loadNews(currentSymbol, includeKorean);
-    startNewsAutoRefresh(currentSymbol, includeKorean);
+    const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+    loadNews(currentSymbol, false, autoTranslate);
+    startNewsAutoRefresh(currentSymbol, false, autoTranslate);
 });
 

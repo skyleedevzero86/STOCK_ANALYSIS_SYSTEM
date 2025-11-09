@@ -54,7 +54,7 @@ class ErrorMonitoringService {
             .doOnError { error ->
                 recordError(
                     errorType = error.javaClass.simpleName,
-                    message = "Error in $operationName: ${error.message}",
+                    message = "$operationName 작업 중 오류 발생: ${error.message}",
                     cause = error
                 )
             }
@@ -67,7 +67,7 @@ class ErrorMonitoringService {
             .doOnError { error ->
                 recordError(
                     errorType = error.javaClass.simpleName,
-                    message = "Error in $operationName: ${error.message}",
+                    message = "$operationName 작업 중 오류 발생: ${error.message}",
                     cause = error
                 )
             }

@@ -15,8 +15,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.NOT_FOUND.value(),
-                error = "Stock Not Found",
-                message = ex.message ?: "Stock not found",
+                error = "종목을 찾을 수 없음",
+                message = ex.message ?: "요청하신 종목을 찾을 수 없습니다",
                 path = ""
             ))
     }
@@ -27,8 +27,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.BAD_REQUEST.value(),
-                error = "Invalid Symbol",
-                message = ex.message ?: "Invalid stock symbol",
+                error = "잘못된 종목 코드",
+                message = ex.message ?: "유효하지 않은 종목 코드입니다",
                 path = ""
             ))
     }
@@ -39,8 +39,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.SERVICE_UNAVAILABLE.value(),
-                error = "External API Error",
-                message = ex.message ?: "External service unavailable",
+                error = "외부 API 오류",
+                message = ex.message ?: "외부 서비스를 사용할 수 없습니다",
                 path = ""
             ))
     }
@@ -51,8 +51,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                error = "Data Processing Error",
-                message = ex.message ?: "Error processing data",
+                error = "데이터 처리 오류",
+                message = ex.message ?: "데이터 처리 중 오류가 발생했습니다",
                 path = ""
             ))
     }
@@ -63,8 +63,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                error = "WebSocket Error",
-                message = ex.message ?: "WebSocket connection error",
+                error = "WebSocket 오류",
+                message = ex.message ?: "WebSocket 연결 오류가 발생했습니다",
                 path = ""
             ))
     }
@@ -75,8 +75,8 @@ class GlobalExceptionHandler {
             .body(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                error = "Internal Server Error",
-                message = "An unexpected error occurred",
+                error = "서버 내부 오류",
+                message = "예상치 못한 오류가 발생했습니다",
                 path = ""
             ))
     }

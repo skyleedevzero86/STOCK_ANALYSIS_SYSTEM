@@ -12,8 +12,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 404,
-                error = "Stock Not Found",
-                message = ex.message ?: "Stock not found",
+                error = "종목을 찾을 수 없음",
+                message = ex.message ?: "요청하신 종목을 찾을 수 없습니다",
                 path = request.path()
             ))
 
@@ -22,8 +22,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 400,
-                error = "Invalid Symbol",
-                message = ex.message ?: "Invalid stock symbol",
+                error = "잘못된 종목 코드",
+                message = ex.message ?: "유효하지 않은 종목 코드입니다",
                 path = request.path()
             ))
 
@@ -32,8 +32,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 503,
-                error = "External API Error",
-                message = ex.message ?: "External service unavailable",
+                error = "외부 API 오류",
+                message = ex.message ?: "외부 서비스를 사용할 수 없습니다",
                 path = request.path()
             ))
 
@@ -42,8 +42,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 500,
-                error = "Data Processing Error",
-                message = ex.message ?: "Error processing data",
+                error = "데이터 처리 오류",
+                message = ex.message ?: "데이터 처리 중 오류가 발생했습니다",
                 path = request.path()
             ))
 
@@ -52,8 +52,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 500,
-                error = "WebSocket Error",
-                message = ex.message ?: "WebSocket connection error",
+                error = "WebSocket 오류",
+                message = ex.message ?: "WebSocket 연결 오류가 발생했습니다",
                 path = request.path()
             ))
 
@@ -62,8 +62,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 503,
-                error = "Service Temporarily Unavailable",
-                message = "Circuit breaker is open. Please try again later.",
+                error = "서비스 일시 중단",
+                message = "서비스가 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요",
                 path = request.path()
             ))
 
@@ -72,8 +72,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 429,
-                error = "Rate Limit Exceeded",
-                message = "Too many requests. Please try again later.",
+                error = "요청 한도 초과",
+                message = "요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
                 path = request.path()
             ))
 
@@ -82,8 +82,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 401,
-                error = "Authentication Failed",
-                message = ex.message ?: "Authentication required",
+                error = "인증 실패",
+                message = ex.message ?: "인증이 필요합니다",
                 path = request.path()
             ))
 
@@ -92,8 +92,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 403,
-                error = "Access Denied",
-                message = ex.message ?: "Insufficient permissions",
+                error = "접근 거부",
+                message = ex.message ?: "권한이 부족합니다",
                 path = request.path()
             ))
 
@@ -102,8 +102,8 @@ object ReactiveExceptionHandler {
             .bodyValue(ErrorResponse(
                 timestamp = LocalDateTime.now(),
                 status = 500,
-                error = "Internal Server Error",
-                message = ex.message ?: ex.javaClass.simpleName ?: "An unexpected error occurred",
+                error = "서버 내부 오류",
+                message = ex.message ?: ex.javaClass.simpleName ?: "예상치 못한 오류가 발생했습니다",
                 path = request.path()
             ))
 }

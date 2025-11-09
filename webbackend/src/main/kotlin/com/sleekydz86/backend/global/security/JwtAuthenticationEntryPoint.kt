@@ -27,8 +27,8 @@ class JwtAuthenticationEntryPoint(
         val body = mapOf(
             "timestamp" to LocalDateTime.now().toString(),
             "status" to HttpStatus.UNAUTHORIZED.value(),
-            "error" to "Unauthorized",
-            "message" to "Authentication required",
+            "error" to "인증 실패",
+            "message" to "인증이 필요합니다",
             "path" to (exchange.request.path.toString())
         )
 

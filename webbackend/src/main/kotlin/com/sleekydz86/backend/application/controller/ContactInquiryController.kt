@@ -28,8 +28,8 @@ class ContactInquiryController(
             .map { inquiry ->
                 ApiResponseBuilder.success(
                     "문의사항이 성공적으로 등록되었습니다.",
-                    mapOf(
-                        "id" to inquiry.id,
+                    mapOf<String, Any>(
+                        "id" to (inquiry.id ?: 0L),
                         "name" to inquiry.name,
                         "email" to inquiry.email,
                         "subject" to inquiry.subject,
@@ -38,7 +38,7 @@ class ContactInquiryController(
                 )
             }
             .onErrorResume { error ->
-                Mono.just(ApiResponseBuilder.failure(error.message ?: "문의사항 등록에 실패했습니다.", null))
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문의사항 등록에 실패했습니다.", null))
             }
     }
 
@@ -62,13 +62,13 @@ class ContactInquiryController(
                             val totalPages = if (total > 0) ((total + size - 1) / size).toInt() else 0
                             ApiResponseBuilder.success(
                                 "문의사항 목록을 성공적으로 조회했습니다.",
-                                mapOf(
+                                mapOf<String, Any>(
                                     "inquiries" to inquiries.map { inquiry ->
-                                        mapOf(
-                                            "id" to inquiry.id,
+                                        mapOf<String, Any>(
+                                            "id" to (inquiry.id ?: 0L),
                                             "name" to inquiry.name,
                                             "email" to inquiry.email,
-                                            "phone" to inquiry.phone,
+                                            "phone" to (inquiry.phone ?: ""),
                                             "category" to inquiry.category,
                                             "subject" to inquiry.subject,
                                             "message" to inquiry.message,
@@ -86,7 +86,7 @@ class ContactInquiryController(
                         }
                 } else {
                     logger.warn("토큰 검증 실패 - 토큰: ${token.take(20)}...")
-                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
     }
@@ -109,12 +109,12 @@ class ContactInquiryController(
                                         .map { updatedInquiry ->
                                             ApiResponseBuilder.success(
                                                 "문의사항을 성공적으로 조회했습니다.",
-                                                mapOf(
-                                                    "inquiry" to mapOf(
-                                                        "id" to updatedInquiry.id,
+                                                mapOf<String, Any>(
+                                                    "inquiry" to mapOf<String, Any>(
+                                                        "id" to (updatedInquiry.id ?: 0L),
                                                         "name" to updatedInquiry.name,
                                                         "email" to updatedInquiry.email,
-                                                        "phone" to updatedInquiry.phone,
+                                                        "phone" to (updatedInquiry.phone ?: ""),
                                                         "category" to updatedInquiry.category,
                                                         "subject" to updatedInquiry.subject,
                                                         "message" to updatedInquiry.message,
@@ -123,8 +123,8 @@ class ContactInquiryController(
                                                         "updatedAt" to updatedInquiry.updatedAt.toString()
                                                     ),
                                                     "replies" to replies.map { reply ->
-                                                        mapOf(
-                                                            "id" to reply.id,
+                                                        mapOf<String, Any>(
+                                                            "id" to (reply.id ?: 0L),
                                                             "inquiryId" to reply.inquiryId,
                                                             "content" to reply.content,
                                                             "createdBy" to reply.createdBy,
@@ -138,11 +138,11 @@ class ContactInquiryController(
                         }
                         .flatMap { it }
                 } else {
-                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
             .onErrorResume { error ->
-                Mono.just(ApiResponseBuilder.failure(error.message ?: "문의사항 조회에 실패했습니다.", null))
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문의사항 조회에 실패했습니다.", null))
             }
     }
 
@@ -158,14 +158,14 @@ class ContactInquiryController(
                 if (isValid) {
                     contactInquiryService.deleteInquiry(id)
                         .map {
-                            ApiResponseBuilder.success("문의사항이 성공적으로 삭제되었습니다.", null)
+                            ApiResponseBuilder.success<Map<String, Any>>("문의사항이 성공적으로 삭제되었습니다.", null)
                         }
                 } else {
-                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
             .onErrorResume { error ->
-                Mono.just(ApiResponseBuilder.failure(error.message ?: "문의사항 삭제에 실패했습니다.", null))
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "문의사항 삭제에 실패했습니다.", null))
             }
     }
 
@@ -245,9 +245,9 @@ ${reply.content}
                                             Mono.just(
                                                 ApiResponseBuilder.success(
                                                     "답변이 성공적으로 등록되었습니다.",
-                                                    mapOf(
-                                                        "reply" to mapOf(
-                                                            "id" to reply.id,
+                                                    mapOf<String, Any>(
+                                                        "reply" to mapOf<String, Any>(
+                                                            "id" to (reply.id ?: 0L),
                                                             "inquiryId" to reply.inquiryId,
                                                             "content" to reply.content,
                                                             "createdBy" to reply.createdBy,
@@ -260,11 +260,11 @@ ${reply.content}
                                 }
                         }
                 } else {
-                    Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
+                    Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("인증이 필요합니다.", null))
                 }
             }
             .onErrorResume { error ->
-                Mono.just(ApiResponseBuilder.failure(error.message ?: "답변 등록에 실패했습니다.", null))
+                Mono.just(ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "답변 등록에 실패했습니다.", null))
             }
     }
 }

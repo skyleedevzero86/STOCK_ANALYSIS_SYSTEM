@@ -42,13 +42,17 @@ class AdminController(
 
     @GetMapping("/subscriptions")
     fun getSubscriptions(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "10") size: Int,
         @RequestParam(required = false) name: String?
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
+        logger.info("구독자 목록 조회 요청 - 토큰: ${token.take(20)}...")
+        
         return adminService.validateToken(token)
             .flatMap { isValid ->
+                logger.info("토큰 검증 결과: $isValid")
                 if (isValid) {
                     emailSubscriptionService.getAllActiveSubscriptions(page, size, name)
                         .map { (subscriptions, total) ->
@@ -72,6 +76,7 @@ class AdminController(
                             )
                         }
                 } else {
+                    logger.warn("토큰 검증 실패 - 토큰: ${token.take(20)}...")
                     Mono.just(ApiResponseBuilder.failure("인증이 필요합니다.", null))
                 }
             }
@@ -79,10 +84,11 @@ class AdminController(
 
     @PutMapping("/subscriptions/{id}/consent")
     fun updateSubscriptionConsent(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long,
         @RequestBody request: Map<String, Boolean?>
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -113,10 +119,11 @@ class AdminController(
 
     @PutMapping("/subscriptions/{id}/status")
     fun updateSubscriptionStatus(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long,
         @RequestBody request: Map<String, Boolean>
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -144,9 +151,10 @@ class AdminController(
 
     @GetMapping("/subscriptions/{id}")
     fun getSubscription(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -177,7 +185,8 @@ class AdminController(
     }
 
     @GetMapping("/email-consent-list")
-    fun getEmailConsentList(@RequestHeader("Authorization") token: String): Mono<ApiResponse<Map<String, Any>>> {
+    fun getEmailConsentList(@RequestHeader("Authorization") authHeader: String): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -206,11 +215,12 @@ class AdminController(
 
     @GetMapping("/subscriptions/{id}/email-history")
     fun getEmailHistory(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -242,10 +252,11 @@ class AdminController(
 
     @PostMapping("/subscriptions/{id}/send-email")
     fun sendEmail(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long,
         @RequestBody request: Map<String, String>
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -405,10 +416,11 @@ class AdminController(
 
     @PostMapping("/subscriptions/{id}/send-sms")
     fun sendSms(
-        @RequestHeader("Authorization") token: String,
+        @RequestHeader("Authorization") authHeader: String,
         @PathVariable id: Long,
         @RequestBody request: Map<String, String>
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {
@@ -543,8 +555,9 @@ class AdminController(
 
     @GetMapping("/sms-config")
     fun getSmsConfig(
-        @RequestHeader("Authorization") token: String
+        @RequestHeader("Authorization") authHeader: String
     ): Mono<ApiResponse<Map<String, Any>>> {
+        val token = authHeader.removePrefix("Bearer ").trim()
         return adminService.validateToken(token)
             .flatMap { isValid ->
                 if (isValid) {

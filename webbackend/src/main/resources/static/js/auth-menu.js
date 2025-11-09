@@ -54,6 +54,12 @@ function updateNavigation() {
             } else {
                 link.style.display = 'none';
             }
+        } else if (href === '/contact-inquiry-list.html') {
+            if (isLoggedIn) {
+                link.style.display = 'inline-block';
+            } else {
+                link.style.display = 'none';
+            }
         }
     });
 
@@ -98,17 +104,39 @@ function updateNavigation() {
 function redirectIfNotLoggedIn() {
     const isLoggedIn = checkAuthStatus();
     const currentPage = window.location.pathname;
+    
+    console.log("redirectIfNotLoggedIn 실행 - 로그인 상태:", isLoggedIn, "현재 페이지:", currentPage);
 
-    if ((currentPage === '/template-management.html' || currentPage === '/admin-dashboard.html') && !isLoggedIn) {
+    if ((currentPage === '/template-management.html' || currentPage === '/admin-dashboard.html' || currentPage === '/contact-inquiry-list.html' || currentPage === '/contact-inquiry-detail.html') && !isLoggedIn) {
+        console.log("보호된 페이지인데 로그인 안 됨 - 로그인 페이지로 리다이렉트");
         window.location.href = '/admin-login.html';
-    } else if (currentPage === '/admin-login.html' && isLoggedIn) {
-        window.location.href = '/admin-dashboard.html';
+    } else if ((currentPage === '/admin-login.html' || currentPage === '/admin-login') && isLoggedIn) {
+        console.log("로그인 페이지인데 이미 로그인됨 - 대시보드로 리다이렉트");
+        setTimeout(function() {
+            window.location.href = '/admin-dashboard.html';
+        }, 100);
     }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    updateNavigation();
-    redirectIfNotLoggedIn();
+    const currentPage = window.location.pathname;
+    const isLoginPage = currentPage === '/admin-login.html' || currentPage === '/admin-login';
+    const isDashboardPage = currentPage === '/admin-dashboard.html' || currentPage === '/admin-dashboard';
+    const isInquiryPage = currentPage === '/contact-inquiry-list.html' || currentPage === '/contact-inquiry-detail.html';
+    
+    if (isDashboardPage || isInquiryPage) {
+        setTimeout(function() {
+            updateNavigation();
+        }, 800);
+    } else if (isLoginPage) {
+        setTimeout(function() {
+            updateNavigation();
+            redirectIfNotLoggedIn();
+        }, 400);
+    } else {
+        updateNavigation();
+        redirectIfNotLoggedIn();
+    }
 });
 
 window.addEventListener('storage', function(e) {

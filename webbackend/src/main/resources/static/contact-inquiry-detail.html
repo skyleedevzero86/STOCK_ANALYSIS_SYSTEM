@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>문의사항 상세 - 주식 분석 시스템</title>
+    <link rel="stylesheet" href="css/common.css" />
+    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/admin-dashboard.css" />
+  </head>
+  <body>
+    <header class="main-header">
+      <div class="header-content">
+        <div class="header-logo">
+          <a href="/" aria-label="홈으로 이동">실시간 주식 분석 시스템</a>
+        </div>
+        <div class="header-actions">
+          <nav class="nav-menu">
+            <a href="/" class="nav-item">홈</a>
+            <a href="/template-management.html" class="nav-item">템플릿보기</a>
+            <a href="/api-view.html" class="nav-item">API보기</a>
+            <a href="/admin-dashboard.html" class="nav-item">관리자대시보드</a>
+            <a href="/contact-inquiry-list.html" class="nav-item active"
+              >문의사항</a
+            >
+          </nav>
+          <button class="icon-btn" onclick="logout()" title="로그아웃">
+            로그아웃
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" role="main">
+      <section class="content-section" aria-labelledby="inquiry-detail-title">
+        <div class="container">
+          <div class="content-header">
+            <h2 id="inquiry-detail-title" class="section-title">
+              문의사항 상세
+            </h2>
+            <button
+              onclick="window.location.href='/contact-inquiry-list.html'"
+              class="btn"
+              style="padding: 8px 16px; font-size: 0.875rem"
+            >
+              목록으로
+            </button>
+          </div>
+
+          <div
+            class="subscriptions-table"
+            style="
+              background: #fff;
+              border-radius: 16px;
+              padding: 24px;
+              margin-bottom: 24px;
+            "
+          >
+            <div id="inquiryDetailContent">
+              <div class="loading">데이터를 불러오는 중...</div>
+            </div>
+          </div>
+
+          <div
+            class="subscriptions-table"
+            style="background: #fff; border-radius: 16px; padding: 24px"
+          >
+            <h3 style="margin-bottom: 16px">답변</h3>
+            <div id="repliesContent">
+              <div class="loading">답변을 불러오는 중...</div>
+            </div>
+            <div style="margin-top: 24px">
+              <textarea
+                id="replyContent"
+                placeholder="답변 내용을 입력하세요..."
+                style="
+                  width: 100%;
+                  padding: 12px;
+                  border: 1px solid #ddd;
+                  border-radius: 8px;
+                  font-size: 14px;
+                  min-height: 150px;
+                  font-family: inherit;
+                "
+              ></textarea>
+              <button
+                onclick="addReply()"
+                class="btn btn--primary"
+                style="
+                  margin-top: 12px;
+                  padding: 10px 20px;
+                  font-size: 0.875rem;
+                "
+              >
+                답변 등록
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="main-footer">
+      <div class="footer-content">
+        <div class="footer-links">
+          <a href="/company.html">회사소개</a>
+          <a href="/terms.html">이용약관</a>
+          <a href="/privacy.html">개인정보처리방침</a>
+          <a href="/contact.html">고객센터</a>
+        </div>
+        <div class="footer-copyright">
+          <p class="footer-logo">주식 분석 시스템. All Rights Reserved.</p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="js/auth-menu.js"></script>
+    <script src="js/contact-inquiry-detail.js"></script>
+  </body>
+</html>

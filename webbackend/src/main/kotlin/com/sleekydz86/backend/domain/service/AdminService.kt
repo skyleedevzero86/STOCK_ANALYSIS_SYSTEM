@@ -34,22 +34,33 @@ class AdminService(
     fun validateToken(token: String): Mono<Boolean> {
         return Mono.fromCallable {
             try {
-                val decoded = String(Base64.getDecoder().decode(token))
+                if (token.isBlank()) {
+                    return@fromCallable false
+                }
+                
+                val cleanToken = token.trim()
+                val decoded = String(Base64.getDecoder().decode(cleanToken))
                 val parts = decoded.split(":")
                 if (parts.size == 2) {
                     val email = parts[0]
                     val timestamp = parts[1].toLong()
                     val currentTime = System.currentTimeMillis()
 
-                    // 24시간 유효
-                    val isValid = (currentTime - timestamp) < (24 * 60 * 60 * 1000)
+                    val timeDiff = currentTime - timestamp
+                    val isValid = timeDiff < (24 * 60 * 60 * 1000) && timeDiff >= 0
                     val admin = adminUserRepository.findByEmailAndIsActive(email, true)
 
-                    isValid && admin != null
+                    val result = isValid && admin != null
+                    if (!result) {
+                        println("토큰 검증 실패 - email: $email, isValid: $isValid, admin: ${admin != null}, timeDiff: $timeDiff")
+                    }
+                    result
                 } else {
+                    println("토큰 형식 오류 - parts.size: ${parts.size}")
                     false
                 }
             } catch (e: Exception) {
+                println("토큰 검증 예외: ${e.message}")
                 false
             }
         }

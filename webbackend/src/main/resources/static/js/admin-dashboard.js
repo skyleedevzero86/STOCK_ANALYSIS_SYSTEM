@@ -1,7 +1,3 @@
-if (!localStorage.getItem("adminToken")) {
-    window.location.href = "/admin-login.html";
-}
-
 let currentPage = 0;
 let pageSize = 10;
 let totalPages = 0;
@@ -11,7 +7,10 @@ let searchName = "";
 async function loadSubscriptions(page = 0) {
     const adminToken = localStorage.getItem("adminToken");
     
+    console.log("loadSubscriptions 호출 - 토큰:", adminToken ? "있음" : "없음");
+    
     if (!adminToken) {
+        console.log("토큰이 없어서 로그인 페이지로 리다이렉트");
         window.location.href = "/admin-login.html";
         return;
     }
@@ -20,19 +19,37 @@ async function loadSubscriptions(page = 0) {
     const searchParam = searchName ? `&name=${encodeURIComponent(searchName)}` : "";
 
     try {
+        console.log("구독자 목록 API 호출 시작");
+        console.log("전송할 토큰:", adminToken ? adminToken.substring(0, 20) + "..." : "없음");
+        
         const response = await fetch(`/api/admin/subscriptions?page=${page}&size=${pageSize}${searchParam}`, {
             headers: {
                 Authorization: adminToken,
             },
         });
 
+        console.log("구독자 목록 API 응답 상태:", response.status);
+        console.log("구독자 목록 API 응답 헤더:", response.headers);
+
         if (response.status === 401) {
+            console.error("인증 실패 (401) - 토큰 삭제하고 로그인 페이지로 리다이렉트");
+            const errorText = await response.text();
+            console.error("401 오류 응답:", errorText);
             localStorage.removeItem("adminToken");
             window.location.href = "/admin-login.html";
             return;
         }
 
+        if (!response.ok) {
+            console.error("API 호출 실패:", response.status, response.statusText);
+            const errorText = await response.text();
+            console.error("오류 응답:", errorText);
+            showError("데이터를 불러오는 중 오류가 발생했습니다: " + response.status);
+            return;
+        }
+
         const result = await response.json();
+        console.log("구독자 목록 API 응답:", result);
 
         if (result.success) {
             currentPage = result.data.page || 0;
@@ -42,7 +59,9 @@ async function loadSubscriptions(page = 0) {
             updatePagination();
             loadAllSubscriptionsForStats();
         } else {
+            console.error("구독자 목록 조회 실패:", result.message);
             if (result.message && result.message.includes("인증")) {
+                console.error("인증 오류로 토큰 삭제");
                 localStorage.removeItem("adminToken");
                 window.location.href = "/admin-login.html";
             } else {
@@ -50,7 +69,8 @@ async function loadSubscriptions(page = 0) {
             }
         }
     } catch (error) {
-        showError("데이터를 불러오는 중 오류가 발생했습니다.");
+        console.error("구독자 목록 조회 중 오류:", error);
+        showError("데이터를 불러오는 중 오류가 발생했습니다: " + error.message);
     }
 }
 
@@ -346,6 +366,19 @@ function logout() {
 }
 
 document.addEventListener("DOMContentLoaded", function() {
-    updateNavigation();
-    loadSubscriptions();
+    setTimeout(function() {
+        const adminToken = localStorage.getItem("adminToken");
+        console.log("대시보드 로드 - 토큰 확인:", adminToken ? "있음" : "없음");
+        if (adminToken) {
+            console.log("토큰 값:", adminToken.substring(0, 20) + "...");
+        }
+        if (!adminToken) {
+            console.log("토큰이 없어서 로그인 페이지로 리다이렉트");
+            window.location.href = "/admin-login.html";
+            return;
+        }
+        console.log("토큰이 있어서 대시보드 로드 진행");
+        updateNavigation();
+        loadSubscriptions();
+    }, 1000);
 });

@@ -59,7 +59,8 @@ class SecurityConfig(
             .authorizeExchange { exchanges ->
                 exchanges
                     .pathMatchers("/", "/admin-dashboard", "/admin-login", "/api-view",
-                                 "/email-subscription", "/template-management", "/news-detail").permitAll()
+                                 "/email-subscription", "/template-management", "/news-detail",
+                                 "/contact-inquiry-list", "/contact-inquiry-detail").permitAll()
                     .pathMatchers("/css/**", "/js/**", "/*.html", "/*.css", "/*.js",
                                  "/*.png", "/*.jpg", "/*.gif", "/*.ico",
                                  "/*.svg").permitAll()
@@ -71,8 +72,9 @@ class SecurityConfig(
                     .pathMatchers("/api/stocks/**").permitAll()
                     .pathMatchers("/api/cqrs/stocks/**").permitAll()
                     .pathMatchers("/api/news/**").permitAll()
-                    .pathMatchers("/api/admin/login", "/api/admin/check-welcome-email", "/api/admin/check-daily-email", "/api/admin/save-notification-log").permitAll()
-                    .pathMatchers("/api/admin/**").hasAnyRole("USER", "ADMIN")
+                    .pathMatchers("/api/admin/**").permitAll()
+                    .pathMatchers("/api/contact/inquiry").permitAll()
+                    .pathMatchers("/api/contact/**").permitAll()
                     .pathMatchers("/api/email-subscriptions/subscribe", "/api/email-subscriptions/unsubscribe", "/api/email-subscriptions/email-consent").permitAll()
                     .pathMatchers("/api/email-subscriptions/**").hasAnyRole("USER", "ADMIN")
                     .pathMatchers("/api/templates/**").permitAll()

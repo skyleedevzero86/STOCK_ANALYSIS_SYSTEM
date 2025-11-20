@@ -50,6 +50,8 @@ dependencies {
 
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.2.0")
 
+    implementation("com.deepl.api:deepl-java:1.5.0")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework:spring-webflux")
     testImplementation("org.springframework:spring-websocket")

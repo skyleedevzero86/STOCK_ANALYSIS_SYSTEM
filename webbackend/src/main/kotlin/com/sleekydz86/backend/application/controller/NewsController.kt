@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.web.bind.annotation.*
+import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
 
@@ -19,7 +20,8 @@ import java.time.Duration
 @Tag(name = "뉴스 API", description = "주식 관련 뉴스 조회 및 검색 API")
 class NewsController(
     private val pythonApiClient: PythonApiClient,
-    private val circuitBreakerManager: CircuitBreakerManager
+    private val circuitBreakerManager: CircuitBreakerManager,
+    private val deepLTranslationService: com.sleekydz86.backend.infrastructure.service.DeepLTranslationService
 ) {
 
     @GetMapping("/{symbol}")
@@ -38,29 +40,93 @@ class NewsController(
         @Parameter(description = "자동 번역 사용 여부 (기본값: true)", required = false)
         @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<List<News>> {
+        val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
             pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, autoTranslate)
         }
             .timeout(Duration.ofSeconds(25))
+            .flatMap { newsList ->
+                if (autoTranslate && deepLTranslationService.isAvailable()) {
+                    val needsTranslation = newsList.any { news ->
+                        (news.titleKo.isNullOrBlank() || news.titleKo == news.title) &&
+                        !isKoreanText(news.title)
+                    }
+                    
+                    if (needsTranslation) {
+                        logger.info("Python API 번역이 불완전합니다. DeepL 번역을 시도합니다: $symbol")
+                        translateNewsWithDeepL(newsList)
+                    } else {
+                        Mono.just(newsList)
+                    }
+                } else {
+                    Mono.just(newsList)
+                }
+            }
             .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException -> {
-                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
-                            .warn("Circuit breaker open for news: $symbol")
+                        logger.warn("Circuit breaker open for news: $symbol")
                         Mono.just(emptyList())
                     }
                     is java.util.concurrent.TimeoutException -> {
-                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
-                            .warn("Timeout fetching news for: $symbol")
+                        logger.warn("Timeout fetching news for: $symbol")
                         Mono.just(emptyList())
                     }
                     else -> {
-                        org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
-                            .error("Error fetching news for $symbol: ${error.message}", error)
+                        logger.error("Error fetching news for $symbol: ${error.message}", error)
                         Mono.just(emptyList())
                     }
                 }
             }
+    }
+    
+    private fun translateNewsWithDeepL(newsList: List<News>): Mono<List<News>> {
+        val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        
+        return Flux.fromIterable(newsList)
+            .flatMap { news ->
+                val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
+                val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
+                    (news.description != null && news.descriptionKo == news.description)
+                
+                if ((needsTitleTranslation && !isKoreanText(news.title)) || 
+                    (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description))) {
+                    deepLTranslationService.translateNews(
+                        news.title,
+                        news.description
+                    ).map { (translatedTitle, translatedDescription) ->
+                        news.copy(
+                            titleKo = if (needsTitleTranslation && !isKoreanText(news.title)) {
+                                translatedTitle
+                            } else {
+                                news.titleKo ?: news.title
+                            },
+                            descriptionKo = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
+                                translatedDescription
+                            } else {
+                                news.descriptionKo ?: news.description
+                            }
+                        )
+                    }
+                } else {
+                    Mono.just(news)
+                }
+            }
+            .collectList()
+            .onErrorResume { error ->
+                logger.warn("DeepL 번역 실패, 원본 뉴스 반환: ${error.message}", error)
+                Mono.just(newsList)
+            }
+    }
+    
+    private fun isKoreanText(text: String): Boolean {
+        if (text.isBlank()) return false
+        val koreanCharCount = text.count { it in '\uAC00'..'\uD7A3' }
+        val totalCharCount = text.count { it.isLetterOrDigit() || it.isWhitespace() }
+        if (totalCharCount == 0) return false
+        val koreanRatio = koreanCharCount.toDouble() / totalCharCount
+        return koreanRatio > 0.3
     }
     
     @GetMapping("/detail")

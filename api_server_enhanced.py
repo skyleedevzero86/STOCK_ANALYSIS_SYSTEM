@@ -709,7 +709,7 @@ class StockAnalysisAPI:
             if not realtime_data:
                 raise HTTPException(status_code=404, detail=f"종목 데이터를 찾을 수 없습니다: {symbol}")
             
-            historical_data = self._load_historical_data(symbol, request)
+            historical_data = self._load_historical_data(symbol)
             
             if historical_data.empty:
                 raise HTTPException(status_code=404, detail=f"과거 데이터를 찾을 수 없습니다: {symbol}")
@@ -865,8 +865,7 @@ async def root() -> Dict[str, Any]:
 
 @app.get("/api/health",
          summary="헬스 체크",
-         description="API 서버의 상태를 확인합니다.",
-         response_model=Dict[str, Union[str, float]])
+         description="API 서버의 상태를 확인합니다.")
 async def health_check(request: Request) -> Dict[str, Any]:
     try:
         if not hasattr(request.app.state, 'data_collector'):
@@ -991,7 +990,84 @@ async def get_all_analysis(
     basic_analyzer: TechnicalAnalyzer = Depends(get_basic_analyzer),
     enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
-    return await api.get_all_symbols_analysis(basic_analyzer, enhanced_collector)
+    from pydantic import ValidationError
+    from datetime import datetime as dt
+    
+    results = await api.get_all_symbols_analysis(basic_analyzer, enhanced_collector)
+    valid_results = []
+    for result in results:
+        try:
+            if 'marketRegime' in result or 'market_regime' in result:
+                signals_data = result.get('signals', {})
+                if isinstance(signals_data, dict):
+                    signals = {
+                        'signal': signals_data.get('signal', 'hold'),
+                        'confidence': signals_data.get('confidence', 0.0),
+                        'rsi': signals_data.get('rsi'),
+                        'macd': signals_data.get('macd'),
+                        'macdSignal': signals_data.get('macd_signal') or signals_data.get('macdSignal')
+                    }
+                else:
+                    signals = {
+                        'signal': 'hold',
+                        'confidence': 0.0,
+                        'rsi': None,
+                        'macd': None,
+                        'macdSignal': None
+                    }
+                
+                anomalies = []
+                for anomaly in result.get('anomalies', []):
+                    if isinstance(anomaly, dict):
+                        timestamp = anomaly.get('timestamp')
+                        if isinstance(timestamp, str):
+                            try:
+                                timestamp = dt.fromisoformat(timestamp.replace('Z', '+00:00'))
+                            except:
+                                timestamp = dt.now()
+                        elif not isinstance(timestamp, dt):
+                            timestamp = dt.now()
+                        anomalies.append({
+                            'type': anomaly.get('type', 'unknown'),
+                            'severity': anomaly.get('severity', 'low'),
+                            'message': anomaly.get('message', ''),
+                            'timestamp': timestamp
+                        })
+                
+                converted_result = {
+                    'symbol': result.get('symbol'),
+                    'currentPrice': result.get('currentPrice'),
+                    'volume': result.get('volume', 0),
+                    'changePercent': result.get('changePercent', 0),
+                    'trend': result.get('trend', 'neutral'),
+                    'trendStrength': result.get('trendStrength', 0.0),
+                    'signals': signals,
+                    'anomalies': anomalies,
+                    'timestamp': result.get('timestamp', dt.now())
+                }
+                valid_results.append(TechnicalAnalysisResponse(**converted_result))
+            else:
+                valid_results.append(TechnicalAnalysisResponse(**result))
+        except ValidationError as e:
+            logger.error(
+                f"Pydantic validation error for analysis result: {str(e)}",
+                symbol=result.get('symbol'),
+                errors=e.errors(),
+                result_keys=list(result.keys()) if isinstance(result, dict) else None,
+                result_type=type(result).__name__
+            )
+            continue
+        except Exception as e:
+            logger.error(
+                f"분석 결과 변환 실패: {str(e)}",
+                symbol=result.get('symbol') if isinstance(result, dict) else None,
+                result_keys=list(result.keys()) if isinstance(result, dict) else None,
+                result_type=type(result).__name__,
+                exception=e,
+                exc_info=True
+            )
+            continue
+    return valid_results
 
 @app.get("/api/analysis/{symbol}",
          summary="기술적 분석 결과",
@@ -1403,15 +1479,6 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         }
     )
 
-@app.get("/api/news/{symbol}",
-         summary="종목별 뉴스 조회",
-         description="특정 종목에 관련된 뉴스를 조회합니다.",
-         response_model=List[NewsResponse],
-         responses={
-             200: {"description": "성공적으로 뉴스를 조회했습니다."},
-             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse},
-             503: {"description": "서비스가 일시적으로 사용 불가능합니다.", "model": ErrorResponse}
-         })
 async def _fetch_news_with_fallback(api: StockAnalysisAPI, symbol: str, include_korean: bool, 
                                      auto_translate: bool, timeout: float) -> List[Dict[str, Any]]:
     try:
@@ -1464,6 +1531,15 @@ async def _fetch_news_with_fallback(api: StockAnalysisAPI, symbol: str, include_
         logger.warning(f"뉴스 조회 오류: {symbol} - {str(e)}")
         return []
 
+@app.get("/api/news/{symbol}",
+         summary="종목별 뉴스 조회",
+         description="특정 종목에 관련된 뉴스를 조회합니다.",
+         response_model=List[NewsResponse],
+         responses={
+             200: {"description": "성공적으로 뉴스를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse},
+             503: {"description": "서비스가 일시적으로 사용 불가능합니다.", "model": ErrorResponse}
+         })
 async def get_stock_news(
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),

@@ -30,6 +30,9 @@ from api_common import (
     format_timestamp,
     safe_float
 )
+from utils.data_formatter import DataFormatter
+from utils.retry_handler import RetryHandler
+from utils.notification_logger import NotificationLogger
 from exceptions import (
     StockAnalysisBaseException,
     StockDataCollectionError,
@@ -304,14 +307,7 @@ class StockAnalysisAPI:
                         context
                     )
                 
-                return {
-                    'symbol': data['symbol'],
-                    'currentPrice': data['price'],
-                    'volume': data.get('volume', 0),
-                    'changePercent': data.get('change_percent', 0),
-                    'timestamp': data.get('timestamp', datetime.now()),
-                    'confidenceScore': confidence_score
-                }
+                return DataFormatter.format_realtime_response(data, confidence_score)
                 
             except HTTPException:
                 raise
@@ -401,17 +397,8 @@ class StockAnalysisAPI:
             fallback_data = fallback_collector.get_realtime_data(symbol)
             
             if fallback_data and fallback_data.get('price', 0) > 0:
-                return {
-                    'symbol': fallback_data['symbol'],
-                    'currentPrice': fallback_data['price'],
-                    'volume': fallback_data.get('volume', 0),
-                    'changePercent': fallback_data.get('change_percent', 0),
-                    'timestamp': fallback_data.get('timestamp', datetime.now()),
-                    'confidenceScore': 0.3
-                }
-        except StockDataCollectionError as e:
-            logger.error(f"{symbol}에 대한 대체 데이터 조회 실패: {str(e)}")
-        except Exception as e:
+                return DataFormatter.format_fallback_data(fallback_data)
+        except (StockDataCollectionError, Exception) as e:
             logger.error(f"{symbol}에 대한 대체 데이터 조회 실패: {str(e)}")
         
         return None
@@ -1177,42 +1164,13 @@ async def send_email_notification(
             body=body
         )
         
-        if PYMYSQL_AVAILABLE:
-            try:
-                conn = pymysql.connect(
-                    host=settings.MYSQL_HOST,
-                    user=settings.MYSQL_USER,
-                    password=settings.MYSQL_PASSWORD,
-                    database=settings.MYSQL_DATABASE,
-                    port=settings.MYSQL_PORT,
-                    charset='utf8mb4'
-                )
-                cursor = conn.cursor()
-                
-                log_message = f"[API발송] {subject}\n{body}"
-                status = "sent" if success else "failed"
-                error_msg = None if success else "이메일 발송에 실패했습니다."
-                
-                cursor.execute("""
-                    INSERT INTO notification_logs 
-                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    to_email,
-                    None,
-                    'email',
-                    log_message,
-                    status,
-                    datetime.now(),
-                    error_msg
-                ))
-                
-                conn.commit()
-                cursor.close()
-                conn.close()
-                logger.info(f"이메일 발송 이력 저장 완료: {to_email} - {status}")
-            except Exception as e:
-                logger.error(f"이메일 발송 이력 저장 실패: {str(e)}")
+        NotificationLogger.log_notification(
+            user_email=to_email,
+            notification_type='email',
+            message=f"[API발송] {subject}\n{body}",
+            status="sent" if success else "failed",
+            error_message=None if success else "이메일 발송에 실패했습니다."
+        )
         
         if success:
             return EmailNotificationResponse(
@@ -1299,42 +1257,13 @@ async def send_sms_notification(
             message=message
         )
         
-        if PYMYSQL_AVAILABLE:
-            try:
-                conn = pymysql.connect(
-                    host=settings.MYSQL_HOST,
-                    user=settings.MYSQL_USER,
-                    password=settings.MYSQL_PASSWORD,
-                    database=settings.MYSQL_DATABASE,
-                    port=settings.MYSQL_PORT,
-                    charset='utf8mb4'
-                )
-                cursor = conn.cursor()
-                
-                log_message = f"[API발송] {message}"
-                status = "sent" if success else "failed"
-                error_msg = None if success else "문자 발송에 실패했습니다."
-                
-                cursor.execute("""
-                    INSERT INTO notification_logs 
-                    (user_email, symbol, notification_type, message, status, sent_at, error_message)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    to_phone,
-                    None,
-                    'sms',
-                    log_message,
-                    status,
-                    datetime.now(),
-                    error_msg
-                ))
-                
-                conn.commit()
-                cursor.close()
-                conn.close()
-                logger.info(f"문자 발송 이력 저장 완료: {to_phone} - {status}")
-            except Exception as e:
-                logger.error(f"문자 발송 이력 저장 실패: {str(e)}")
+        NotificationLogger.log_notification(
+            user_email=to_phone,
+            notification_type='sms',
+            message=f"[API발송] {message}",
+            status="sent" if success else "failed",
+            error_message=None if success else "문자 발송에 실패했습니다."
+        )
         
         if success:
             return SmsNotificationResponse(

@@ -229,7 +229,10 @@ class NewsController(
         }
         
         return Mono.zip(titleMono, descriptionMono, contentMono)
-            .map { (translatedTitle, translatedDescription, translatedContent) ->
+            .map { tuple ->
+                val translatedTitle = tuple.t1
+                val translatedDescription = tuple.t2
+                val translatedContent = tuple.t3
                 news.copy(
                     titleKo = if (needsTitleTranslation && !isKoreanText(news.title)) {
                         translatedTitle

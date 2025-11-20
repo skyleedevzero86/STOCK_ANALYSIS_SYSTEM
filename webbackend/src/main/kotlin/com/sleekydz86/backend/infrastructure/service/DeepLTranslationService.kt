@@ -49,7 +49,7 @@ class DeepLTranslationService(
                 val result = translator!!.translateText(
                     text,
                     null,
-                    Language.KO,
+                    "ko",
                     options
                 )
                 result.text
@@ -85,7 +85,7 @@ class DeepLTranslationService(
                             translator!!.translateText(
                                 text,
                                 null,
-                                Language.KO,
+                                "ko",
                                 options
                             ).text
                         } catch (e: Exception) {

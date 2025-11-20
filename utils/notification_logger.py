@@ -59,3 +59,4 @@ class NotificationLogger:
             logger.error(f"{notification_type} 발송 이력 저장 실패: {str(e)}")
             return False
 
+

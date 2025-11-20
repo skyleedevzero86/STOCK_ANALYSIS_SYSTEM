@@ -38,3 +38,4 @@ class DataFormatter:
         except (ValueError, TypeError):
             return default
 
+

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import sys
 import os
 from datetime import datetime
@@ -11,15 +10,11 @@ from data_collectors.stock_data_collector import StockDataCollector, DataQuality
 from analysis_engine.technical_analyzer import TechnicalAnalyzer
 from notification.notification_service import NotificationService, AlertManager
 from config.settings import settings
+from config.logging_config import get_logger, setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('stock_analysis.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# 로깅 초기화
+setup_logging(log_file='stock_analysis.log')
+logger = get_logger(__name__, 'stock_analysis.log')
 
 class StockAnalysisSystem:
     
@@ -47,17 +42,17 @@ class StockAnalysisSystem:
         self.alert_manager = AlertManager(self.notification_service)
         
     def run_analysis_cycle(self) -> Dict:
-        logging.info("주식 분석 사이클 시작")
+        logger.info("주식 분석 사이클 시작", component="StockAnalysisSystem")
         
         try:
-            logging.info("1단계: 데이터 수집")
+            logger.info("1단계: 데이터 수집", component="StockAnalysisSystem", step="data_collection")
             realtime_data = self.collector.get_multiple_realtime_data()
             
             if not realtime_data:
-                logging.warning("수집된 데이터가 없습니다")
+                logger.warning("수집된 데이터가 없습니다", component="StockAnalysisSystem")
                 return {'status': 'failed', 'reason': 'no_data'}
             
-            logging.info("2단계: 데이터 품질 검사")
+            logger.info("2단계: 데이터 품질 검사", component="StockAnalysisSystem", step="quality_check")
             quality_checker = DataQualityChecker()
             quality_results = []
             
@@ -71,7 +66,7 @@ class StockAnalysisSystem:
                     }
                     quality_results.append(quality_result)
             
-            logging.info("3단계: 기술적 분석")
+            logger.info("3단계: 기술적 분석", component="StockAnalysisSystem", step="technical_analysis")
             analysis_results = []
             
             for data in realtime_data:
@@ -79,12 +74,12 @@ class StockAnalysisSystem:
                     continue
                     
                 symbol = data['symbol']
-                logging.info(f"{symbol} 분석 시작")
+                logger.info("종목 분석 시작", component="StockAnalysisSystem", symbol=symbol)
                 
                 historical_data = self._load_historical_data(symbol)
                 
                 if historical_data.empty:
-                    logging.warning(f"{symbol}: 과거 데이터가 없습니다")
+                    logger.warning("과거 데이터가 없습니다", component="StockAnalysisSystem", symbol=symbol)
                     continue
                 
                 analyzed_data = self.analyzer.calculate_all_indicators(historical_data)
@@ -108,12 +103,16 @@ class StockAnalysisSystem:
                 }
                 
                 analysis_results.append(analysis_result)
-                logging.info(f"{symbol} 분석 완료: {trend_analysis['trend']} ({signals['signal']})")
+                logger.info("종목 분석 완료", 
+                          component="StockAnalysisSystem", 
+                          symbol=symbol, 
+                          trend=trend_analysis['trend'], 
+                          signal=signals['signal'])
             
-            logging.info("4단계: 알림 처리")
+            logger.info("4단계: 알림 처리", component="StockAnalysisSystem", step="notification")
             notification_results = self._process_notifications(analysis_results)
             
-            logging.info("5단계: 결과 저장")
+            logger.info("5단계: 결과 저장", component="StockAnalysisSystem", step="save_results")
             save_results = self._save_analysis_results(analysis_results)
             
             summary = {
@@ -125,14 +124,14 @@ class StockAnalysisSystem:
                 'results_saved': save_results
             }
             
-            logging.info(f"분석 사이클 완료: {summary}")
+            logger.info("분석 사이클 완료", component="StockAnalysisSystem", **summary)
             return summary
             
         except (ValueError, TypeError) as e:
-            logging.error(f"분석 사이클 데이터 오류: {str(e)}")
+            logger.error("분석 사이클 데이터 오류", component="StockAnalysisSystem", exception=e)
             return {'status': 'failed', 'reason': str(e)}
         except Exception as e:
-            logging.error(f"분석 사이클 예상치 못한 오류: {str(e)}")
+            logger.error("분석 사이클 예상치 못한 오류", component="StockAnalysisSystem", exception=e)
             return {'status': 'failed', 'reason': str(e)}
     
     def _load_historical_data(self, symbol: str):
@@ -173,10 +172,10 @@ class StockAnalysisSystem:
             }
             
         except (ValueError, TypeError) as e:
-            logging.error(f"알림 처리 데이터 오류: {str(e)}")
+            logger.error("알림 처리 데이터 오류", component="StockAnalysisSystem", exception=e)
             return {'total_sent': 0}
         except Exception as e:
-            logging.error(f"알림 처리 예상치 못한 오류: {str(e)}")
+            logger.error("알림 처리 예상치 못한 오류", component="StockAnalysisSystem", exception=e)
             return {'total_sent': 0}
     
     def _save_analysis_results(self, analysis_results: List[Dict]) -> int:
@@ -187,40 +186,49 @@ class StockAnalysisSystem:
                 signal = result['signals']['signal']
                 confidence = result['signals']['confidence']
                 
-                logging.info(f"저장: {symbol} - {trend} ({signal}, 신뢰도: {confidence:.2f})")
+                logger.info("분석 결과 저장", 
+                          component="StockAnalysisSystem", 
+                          symbol=symbol, 
+                          trend=trend, 
+                          signal=signal, 
+                          confidence=confidence)
             
             return len(analysis_results)
             
         except (ValueError, TypeError) as e:
-            logging.error(f"결과 저장 데이터 오류: {str(e)}")
+            logger.error("결과 저장 데이터 오류", component="StockAnalysisSystem", exception=e)
             return 0
         except Exception as e:
-            logging.error(f"결과 저장 예상치 못한 오류: {str(e)}")
+            logger.error("결과 저장 예상치 못한 오류", component="StockAnalysisSystem", exception=e)
             return 0
     
     def run_continuous_analysis(self, interval_minutes: int = 15):
         import time
         
-        logging.info(f"연속 분석 시작 (간격: {interval_minutes}분)")
+        logger.info("연속 분석 시작", component="StockAnalysisSystem", interval_minutes=interval_minutes)
         
         while True:
             try:
                 result = self.run_analysis_cycle()
                 
                 if result['status'] == 'success':
-                    logging.info(f"분석 완료: {result['symbols_analyzed']}개 종목")
+                    logger.info("분석 완료", 
+                              component="StockAnalysisSystem", 
+                              symbols_analyzed=result['symbols_analyzed'])
                 else:
-                    logging.error(f"분석 실패: {result.get('reason', 'unknown')}")
+                    logger.error("분석 실패", 
+                               component="StockAnalysisSystem", 
+                               reason=result.get('reason', 'unknown'))
                 
                 time.sleep(interval_minutes * 60)
                 
             except KeyboardInterrupt:
-                logging.info("연속 분석 중단됨")
+                logger.info("연속 분석 중단됨", component="StockAnalysisSystem")
                 break
             except KeyboardInterrupt:
                 raise
             except Exception as e:
-                logging.error(f"연속 분석 예상치 못한 오류: {str(e)}")
+                logger.error("연속 분석 예상치 못한 오류", component="StockAnalysisSystem", exception=e)
                 time.sleep(60)
 
 def main():

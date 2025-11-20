@@ -24,3 +24,4 @@ interface ContactInquiryRepository : JpaRepository<ContactInquiryEntity, Long> {
 }
 
 
+

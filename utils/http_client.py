@@ -93,3 +93,4 @@ class HttpClient:
         url = f"{base_url.rstrip('/')}{health_endpoint}"
         return HttpClient.get(url, timeout=timeout)
 
+

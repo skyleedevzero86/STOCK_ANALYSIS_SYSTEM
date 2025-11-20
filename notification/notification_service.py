@@ -1,13 +1,15 @@
 import smtplib
 import requests
-import logging
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from config.logging_config import get_logger
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = get_logger(__name__)
 from exceptions import (
     NotificationError,
     EmailNotificationError,
@@ -24,7 +26,7 @@ try:
     SOLAPI_AVAILABLE = True
 except ImportError:
     SOLAPI_AVAILABLE = False
-    logging.warning("solapi 모듈이 설치되지 않았습니다. 문자 발송 기능이 비활성화됩니다.")
+    logger.warning("solapi 모듈이 설치되지 않았습니다. 문자 발송 기능이 비활성화됩니다.", component="NotificationService")
 
 class NotificationService:
     
@@ -41,10 +43,10 @@ class NotificationService:
                     api_secret=self.solapi_config['api_secret']
                 )
             except (ConfigurationError, ConnectionError) as e:
-                logging.error(f"SOLAPI 초기화 실패: {str(e)}")
+                logger.error("SOLAPI 초기화 실패", exception=e, component="NotificationService")
                 self.message_service = None
             except Exception as e:
-                logging.error(f"SOLAPI 초기화 예상치 못한 오류: {str(e)}")
+                logger.error("SOLAPI 초기화 예상치 못한 오류", exception=e, component="NotificationService")
                 self.message_service = None
         else:
             self.message_service = None
@@ -52,7 +54,7 @@ class NotificationService:
     def send_email(self, to_email: str, subject: str, body: str) -> bool:
         try:
             if not self.email_config:
-                logging.warning("이메일 설정이 없습니다.")
+                logger.warning("이메일 설정이 없습니다", component="NotificationService")
                 return False
             
             smtp_server = self.email_config.get('smtp_server')
@@ -61,7 +63,7 @@ class NotificationService:
             password = self.email_config.get('password')
             
             if not all([smtp_server, user, password]):
-                logging.warning("이메일 설정이 완전하지 않습니다.")
+                logger.warning("이메일 설정이 완전하지 않습니다", component="NotificationService")
                 return False
             
             msg = MIMEMultipart()
@@ -76,39 +78,39 @@ class NotificationService:
             server.send_message(msg)
             server.quit()
             
-            logging.info(f"이메일 발송 성공: {to_email}")
+            logger.info("이메일 발송 성공", to_email=to_email, component="NotificationService")
             return True
             
         except smtplib.SMTPAuthenticationError as e:
-            logging.error(f"이메일 인증 실패 ({to_email}): {str(e)}")
+            logger.error("이메일 인증 실패", to_email=to_email, exception=e, component="NotificationService")
             raise EmailNotificationError(
                 f"이메일 인증 실패: {str(e)}",
                 error_code="EMAIL_AUTH_FAILED",
                 cause=e
             ) from e
         except smtplib.SMTPException as e:
-            logging.error(f"이메일 SMTP 오류 ({to_email}): {str(e)}")
+            logger.error("이메일 SMTP 오류", to_email=to_email, exception=e, component="NotificationService")
             raise EmailNotificationError(
                 f"이메일 SMTP 오류: {str(e)}",
                 error_code="EMAIL_SMTP_ERROR",
                 cause=e
             ) from e
         except (ConnectionError, TimeoutError) as e:
-            logging.error(f"이메일 네트워크 오류 ({to_email}): {str(e)}")
+            logger.error("이메일 네트워크 오류", to_email=to_email, exception=e, component="NotificationService")
             raise EmailNotificationError(
                 f"이메일 네트워크 오류: {str(e)}",
                 error_code="EMAIL_NETWORK_ERROR",
                 cause=e
             ) from e
         except ConfigurationError as e:
-            logging.error(f"이메일 설정 오류 ({to_email}): {str(e)}")
+            logger.error("이메일 설정 오류", to_email=to_email, exception=e, component="NotificationService")
             raise EmailNotificationError(
                 f"이메일 설정 오류: {str(e)}",
                 error_code="EMAIL_CONFIG_ERROR",
                 cause=e
             ) from e
         except Exception as e:
-            logging.error(f"이메일 발송 예상치 못한 오류 ({to_email}): {str(e)}")
+            logger.error("이메일 발송 예상치 못한 오류", to_email=to_email, exception=e, component="NotificationService")
             raise EmailNotificationError(
                 f"이메일 발송 실패: {str(e)}",
                 error_code="EMAIL_SEND_FAILED",
@@ -128,17 +130,17 @@ class NotificationService:
             response = self.session.post(self.slack_webhook, json=payload)
             response.raise_for_status()
             
-            logging.info("Slack 메시지 발송 성공")
+            logger.info("Slack 메시지 발송 성공", component="NotificationService")
             return True
             
         except (ConnectionError, TimeoutError) as e:
-            logging.error(f"Slack 메시지 네트워크 오류: {str(e)}")
+            logger.error("Slack 메시지 네트워크 오류", exception=e, component="NotificationService")
             return False
         except requests.exceptions.HTTPError as e:
-            logging.error(f"Slack 메시지 HTTP 오류: {str(e)}")
+            logger.error("Slack 메시지 HTTP 오류", exception=e, component="NotificationService")
             return False
         except Exception as e:
-            logging.error(f"Slack 메시지 발송 예상치 못한 오류: {str(e)}")
+            logger.error("Slack 메시지 발송 예상치 못한 오류", exception=e, component="NotificationService")
             return False
     
     def send_telegram_message(self, bot_token: str, chat_id: str, message: str) -> bool:
@@ -152,21 +154,21 @@ class NotificationService:
             response = self.session.post(url, json=payload)
             response.raise_for_status()
             
-            logging.info("Telegram 메시지 발송 성공")
+            logger.info("Telegram 메시지 발송 성공", component="NotificationService")
             return True
             
         except Exception as e:
-            logging.error(f"Telegram 메시지 발송 실패: {str(e)}")
+            logger.error("Telegram 메시지 발송 실패", exception=e, component="NotificationService")
             return False
     
     def send_sms(self, from_phone: str, to_phone: str, message: str) -> bool:
         try:
             if not SOLAPI_AVAILABLE:
-                logging.warning("solapi 모듈이 설치되지 않았습니다.")
+                logger.warning("solapi 모듈이 설치되지 않았습니다", component="NotificationService")
                 return False
             
             if not self.message_service:
-                logging.warning("SOLAPI 서비스가 초기화되지 않았습니다.")
+                logger.warning("SOLAPI 서비스가 초기화되지 않았습니다", component="NotificationService")
                 return False
             
             from_phone = from_phone.replace("-", "").replace(" ", "")
@@ -185,17 +187,20 @@ class NotificationService:
                 failed_count = response.group_info.count.registered_failed
                 
                 if success_count > 0:
-                    logging.info(f"SMS 발송 성공: {to_phone} (Group ID: {response.group_info.group_id})")
+                    logger.info("SMS 발송 성공", 
+                              to_phone=to_phone, 
+                              group_id=response.group_info.group_id, 
+                              component="NotificationService")
                     return True
                 else:
-                    logging.error(f"SMS 발송 실패: {to_phone} (실패 개수: {failed_count})")
+                    logger.error("SMS 발송 실패", to_phone=to_phone, failed_count=failed_count, component="NotificationService")
                     return False
             else:
-                logging.error(f"SMS 발송 실패: {to_phone} (응답 형식 오류)")
+                logger.error("SMS 발송 실패: 응답 형식 오류", to_phone=to_phone, component="NotificationService")
                 return False
                 
         except Exception as e:
-            logging.error(f"SMS 발송 실패 ({to_phone}): {str(e)}")
+            logger.error("SMS 발송 실패", to_phone=to_phone, exception=e, component="NotificationService")
             return False
     
     def create_anomaly_alert(self, anomaly_data: Dict) -> str:

@@ -47,3 +47,4 @@ class PrintFormatter:
         for service, (is_online, _) in results.items():
             PrintFormatter.print_status(service, is_online)
 
+

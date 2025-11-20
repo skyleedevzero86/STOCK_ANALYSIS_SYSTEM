@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import ta
 from typing import Dict, List, Tuple
-import logging
 from datetime import datetime, timedelta
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class TechnicalAnalyzer:
     
@@ -52,7 +54,7 @@ class TechnicalAnalyzer:
     
     def calculate_all_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
         if data.empty or len(data) < 50:
-            logging.warning("데이터가 부족합니다 (최소 50일 필요)")
+            logger.warning("데이터가 부족합니다 (최소 50일 필요)", component="TechnicalAnalyzer", data_points=len(data))
             return data
         
         data['rsi_14'] = self.calculate_rsi(data)

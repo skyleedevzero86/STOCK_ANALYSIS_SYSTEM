@@ -2,7 +2,9 @@ from fastapi import WebSocket
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Optional
 from datetime import datetime
-import logging
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class StockDataResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -127,7 +129,7 @@ class ConnectionManager:
                 'last_activity': datetime.utcnow(),
                 'message_count': 0
             }
-            logging.info(f"WebSocket 연결 수립됨: {client_ip}")
+            logger.info("WebSocket 연결 수립됨", client_ip=client_ip, component="ConnectionManager")
         
     def disconnect(self, websocket: WebSocket) -> None:
         if websocket in self.active_connections:
@@ -135,7 +137,7 @@ class ConnectionManager:
         
         if self.enable_metadata and websocket in self.connection_metadata:
             metadata = self.connection_metadata.pop(websocket)
-            logging.info(f"WebSocket 연결 종료됨: {metadata.get('client_ip')}")
+            logger.info("WebSocket 연결 종료됨", client_ip=metadata.get('client_ip'), component="ConnectionManager")
     
     async def send_personal_message(self, message: str, websocket: WebSocket) -> None:
         try:
@@ -144,7 +146,7 @@ class ConnectionManager:
                 self.connection_metadata[websocket]['last_activity'] = datetime.utcnow()
                 self.connection_metadata[websocket]['message_count'] += 1
         except Exception as e:
-            logging.error(f"WebSocket 메시지 전송 오류: {str(e)}")
+            logger.error("WebSocket 메시지 전송 오류", exception=e, component="ConnectionManager")
             self.disconnect(websocket)
     
     async def broadcast(self, message: str) -> None:

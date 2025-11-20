@@ -2,15 +2,17 @@ import yfinance as yf
 import pandas as pd
 import requests
 import time
-import logging
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
 import json
 from config.settings import settings
+from config.logging_config import get_logger
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = get_logger(__name__)
 from exceptions import (
     StockDataCollectionError,
     StockNotFoundError,
@@ -58,18 +60,18 @@ class StockDataCollector:
             return data
             
         except (StockDataCollectionError, StockNotFoundError, InvalidSymbolError) as e:
-            logging.warning(f"과거 데이터 수집 실패 ({symbol}): {str(e)}, 모의 데이터 사용")
+            logger.warning("과거 데이터 수집 실패, 모의 데이터 사용", symbol=symbol, exception=e)
             return self._generate_mock_historical_data(symbol, period)
         except (TimeoutError, ConnectionError, NetworkError) as e:
-            logging.warning(f"과거 데이터 수집 네트워크 오류 ({symbol}): {str(e)}, 모의 데이터 사용")
+            logger.warning("과거 데이터 수집 네트워크 오류, 모의 데이터 사용", symbol=symbol, exception=e)
             return self._generate_mock_historical_data(symbol, period)
         except Exception as e:
-            logging.warning(f"과거 데이터 수집 예상치 못한 오류 ({symbol}): {str(e)}, 모의 데이터 사용")
+            logger.warning("과거 데이터 수집 예상치 못한 오류, 모의 데이터 사용", symbol=symbol, exception=e)
             return self._generate_mock_historical_data(symbol, period)
     
     def get_realtime_data(self, symbol: str) -> Dict:
         if self.use_mock_data:
-            logging.warning(f"Mock 데이터 모드: {symbol}에 대한 모의 데이터를 반환합니다.")
+            logger.warning("Mock 데이터 모드: 모의 데이터를 반환합니다", symbol=symbol, component="StockDataCollector")
             return self._generate_mock_realtime_data(symbol)
         
         data_sources = [
@@ -85,11 +87,11 @@ class StockDataCollector:
                 if source_name == 'alpha_vantage' and not self.use_alpha_vantage:
                     continue
                 
-                logging.info(f"{source_name}로 {symbol} 데이터 수집 시도...")
+                logger.info("데이터 수집 시도", symbol=symbol, source=source_name, component="StockDataCollector")
                 result = fetch_func(symbol)
                 
                 if result and result.get('price', 0) > 0:
-                    logging.info(f"{source_name}에서 {symbol} 데이터 수집 성공: ${result['price']:.2f}")
+                    logger.info("데이터 수집 성공", symbol=symbol, source=source_name, price=result['price'], component="StockDataCollector")
                     return result
                 else:
                     raise StockDataCollectionError(
@@ -100,26 +102,26 @@ class StockDataCollector:
                     
             except (StockDataCollectionError, StockNotFoundError, InvalidSymbolError) as e:
                 last_exception = e
-                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 실패: {str(e)}")
+                logger.warning("데이터 수집 실패", symbol=symbol, source=source_name, exception=e)
                 continue
             except (TimeoutError, ConnectionError, NetworkError, RateLimitError) as e:
                 last_exception = e
-                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 네트워크 오류: {str(e)}")
+                logger.warning("데이터 수집 네트워크 오류", symbol=symbol, source=source_name, exception=e)
                 continue
             except (YahooFinanceError, AlphaVantageError, ExternalServiceError) as e:
                 last_exception = e
-                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 외부 서비스 오류: {str(e)}")
+                logger.warning("데이터 수집 외부 서비스 오류", symbol=symbol, source=source_name, exception=e)
                 continue
             except Exception as e:
                 last_exception = e
-                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 예상치 못한 오류: {str(e)}")
+                logger.warning("데이터 수집 예상치 못한 오류", symbol=symbol, source=source_name, exception=e)
                 continue
         
         if self.fallback_to_mock:
-            logging.warning(f"모든 데이터 소스 실패, {symbol}에 대한 모의 데이터를 반환합니다.")
+            logger.warning("모든 데이터 소스 실패, 모의 데이터를 반환합니다", symbol=symbol, component="StockDataCollector")
             return self._generate_mock_realtime_data(symbol)
         else:
-            logging.error(f"{symbol}에 대한 실제 데이터를 가져올 수 없습니다.")
+            logger.error("실제 데이터를 가져올 수 없습니다", symbol=symbol, component="StockDataCollector")
             return {
                 'symbol': symbol,
                 'timestamp': datetime.now(),
@@ -310,25 +312,25 @@ class StockDataCollector:
                 return {}
             
         except requests.exceptions.Timeout as e:
-            logging.warning(f"Alpha Vantage 타임아웃 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 타임아웃", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
         except requests.exceptions.ConnectionError as e:
-            logging.warning(f"Alpha Vantage 연결 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 연결 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
         except requests.exceptions.HTTPError as e:
             if e.response and e.response.status_code == 429:
-                logging.warning(f"Alpha Vantage 레이트 리밋 ({symbol})")
+                logger.warning("Alpha Vantage 레이트 리밋", symbol=symbol, component="StockDataCollector")
             else:
-                logging.warning(f"Alpha Vantage HTTP 오류 ({symbol}): {str(e)}")
+                logger.warning("Alpha Vantage HTTP 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Alpha Vantage 요청 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 요청 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
         except (ValueError, KeyError) as e:
-            logging.warning(f"Alpha Vantage 데이터 파싱 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 데이터 파싱 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
         except Exception as e:
-            logging.warning(f"Alpha Vantage 예상치 못한 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 예상치 못한 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return {}
     
     def get_alpha_vantage_daily_data(self, symbol: str, outputsize: str = "compact") -> pd.DataFrame:
@@ -367,16 +369,16 @@ class StockDataCollector:
                 return pd.DataFrame()
                 
         except requests.exceptions.Timeout as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 타임아웃", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 요청 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except (ValueError, KeyError) as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 파싱 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except Exception as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 예상치 못한 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
     
     def get_alpha_vantage_intraday_data(self, symbol: str, interval: str = "5min", outputsize: str = "compact") -> pd.DataFrame:
@@ -416,16 +418,16 @@ class StockDataCollector:
                 return pd.DataFrame()
                 
         except requests.exceptions.Timeout as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 타임아웃", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 요청 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except (ValueError, KeyError) as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 파싱 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except Exception as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 예상치 못한 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
     
     def get_alpha_vantage_weekly_data(self, symbol: str) -> pd.DataFrame:
@@ -463,16 +465,16 @@ class StockDataCollector:
                 return pd.DataFrame()
                 
         except requests.exceptions.Timeout as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 타임아웃", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 요청 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except (ValueError, KeyError) as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 파싱 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except Exception as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 예상치 못한 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
     
     def get_alpha_vantage_monthly_data(self, symbol: str) -> pd.DataFrame:
@@ -510,16 +512,16 @@ class StockDataCollector:
                 return pd.DataFrame()
                 
         except requests.exceptions.Timeout as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 타임아웃", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 요청 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except (ValueError, KeyError) as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 파싱 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
         except Exception as e:
-            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
+            logger.warning("Alpha Vantage 일별 데이터 예상치 못한 오류", symbol=symbol, exception=e, component="StockDataCollector")
             return pd.DataFrame()
     
     def search_alpha_vantage_symbols(self, keywords: str) -> List[Dict]:

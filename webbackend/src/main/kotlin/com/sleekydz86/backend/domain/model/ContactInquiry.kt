@@ -15,3 +15,4 @@ data class ContactInquiry(
     val updatedAt: LocalDateTime = LocalDateTime.now()
 )
 
+

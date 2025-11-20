@@ -10,3 +10,4 @@ data class ContactInquiryReply(
     val createdAt: LocalDateTime = LocalDateTime.now()
 )
 
+

@@ -8,6 +8,23 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Union
 import json
 from config.settings import settings
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from exceptions import (
+    StockDataCollectionError,
+    StockNotFoundError,
+    InvalidSymbolError,
+    DataSourceUnavailableError,
+    TimeoutError,
+    ConnectionError,
+    NetworkError,
+    RateLimitError,
+    HTTPError,
+    YahooFinanceError,
+    AlphaVantageError,
+    ExternalServiceError
+)
 
 class StockDataCollector:
     
@@ -40,7 +57,14 @@ class StockDataCollector:
             
             return data
             
+        except (StockDataCollectionError, StockNotFoundError, InvalidSymbolError) as e:
+            logging.warning(f"과거 데이터 수집 실패 ({symbol}): {str(e)}, 모의 데이터 사용")
+            return self._generate_mock_historical_data(symbol, period)
+        except (TimeoutError, ConnectionError, NetworkError) as e:
+            logging.warning(f"과거 데이터 수집 네트워크 오류 ({symbol}): {str(e)}, 모의 데이터 사용")
+            return self._generate_mock_historical_data(symbol, period)
         except Exception as e:
+            logging.warning(f"과거 데이터 수집 예상치 못한 오류 ({symbol}): {str(e)}, 모의 데이터 사용")
             return self._generate_mock_historical_data(symbol, period)
     
     def get_realtime_data(self, symbol: str) -> Dict:
@@ -68,11 +92,27 @@ class StockDataCollector:
                     logging.info(f"{source_name}에서 {symbol} 데이터 수집 성공: ${result['price']:.2f}")
                     return result
                 else:
-                    raise ValueError(f"{source_name} returned invalid data")
+                    raise StockDataCollectionError(
+                        f"{source_name} returned invalid data for {symbol}",
+                        error_code="INVALID_DATA",
+                        cause=None
+                    )
                     
-            except Exception as e:
+            except (StockDataCollectionError, StockNotFoundError, InvalidSymbolError) as e:
                 last_exception = e
                 logging.warning(f"{source_name}에서 {symbol} 데이터 수집 실패: {str(e)}")
+                continue
+            except (TimeoutError, ConnectionError, NetworkError, RateLimitError) as e:
+                last_exception = e
+                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 네트워크 오류: {str(e)}")
+                continue
+            except (YahooFinanceError, AlphaVantageError, ExternalServiceError) as e:
+                last_exception = e
+                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 외부 서비스 오류: {str(e)}")
+                continue
+            except Exception as e:
+                last_exception = e
+                logging.warning(f"{source_name}에서 {symbol} 데이터 수집 예상치 못한 오류: {str(e)}")
                 continue
         
         if self.fallback_to_mock:
@@ -99,7 +139,11 @@ class StockDataCollector:
         info = ticker.info
         
         if not info or 'currentPrice' not in info:
-            raise ValueError(f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.")
+            raise YahooFinanceError(
+                f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.",
+                service_name="Yahoo Finance",
+                cause=None
+            )
         
         hist = ticker.history(period="1d", interval="1m")
         if not hist.empty:
@@ -110,7 +154,11 @@ class StockDataCollector:
             volume = int(info.get('volume', 0))
         
         if latest_price <= 0:
-            raise ValueError(f"Yahoo Finance에서 {symbol}의 가격이 0입니다.")
+            raise YahooFinanceError(
+                f"Yahoo Finance에서 {symbol}의 가격이 0입니다.",
+                service_name="Yahoo Finance",
+                cause=None
+            )
         
         change = float(info.get('regularMarketChange', 0))
         change_percent = float(info.get('regularMarketChangePercent', 0))
@@ -147,7 +195,11 @@ class StockDataCollector:
                 'confidence_score': 0.85
             }
         else:
-            raise ValueError("Alpha Vantage returned empty or invalid data")
+            raise AlphaVantageError(
+                "Alpha Vantage returned empty or invalid data",
+                service_name="Alpha Vantage",
+                cause=None
+            )
     
     def _fetch_yahoo_direct_api(self, symbol: str) -> Dict:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -172,7 +224,11 @@ class StockDataCollector:
         indicators = result.get('indicators', {})
         
         if not timestamps or 'quote' not in indicators:
-            raise ValueError("Missing required data in Yahoo Finance API response")
+            raise YahooFinanceError(
+                "Missing required data in Yahoo Finance API response",
+                service_name="Yahoo Finance",
+                cause=None
+            )
         
         quote = indicators['quote'][0]
         latest_idx = -1
@@ -183,7 +239,11 @@ class StockDataCollector:
         change_percent = meta.get('regularMarketChangePercent', 0)
         
         if price <= 0:
-            raise ValueError(f"Invalid price from Yahoo Direct API: {price}")
+            raise YahooFinanceError(
+                f"Invalid price from Yahoo Direct API: {price}",
+                service_name="Yahoo Finance",
+                cause=None
+            )
         
         return {
             'symbol': symbol,
@@ -249,13 +309,26 @@ class StockDataCollector:
             else:
                 return {}
             
-        except requests.exceptions.Timeout:
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Alpha Vantage 타임아웃 ({symbol}): {str(e)}")
+            return {}
+        except requests.exceptions.ConnectionError as e:
+            logging.warning(f"Alpha Vantage 연결 오류 ({symbol}): {str(e)}")
+            return {}
+        except requests.exceptions.HTTPError as e:
+            if e.response and e.response.status_code == 429:
+                logging.warning(f"Alpha Vantage 레이트 리밋 ({symbol})")
+            else:
+                logging.warning(f"Alpha Vantage HTTP 오류 ({symbol}): {str(e)}")
             return {}
         except requests.exceptions.RequestException as e:
+            logging.warning(f"Alpha Vantage 요청 오류 ({symbol}): {str(e)}")
             return {}
         except (ValueError, KeyError) as e:
+            logging.warning(f"Alpha Vantage 데이터 파싱 오류 ({symbol}): {str(e)}")
             return {}
         except Exception as e:
+            logging.warning(f"Alpha Vantage 예상치 못한 오류 ({symbol}): {str(e)}")
             return {}
     
     def get_alpha_vantage_daily_data(self, symbol: str, outputsize: str = "compact") -> pd.DataFrame:
@@ -293,7 +366,17 @@ class StockDataCollector:
             else:
                 return pd.DataFrame()
                 
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except (ValueError, KeyError) as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
             return pd.DataFrame()
     
     def get_alpha_vantage_intraday_data(self, symbol: str, interval: str = "5min", outputsize: str = "compact") -> pd.DataFrame:
@@ -332,7 +415,17 @@ class StockDataCollector:
             else:
                 return pd.DataFrame()
                 
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except (ValueError, KeyError) as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
             return pd.DataFrame()
     
     def get_alpha_vantage_weekly_data(self, symbol: str) -> pd.DataFrame:
@@ -369,7 +462,17 @@ class StockDataCollector:
             else:
                 return pd.DataFrame()
                 
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except (ValueError, KeyError) as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
             return pd.DataFrame()
     
     def get_alpha_vantage_monthly_data(self, symbol: str) -> pd.DataFrame:
@@ -406,7 +509,17 @@ class StockDataCollector:
             else:
                 return pd.DataFrame()
                 
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 타임아웃 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 요청 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
+        except (ValueError, KeyError) as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 파싱 오류 ({symbol}): {str(e)}")
+            return pd.DataFrame()
         except Exception as e:
+            logging.warning(f"Alpha Vantage 일별 데이터 예상치 못한 오류 ({symbol}): {str(e)}")
             return pd.DataFrame()
     
     def search_alpha_vantage_symbols(self, keywords: str) -> List[Dict]:

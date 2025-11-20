@@ -206,3 +206,4 @@ def safe_float(value, default=None):
     except (ValueError, TypeError):
         return default
 
+

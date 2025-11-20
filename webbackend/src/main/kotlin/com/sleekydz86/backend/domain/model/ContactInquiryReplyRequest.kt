@@ -6,3 +6,4 @@ data class ContactInquiryReplyRequest(
     val createdBy: String
 )
 
+

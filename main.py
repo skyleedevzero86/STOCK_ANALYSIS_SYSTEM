@@ -128,8 +128,11 @@ class StockAnalysisSystem:
             logging.info(f"분석 사이클 완료: {summary}")
             return summary
             
+        except (ValueError, TypeError) as e:
+            logging.error(f"분석 사이클 데이터 오류: {str(e)}")
+            return {'status': 'failed', 'reason': str(e)}
         except Exception as e:
-            logging.error(f"분석 사이클 실행 중 오류: {str(e)}")
+            logging.error(f"분석 사이클 예상치 못한 오류: {str(e)}")
             return {'status': 'failed', 'reason': str(e)}
     
     def _load_historical_data(self, symbol: str):
@@ -169,8 +172,11 @@ class StockAnalysisSystem:
                 'total_sent': anomaly_result.get('alerts_sent', 0) + report_result.get('reports_sent', 0)
             }
             
+        except (ValueError, TypeError) as e:
+            logging.error(f"알림 처리 데이터 오류: {str(e)}")
+            return {'total_sent': 0}
         except Exception as e:
-            logging.error(f"알림 처리 중 오류: {str(e)}")
+            logging.error(f"알림 처리 예상치 못한 오류: {str(e)}")
             return {'total_sent': 0}
     
     def _save_analysis_results(self, analysis_results: List[Dict]) -> int:
@@ -185,8 +191,11 @@ class StockAnalysisSystem:
             
             return len(analysis_results)
             
+        except (ValueError, TypeError) as e:
+            logging.error(f"결과 저장 데이터 오류: {str(e)}")
+            return 0
         except Exception as e:
-            logging.error(f"결과 저장 중 오류: {str(e)}")
+            logging.error(f"결과 저장 예상치 못한 오류: {str(e)}")
             return 0
     
     def run_continuous_analysis(self, interval_minutes: int = 15):
@@ -208,8 +217,10 @@ class StockAnalysisSystem:
             except KeyboardInterrupt:
                 logging.info("연속 분석 중단됨")
                 break
+            except KeyboardInterrupt:
+                raise
             except Exception as e:
-                logging.error(f"연속 분석 중 오류: {str(e)}")
+                logging.error(f"연속 분석 예상치 못한 오류: {str(e)}")
                 time.sleep(60)
 
 def main():

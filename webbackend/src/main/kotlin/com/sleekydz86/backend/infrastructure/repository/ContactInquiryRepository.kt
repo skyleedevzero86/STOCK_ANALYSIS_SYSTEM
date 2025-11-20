@@ -23,3 +23,4 @@ interface ContactInquiryRepository : JpaRepository<ContactInquiryEntity, Long> {
     fun findAllOrderByCreatedAtDesc(pageable: Pageable): Page<ContactInquiryEntity>
 }
 
+

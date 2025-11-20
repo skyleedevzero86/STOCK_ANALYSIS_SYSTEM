@@ -12,3 +12,4 @@ interface ContactInquiryReplyRepository : JpaRepository<ContactInquiryReplyEntit
     fun findByInquiryId(inquiryId: Long): List<ContactInquiryReplyEntity>
 }
 
+

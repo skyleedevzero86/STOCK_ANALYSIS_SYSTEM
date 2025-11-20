@@ -9,3 +9,4 @@ data class ContactInquiryRequest(
     val message: String
 )
 
+

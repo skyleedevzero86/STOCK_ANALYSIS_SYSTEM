@@ -5,6 +5,18 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from exceptions import (
+    NotificationError,
+    EmailNotificationError,
+    SMSNotificationError,
+    NetworkError,
+    ConnectionError,
+    TimeoutError,
+    ConfigurationError
+)
 
 try:
     from solapi import SolapiMessageService
@@ -28,8 +40,11 @@ class NotificationService:
                     api_key=self.solapi_config['api_key'],
                     api_secret=self.solapi_config['api_secret']
                 )
-            except Exception as e:
+            except (ConfigurationError, ConnectionError) as e:
                 logging.error(f"SOLAPI 초기화 실패: {str(e)}")
+                self.message_service = None
+            except Exception as e:
+                logging.error(f"SOLAPI 초기화 예상치 못한 오류: {str(e)}")
                 self.message_service = None
         else:
             self.message_service = None
@@ -64,9 +79,41 @@ class NotificationService:
             logging.info(f"이메일 발송 성공: {to_email}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logging.error(f"이메일 인증 실패 ({to_email}): {str(e)}")
+            raise EmailNotificationError(
+                f"이메일 인증 실패: {str(e)}",
+                error_code="EMAIL_AUTH_FAILED",
+                cause=e
+            ) from e
+        except smtplib.SMTPException as e:
+            logging.error(f"이메일 SMTP 오류 ({to_email}): {str(e)}")
+            raise EmailNotificationError(
+                f"이메일 SMTP 오류: {str(e)}",
+                error_code="EMAIL_SMTP_ERROR",
+                cause=e
+            ) from e
+        except (ConnectionError, TimeoutError) as e:
+            logging.error(f"이메일 네트워크 오류 ({to_email}): {str(e)}")
+            raise EmailNotificationError(
+                f"이메일 네트워크 오류: {str(e)}",
+                error_code="EMAIL_NETWORK_ERROR",
+                cause=e
+            ) from e
+        except ConfigurationError as e:
+            logging.error(f"이메일 설정 오류 ({to_email}): {str(e)}")
+            raise EmailNotificationError(
+                f"이메일 설정 오류: {str(e)}",
+                error_code="EMAIL_CONFIG_ERROR",
+                cause=e
+            ) from e
         except Exception as e:
-            logging.error(f"이메일 발송 실패 ({to_email}): {str(e)}")
-            return False
+            logging.error(f"이메일 발송 예상치 못한 오류 ({to_email}): {str(e)}")
+            raise EmailNotificationError(
+                f"이메일 발송 실패: {str(e)}",
+                error_code="EMAIL_SEND_FAILED",
+                cause=e
+            ) from e
     
     def send_slack_message(self, message: str) -> bool:
         try:
@@ -84,8 +131,14 @@ class NotificationService:
             logging.info("Slack 메시지 발송 성공")
             return True
             
+        except (ConnectionError, TimeoutError) as e:
+            logging.error(f"Slack 메시지 네트워크 오류: {str(e)}")
+            return False
+        except requests.exceptions.HTTPError as e:
+            logging.error(f"Slack 메시지 HTTP 오류: {str(e)}")
+            return False
         except Exception as e:
-            logging.error(f"Slack 메시지 발송 실패: {str(e)}")
+            logging.error(f"Slack 메시지 발송 예상치 못한 오류: {str(e)}")
             return False
     
     def send_telegram_message(self, bot_token: str, chat_id: str, message: str) -> bool:

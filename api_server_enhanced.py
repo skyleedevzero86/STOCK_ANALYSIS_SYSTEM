@@ -262,6 +262,80 @@ class StockAnalysisAPI:
         self.error_manager = error_manager
         self.news_collector = news_collector
         
+    async def _handle_realtime_data_error(self, e: Exception, symbol: str, context: ErrorContext, 
+                                     max_retries: int, attempt: int) -> Optional[Dict[str, Any]]:
+        if isinstance(e, HTTPException):
+            raise
+        elif isinstance(e, TimeoutError):
+            if attempt < max_retries - 1:
+                return None
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.HIGH,
+                ErrorCategory.DATA_COLLECTION,
+                f"실시간 데이터 조회 타임아웃: {symbol} ({max_retries}회 시도 후)",
+                e,
+                context
+            )
+            logger.error("실시간 데이터 조회 타임아웃", symbol=symbol, error_id=error_id, retry_count=attempt+1)
+            raise HTTPException(
+                status_code=504,
+                detail=f"데이터 조회 시간 초과. 오류 ID: {error_id}"
+            ) from e
+        elif isinstance(e, (ConnectionError, NetworkError)):
+            if attempt < max_retries - 1:
+                return None
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.HIGH,
+                ErrorCategory.NETWORK,
+                f"네트워크 오류: {symbol} ({max_retries}회 시도 후)",
+                e,
+                context
+            )
+            logger.error("네트워크 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1)
+            raise HTTPException(
+                status_code=503,
+                detail=f"네트워크 오류. 오류 ID: {error_id}"
+            ) from e
+        elif isinstance(e, StockDataCollectionError):
+            if attempt < max_retries - 1:
+                return None
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.HIGH,
+                ErrorCategory.DATA_COLLECTION,
+                f"데이터 수집 오류: {symbol} ({max_retries}회 시도 후) - {str(e)}",
+                e,
+                context
+            )
+            logger.error("데이터 수집 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1, exception=e)
+            fallback_data = await self._get_fallback_data(symbol)
+            if fallback_data:
+                logger.warning("대체 데이터 사용 중", symbol=symbol)
+                return fallback_data
+            raise HTTPException(
+                status_code=500,
+                detail=f"데이터 수집 오류. 오류 ID: {error_id}"
+            ) from e
+        else:
+            if attempt < max_retries - 1:
+                return None
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.HIGH,
+                ErrorCategory.DATA_COLLECTION,
+                f"실시간 데이터 조회 오류: {symbol} ({max_retries}회 시도 후) - {str(e)}",
+                e,
+                context
+            )
+            logger.error("실시간 데이터 조회 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1, exception=e)
+            fallback_data = await self._get_fallback_data(symbol)
+            if fallback_data:
+                logger.warning("대체 데이터 사용 중", symbol=symbol)
+                return fallback_data
+            raise StockDataCollectionError(
+                f"실시간 데이터 조회 실패: {symbol}",
+                error_code="DATA_FETCH_FAILED",
+                cause=e
+            ) from e
+    
     async def get_realtime_data_enhanced(self, symbol: str) -> Dict[str, Any]:
         context = ErrorContext(
             endpoint=f"/api/realtime/{symbol}",
@@ -311,86 +385,13 @@ class StockAnalysisAPI:
                 
                 return DataFormatter.format_realtime_response(data, confidence_score)
                 
-            except HTTPException:
-                raise
-            except TimeoutError as e:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.HIGH,
-                    ErrorCategory.DATA_COLLECTION,
-                    f"실시간 데이터 조회 타임아웃: {symbol} ({max_retries}회 시도 후)",
-                    e,
-                    context
-                )
-                logger.error("실시간 데이터 조회 타임아웃", symbol=symbol, error_id=error_id, retry_count=attempt+1)
-                raise HTTPException(
-                    status_code=504,
-                    detail=f"데이터 조회 시간 초과. 오류 ID: {error_id}"
-                ) from e
-            except (ConnectionError, NetworkError) as e:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.HIGH,
-                    ErrorCategory.NETWORK,
-                    f"네트워크 오류: {symbol} ({max_retries}회 시도 후)",
-                    e,
-                    context
-                )
-                logger.error("네트워크 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1)
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"네트워크 오류. 오류 ID: {error_id}"
-                ) from e
-            except StockDataCollectionError as e:
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.HIGH,
-                    ErrorCategory.DATA_COLLECTION,
-                    f"데이터 수집 오류: {symbol} ({max_retries}회 시도 후) - {str(e)}",
-                    e,
-                    context
-                )
-                logger.error("데이터 수집 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1, exception=e)
-                
-                fallback_data = await self._get_fallback_data(symbol)
-                if fallback_data:
-                    logger.warning("대체 데이터 사용 중", symbol=symbol)
-                    return fallback_data
-                
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"데이터 수집 오류. 오류 ID: {error_id}"
-                ) from e
             except Exception as e:
+                result = await self._handle_realtime_data_error(e, symbol, context, max_retries, attempt)
+                if result is not None:
+                    return result
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay * (attempt + 1))
                     continue
-                
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.HIGH,
-                    ErrorCategory.DATA_COLLECTION,
-                    f"실시간 데이터 조회 오류: {symbol} ({max_retries}회 시도 후) - {str(e)}",
-                    e,
-                    context
-                )
-                logger.error("실시간 데이터 조회 오류", symbol=symbol, error_id=error_id, retry_count=attempt+1, exception=e)
-                
-                fallback_data = await self._get_fallback_data(symbol)
-                if fallback_data:
-                    logger.warning("대체 데이터 사용 중", symbol=symbol)
-                    return fallback_data
-                
-                raise StockDataCollectionError(
-                    f"실시간 데이터 조회 실패: {symbol}",
-                    error_code="DATA_FETCH_FAILED",
-                    cause=e
-                ) from e
     
     async def _get_fallback_data(self, symbol: str) -> Optional[Dict[str, Any]]:
         try:
@@ -405,6 +406,134 @@ class StockAnalysisAPI:
         
         return None
     
+    async def _fetch_historical_data_with_retry(self, symbol: str, context: ErrorContext) -> pd.DataFrame:
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                historical_data = await self.data_collector.get_historical_data_async(symbol, "3mo")
+                if not historical_data.empty:
+                    return historical_data
+            except (TimeoutError, ConnectionError, NetworkError) as e:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2.0 * (attempt + 1))
+                    continue
+                error_id = self.error_manager.log_error(
+                    ErrorSeverity.MEDIUM,
+                    ErrorCategory.DATA_COLLECTION,
+                    f"과거 데이터 조회 네트워크 오류: {symbol} ({max_retries}회 시도 후)",
+                    e,
+                    context
+                )
+                historical_data = await self._get_fallback_historical_data(symbol)
+                if historical_data.empty:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f"과거 데이터 조회 실패: {symbol}. 오류 ID: {error_id}"
+                    ) from e
+                return historical_data
+            except StockDataCollectionError as e:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2.0 * (attempt + 1))
+                    continue
+                error_id = self.error_manager.log_error(
+                    ErrorSeverity.MEDIUM,
+                    ErrorCategory.DATA_COLLECTION,
+                    f"과거 데이터 조회 실패: {symbol} ({max_retries}회 시도 후) - {str(e)}",
+                    e,
+                    context
+                )
+                historical_data = await self._get_fallback_historical_data(symbol)
+                if historical_data.empty:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"과거 데이터를 찾을 수 없습니다: {symbol}. 오류 ID: {error_id}"
+                    ) from e
+                return historical_data
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2.0 * (attempt + 1))
+                    continue
+                error_id = self.error_manager.log_error(
+                    ErrorSeverity.MEDIUM,
+                    ErrorCategory.DATA_COLLECTION,
+                    f"과거 데이터 조회 실패: {symbol} ({max_retries}회 시도 후) - {str(e)}",
+                    e,
+                    context
+                )
+                historical_data = await self._get_fallback_historical_data(symbol)
+                if historical_data.empty:
+                    raise StockDataCollectionError(
+                        f"과거 데이터를 찾을 수 없습니다: {symbol}",
+                        error_code="HISTORICAL_DATA_NOT_FOUND",
+                        cause=e
+                    ) from e
+                return historical_data
+        return pd.DataFrame()
+    
+    def _calculate_indicators_safe(self, data: pd.DataFrame, symbol: str, context: ErrorContext) -> pd.DataFrame:
+        try:
+            return self.analyzer.calculate_all_advanced_indicators(data)
+        except (ValueError, TypeError, StockAnalysisError) as e:
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.MEDIUM,
+                ErrorCategory.ANALYSIS,
+                f"지표 계산 오류: {symbol} - {str(e)}",
+                e,
+                context
+            )
+            return data
+        except Exception as e:
+            error_id = self.error_manager.log_error(
+                ErrorSeverity.MEDIUM,
+                ErrorCategory.ANALYSIS,
+                f"지표 계산 예상치 못한 오류: {symbol} - {str(e)}",
+                e,
+                context
+            )
+            return data
+    
+    def _calculate_analysis_components_safe(self, analyzed_data: pd.DataFrame, symbol: str) -> Dict[str, Any]:
+        components = {
+            'market_regime': {'regime': 'unknown', 'confidence': 0.0},
+            'patterns': [],
+            'support_resistance': {'support': [], 'resistance': []},
+            'fibonacci_levels': {},
+            'anomalies': [],
+            'signals': {'signal': 'hold', 'confidence': 0.0, 'signals': []}
+        }
+        
+        try:
+            components['market_regime'] = self.analyzer.calculate_market_regime(analyzed_data)
+        except Exception as e:
+            logger.warning("시장 상황 계산 오류", symbol=symbol, exception=e)
+        
+        try:
+            components['patterns'] = self.analyzer.detect_chart_patterns(analyzed_data)
+        except Exception as e:
+            logger.warning("패턴 감지 오류", symbol=symbol, exception=e)
+        
+        try:
+            components['support_resistance'] = self.analyzer.calculate_support_resistance(analyzed_data)
+        except Exception as e:
+            logger.warning("지지/저항선 계산 오류", symbol=symbol, exception=e)
+        
+        try:
+            components['fibonacci_levels'] = self.analyzer.calculate_fibonacci_levels(analyzed_data)
+        except Exception as e:
+            logger.warning("피보나치 레벨 계산 오류", symbol=symbol, exception=e)
+        
+        try:
+            components['anomalies'] = self.analyzer.detect_anomalies_ml(analyzed_data)
+        except Exception as e:
+            logger.warning("이상 패턴 감지 오류", symbol=symbol, exception=e)
+        
+        try:
+            components['signals'] = self.analyzer.calculate_advanced_signals(analyzed_data)
+        except Exception as e:
+            logger.warning("신호 계산 오류", symbol=symbol, exception=e)
+        
+        return components
+    
     async def get_advanced_analysis(self, symbol: str) -> Dict[str, Any]:
         context = ErrorContext(
             endpoint=f"/api/analysis/{symbol}",
@@ -413,177 +542,32 @@ class StockAnalysisAPI:
         
         try:
             realtime_data = await self.get_realtime_data_enhanced(symbol)
+            historical_data = await self._fetch_historical_data_with_retry(symbol, context)
+            analyzed_data = self._calculate_indicators_safe(historical_data, symbol, context)
+            components = self._calculate_analysis_components_safe(analyzed_data, symbol)
             
-            historical_data = None
-            max_retries = 2
-            
-            for attempt in range(max_retries):
-                try:
-                    historical_data = await self.data_collector.get_historical_data_async(symbol, "3mo")
-                    if not historical_data.empty:
-                        break
-                except (TimeoutError, ConnectionError, NetworkError) as e:
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2.0 * (attempt + 1))
-                        continue
-                    else:
-                        error_id = self.error_manager.log_error(
-                            ErrorSeverity.MEDIUM,
-                            ErrorCategory.DATA_COLLECTION,
-                            f"과거 데이터 조회 네트워크 오류: {symbol} ({max_retries}회 시도 후)",
-                            e,
-                            context
-                        )
-                        historical_data = await self._get_fallback_historical_data(symbol)
-                        if historical_data.empty:
-                            raise HTTPException(
-                                status_code=503,
-                                detail=f"과거 데이터 조회 실패: {symbol}. 오류 ID: {error_id}"
-                            ) from e
-                except StockDataCollectionError as e:
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2.0 * (attempt + 1))
-                        continue
-                    else:
-                        error_id = self.error_manager.log_error(
-                            ErrorSeverity.MEDIUM,
-                            ErrorCategory.DATA_COLLECTION,
-                            f"과거 데이터 조회 실패: {symbol} ({max_retries}회 시도 후) - {str(e)}",
-                            e,
-                            context
-                        )
-                        historical_data = await self._get_fallback_historical_data(symbol)
-                        if historical_data.empty:
-                            raise HTTPException(
-                                status_code=404,
-                                detail=f"과거 데이터를 찾을 수 없습니다: {symbol}. 오류 ID: {error_id}"
-                            ) from e
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2.0 * (attempt + 1))
-                        continue
-                    else:
-                        error_id = self.error_manager.log_error(
-                            ErrorSeverity.MEDIUM,
-                            ErrorCategory.DATA_COLLECTION,
-                            f"과거 데이터 조회 실패: {symbol} ({max_retries}회 시도 후) - {str(e)}",
-                            e,
-                            context
-                        )
-                        historical_data = await self._get_fallback_historical_data(symbol)
-                        if historical_data.empty:
-                            raise StockDataCollectionError(
-                                f"과거 데이터를 찾을 수 없습니다: {symbol}",
-                                error_code="HISTORICAL_DATA_NOT_FOUND",
-                                cause=e
-                            ) from e
-            
-            try:
-                analyzed_data = self.analyzer.calculate_all_advanced_indicators(historical_data)
-            except (ValueError, TypeError) as e:
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.MEDIUM,
-                    ErrorCategory.ANALYSIS,
-                    f"지표 계산 데이터 오류: {symbol} - {str(e)}",
-                    e,
-                    context
-                )
-                analyzed_data = historical_data
-            except StockAnalysisError as e:
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.MEDIUM,
-                    ErrorCategory.ANALYSIS,
-                    f"지표 계산 오류: {symbol} - {str(e)}",
-                    e,
-                    context
-                )
-                analyzed_data = historical_data
-            except Exception as e:
-                error_id = self.error_manager.log_error(
-                    ErrorSeverity.MEDIUM,
-                    ErrorCategory.ANALYSIS,
-                    f"지표 계산 예상치 못한 오류: {symbol} - {str(e)}",
-                    e,
-                    context
-                )
-                analyzed_data = historical_data
-            
-            try:
-                market_regime = self.analyzer.calculate_market_regime(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("시장 상황 계산 오류", symbol=symbol, exception=e)
-                market_regime = {'regime': 'unknown', 'confidence': 0.0}
-            except Exception as e:
-                logger.warning("시장 상황 계산 예상치 못한 오류", symbol=symbol, exception=e)
-                market_regime = {'regime': 'unknown', 'confidence': 0.0}
-            
-            try:
-                patterns = self.analyzer.detect_chart_patterns(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("패턴 감지 오류", symbol=symbol, exception=e)
-                patterns = []
-            except Exception as e:
-                logger.warning("패턴 감지 예상치 못한 오류", symbol=symbol, exception=e)
-                patterns = []
-            
-            try:
-                support_resistance = self.analyzer.calculate_support_resistance(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("지지/저항선 계산 오류", symbol=symbol, exception=e)
-                support_resistance = {'support': [], 'resistance': []}
-            except Exception as e:
-                logger.warning("지지/저항선 계산 예상치 못한 오류", symbol=symbol, exception=e)
-                support_resistance = {'support': [], 'resistance': []}
-            
-            try:
-                fibonacci_levels = self.analyzer.calculate_fibonacci_levels(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("피보나치 레벨 계산 오류", symbol=symbol, exception=e)
-                fibonacci_levels = {}
-            except Exception as e:
-                logger.warning("피보나치 레벨 계산 예상치 못한 오류", symbol=symbol, exception=e)
-                fibonacci_levels = {}
-            
-            try:
-                anomalies = self.analyzer.detect_anomalies_ml(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("이상 패턴 감지 오류", symbol=symbol, exception=e)
-                anomalies = []
-            except Exception as e:
-                logger.warning("이상 패턴 감지 예상치 못한 오류", symbol=symbol, exception=e)
-                anomalies = []
-            
-            try:
-                signals = self.analyzer.calculate_advanced_signals(analyzed_data)
-            except (ValueError, TypeError, StockAnalysisError) as e:
-                logger.warning("신호 계산 오류", symbol=symbol, exception=e)
-                signals = {'signal': 'hold', 'confidence': 0.0, 'signals': []}
-            except Exception as e:
-                logger.warning("신호 계산 예상치 못한 오류", symbol=symbol, exception=e)
-                signals = {'signal': 'hold', 'confidence': 0.0, 'signals': []}
-            
-            risk_score = self._calculate_risk_score(analyzed_data, anomalies)
-            confidence = self._calculate_analysis_confidence(analyzed_data, market_regime)
+            risk_score = self._calculate_risk_score(analyzed_data, components['anomalies'])
+            confidence = self._calculate_analysis_confidence(analyzed_data, components['market_regime'])
             
             return {
                 'symbol': symbol,
                 'currentPrice': realtime_data['currentPrice'],
                 'volume': realtime_data.get('volume', 0),
                 'changePercent': realtime_data.get('changePercent', 0),
-                'trend': signals.get('signal', 'hold'),
-                'trendStrength': signals.get('confidence', 0.0),
-                'marketRegime': market_regime.get('regime', 'unknown'),
-                'signals': signals,
-                'patterns': patterns,
-                'supportResistance': support_resistance,
-                'fibonacciLevels': fibonacci_levels,
+                'trend': components['signals'].get('signal', 'hold'),
+                'trendStrength': components['signals'].get('confidence', 0.0),
+                'marketRegime': components['market_regime'].get('regime', 'unknown'),
+                'signals': components['signals'],
+                'patterns': components['patterns'],
+                'supportResistance': components['support_resistance'],
+                'fibonacciLevels': components['fibonacci_levels'],
                 'anomalies': [
                     {
                         'type': anomaly.get('type', 'unknown'),
                         'severity': anomaly.get('severity', 'low'),
                         'message': anomaly.get('message', f"이상 패턴 감지: {anomaly.get('type', 'unknown')}"),
                         'timestamp': datetime.now().isoformat()
-                    } for anomaly in anomalies
+                    } for anomaly in components['anomalies']
                 ],
                 'riskScore': risk_score,
                 'confidence': confidence,
@@ -870,13 +854,20 @@ async def root() -> Dict[str, Any]:
          summary="헬스 체크",
          description="API 서버의 상태를 확인합니다.",
          response_model=Dict[str, Union[str, float]])
-async def health_check(api: StockAnalysisAPI = Depends(get_stock_api)) -> Dict[str, Any]:
+async def health_check(request: Request) -> Dict[str, Any]:
     try:
+        if not hasattr(request.app.state, 'data_collector'):
+            return {
+                "status": "initializing",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        api = get_stock_api(request)
         health_data = await api.data_collector.health_check()
         performance_metrics = api.data_collector.get_performance_metrics()
         
         return {
-            "status": health_data['status'],
+            "status": health_data.get('status', 'healthy'),
             "timestamp": datetime.now().isoformat(),
             "performance": performance_metrics,
             "connections": manager.get_connection_stats(),
@@ -885,14 +876,14 @@ async def health_check(api: StockAnalysisAPI = Depends(get_stock_api)) -> Dict[s
     except (NetworkError, DatabaseConnectionError) as e:
         logger.error("헬스 체크 실패", exception=e)
         return {
-            "status": "unhealthy",
+            "status": "degraded",
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         logger.error("헬스 체크 예상치 못한 오류", exception=e)
         return {
-            "status": "unhealthy",
+            "status": "degraded",
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
@@ -1410,57 +1401,22 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse},
              503: {"description": "서비스가 일시적으로 사용 불가능합니다.", "model": ErrorResponse}
          })
-async def get_stock_news(
-    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
-    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
-    auto_translate: bool = Query(False, description="한국어 뉴스 번역 여부"),
-    api: StockAnalysisAPI = Depends(get_stock_api)
-) -> List[NewsResponse]:
-    logger.info(f"뉴스 조회 요청 받음: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
+async def _fetch_news_with_fallback(api: StockAnalysisAPI, symbol: str, include_korean: bool, 
+                                     auto_translate: bool, timeout: float) -> List[Dict[str, Any]]:
     try:
-        timeout_seconds = 25.0 if auto_translate else 20.0
-        logger.info(f"뉴스 수집 시작: {symbol} (타임아웃: {timeout_seconds}초)")
-        
-        try:
-            news = await asyncio.wait_for(
-                asyncio.to_thread(
-                    api.news_collector.get_stock_news,
-                    symbol.upper(),
-                    include_korean=include_korean,
-                    auto_translate=auto_translate
-                ),
-                timeout=timeout_seconds
-            )
-            logger.info(f"뉴스 수집 완료: {symbol} - {len(news) if news else 0}개")
-            if not news:
-                logger.info(f"뉴스 조회 결과 없음: {symbol}")
-                return []
-            return [NewsResponse(**item) for item in news]
-        except asyncio.TimeoutError:
-            if auto_translate:
-                logger.warning(f"번역 타임아웃: {symbol}, 번역 없이 뉴스 수집 시도")
-                try:
-                    news = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            api.news_collector.get_stock_news,
-                            symbol.upper(),
-                            include_korean=include_korean,
-                            auto_translate=False
-                        ),
-                        timeout=15.0
-                    )
-                    if news:
-                        logger.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
-                        return [NewsResponse(**item) for item in news]
-                except (TimeoutError, NetworkError) as e:
-                    logger.warning(f"번역 없이 뉴스 수집 실패: {str(e)}")
-                except Exception as e:
-                    logger.warning(f"번역 없이 뉴스 수집 예상치 못한 오류: {str(e)}")
-            logger.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
-            return []
-    except TimeoutError as e:
-        logger.error(f"뉴스 조회 타임아웃: {symbol} - {str(e)}", exc_info=True)
+        news = await asyncio.wait_for(
+            asyncio.to_thread(
+                api.news_collector.get_stock_news,
+                symbol.upper(),
+                include_korean=include_korean,
+                auto_translate=auto_translate
+            ),
+            timeout=timeout
+        )
+        return news if news else []
+    except (asyncio.TimeoutError, TimeoutError):
         if auto_translate:
+            logger.warning(f"번역 타임아웃: {symbol}, 번역 없이 재시도")
             try:
                 news = await asyncio.wait_for(
                     asyncio.to_thread(
@@ -1471,21 +1427,14 @@ async def get_stock_news(
                     ),
                     timeout=15.0
                 )
-                if news:
-                    logger.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
-                    return [NewsResponse(**item) for item in news]
-            except (TimeoutError, NetworkError) as e2:
-                logger.warning(f"번역 없이 뉴스 수집 실패: {str(e2)}")
-            except Exception as e2:
-                logger.warning(f"번역 없이 뉴스 수집 예상치 못한 오류: {str(e2)}")
-        logger.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
+                return news if news else []
+            except Exception as e:
+                logger.warning(f"번역 없이 뉴스 수집 실패: {symbol} - {str(e)}")
         return []
     except (ConnectionError, NetworkError) as e:
-        logger.error(f"뉴스 조회 네트워크 오류: {symbol} - {str(e)}", exc_info=True)
-        logger.warning(f"뉴스 조회 실패, 빈 리스트 반환: {symbol} - {str(e)}")
+        logger.warning(f"뉴스 조회 네트워크 오류: {symbol} - {str(e)}")
         return []
     except Exception as e:
-        logger.error(f"뉴스 조회 예상치 못한 오류: {symbol} - {str(e)}", exc_info=True)
         if "timeout" in str(e).lower() or "timed out" in str(e).lower():
             if auto_translate:
                 try:
@@ -1498,16 +1447,32 @@ async def get_stock_news(
                         ),
                         timeout=15.0
                     )
-                    if news:
-                        logger.info(f"번역 없이 뉴스 수집 완료: {symbol} - {len(news)}개")
-                        return [NewsResponse(**item) for item in news]
-                except (TimeoutError, NetworkError) as e2:
-                    logger.warning(f"번역 없이 뉴스 수집 실패: {str(e2)}")
-                except Exception as e2:
-                    logger.warning(f"번역 없이 뉴스 수집 예상치 못한 오류: {str(e2)}")
-            logger.warning(f"뉴스 조회 타임아웃: {symbol}, 빈 리스트 반환")
-            return []
-        logger.warning(f"뉴스 조회 실패, 빈 리스트 반환: {symbol} - {str(e)}")
+                    return news if news else []
+                except Exception:
+                    pass
+        logger.warning(f"뉴스 조회 오류: {symbol} - {str(e)}")
+        return []
+
+async def get_stock_news(
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    include_korean: bool = Query(False, description="한국어 뉴스 포함 여부"),
+    auto_translate: bool = Query(False, description="한국어 뉴스 번역 여부"),
+    api: StockAnalysisAPI = Depends(get_stock_api)
+) -> List[NewsResponse]:
+    logger.info(f"뉴스 조회 요청: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
+    
+    timeout_seconds = 25.0 if auto_translate else 20.0
+    news = await _fetch_news_with_fallback(api, symbol, include_korean, auto_translate, timeout_seconds)
+    
+    if not news:
+        logger.info(f"뉴스 조회 결과 없음: {symbol}")
+        return []
+    
+    logger.info(f"뉴스 수집 완료: {symbol} - {len(news)}개")
+    try:
+        return [NewsResponse(**item) for item in news]
+    except Exception as e:
+        logger.error(f"뉴스 응답 변환 오류: {symbol} - {str(e)}", exc_info=True)
         return []
 
 @app.get("/api/news",

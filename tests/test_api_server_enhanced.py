@@ -209,6 +209,102 @@ class TestEnhancedAPIEndpoints:
                 parsed = json.loads(data)
                 assert isinstance(parsed, list)
 
+class TestRefactoredFunctions:
+    
+    @pytest.fixture
+    def mock_api(self):
+        data_collector = Mock()
+        analyzer = Mock()
+        security_manager = Mock()
+        error_manager = Mock()
+        news_collector = Mock()
+        
+        return StockAnalysisAPI(
+            data_collector=data_collector,
+            analyzer=analyzer,
+            security_manager=security_manager,
+            error_manager=error_manager,
+            news_collector=news_collector
+        )
+    
+    @pytest.mark.asyncio
+    async def test_fetch_historical_data_with_retry_success(self, mock_api):
+        from error_handling.error_manager import ErrorContext
+        
+        mock_api.data_collector.get_historical_data_async = AsyncMock(return_value=pd.DataFrame({
+            'close': [100, 101, 102],
+            'volume': [1000000, 1100000, 1200000]
+        }))
+        
+        context = ErrorContext(endpoint="/test", parameters={})
+        result = await mock_api._fetch_historical_data_with_retry("AAPL", context)
+        
+        assert not result.empty
+        assert len(result) == 3
+    
+    @pytest.mark.asyncio
+    async def test_calculate_indicators_safe_with_error(self, mock_api):
+        from error_handling.error_manager import ErrorContext
+        import pandas as pd
+        
+        mock_api.analyzer.calculate_all_advanced_indicators = Mock(side_effect=ValueError("Invalid data"))
+        
+        data = pd.DataFrame({'close': [100, 101]})
+        context = ErrorContext(endpoint="/test", parameters={})
+        
+        result = await mock_api._calculate_indicators_safe(data, "AAPL", context)
+        
+        assert result.equals(data)
+    
+    @pytest.mark.asyncio
+    async def test_calculate_analysis_components_safe(self, mock_api):
+        import pandas as pd
+        
+        mock_api.analyzer.calculate_market_regime = Mock(return_value={'regime': 'bullish', 'confidence': 0.8})
+        mock_api.analyzer.detect_chart_patterns = Mock(return_value=[{'type': 'head_shoulders'}])
+        mock_api.analyzer.calculate_support_resistance = Mock(return_value={'support': [100], 'resistance': [150]})
+        mock_api.analyzer.calculate_fibonacci_levels = Mock(return_value={'levels': {}})
+        mock_api.analyzer.detect_anomalies_ml = Mock(return_value=[])
+        mock_api.analyzer.calculate_advanced_signals = Mock(return_value={'signal': 'buy', 'confidence': 0.7})
+        
+        data = pd.DataFrame({'close': [100, 101, 102]})
+        result = await mock_api._calculate_analysis_components_safe(data, "AAPL")
+        
+        assert result['market_regime']['regime'] == 'bullish'
+        assert len(result['patterns']) == 1
+        assert result['signals']['signal'] == 'buy'
+    
+    @pytest.mark.asyncio
+    async def test_handle_realtime_data_error_timeout(self, mock_api):
+        from error_handling.error_manager import ErrorContext
+        from exceptions import TimeoutError
+        
+        context = ErrorContext(endpoint="/test", parameters={})
+        error = TimeoutError("Request timeout")
+        
+        with pytest.raises(HTTPException) as exc_info:
+            await mock_api._handle_realtime_data_error(error, "AAPL", context, 3, 2)
+        
+        assert exc_info.value.status_code == 504
+    
+    @pytest.mark.asyncio
+    async def test_fetch_news_with_fallback_success(self):
+        from api_server_enhanced import _fetch_news_with_fallback
+        from data_collectors.news_collector import NewsCollector
+        
+        mock_collector = Mock()
+        mock_collector.get_stock_news = Mock(return_value=[
+            {'title': 'Test News', 'url': 'http://test.com', 'symbol': 'AAPL'}
+        ])
+        
+        mock_api = Mock()
+        mock_api.news_collector = mock_collector
+        
+        result = await _fetch_news_with_fallback(mock_api, "AAPL", False, False, 10.0)
+        
+        assert len(result) == 1
+        assert result[0]['title'] == 'Test News'
+
 class TestEnhancedStockAnalysisAPI:
     
     @pytest.fixture

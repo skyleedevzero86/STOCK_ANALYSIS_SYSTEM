@@ -686,7 +686,7 @@ class StockAnalysisAPI:
                 cause=e
             ) from e
     
-    def _load_historical_data(self, symbol: str, request: Request):
+    def _load_historical_data(self, symbol: str):
         import numpy as np
         dates = pd.date_range(start=datetime.now() - pd.Timedelta(days=60), end=datetime.now(), freq='D')
         np.random.seed(hash(symbol) % 2**32)
@@ -701,11 +701,9 @@ class StockAnalysisAPI:
             'volume': np.random.randint(1000000, 5000000, len(dates))
         })
     
-    async def get_basic_analysis(self, symbol: str, request: Request) -> Dict[str, Any]:
+    async def get_basic_analysis(self, symbol: str, basic_analyzer: TechnicalAnalyzer, 
+                                 enhanced_collector: StockDataCollector) -> Dict[str, Any]:
         try:
-            from analysis_engine.technical_analyzer import TechnicalAnalyzer
-            basic_analyzer = request.app.state.basic_analyzer
-            enhanced_collector = request.app.state.enhanced_collector
             
             realtime_data = enhanced_collector.get_realtime_data(symbol)
             if not realtime_data:
@@ -760,13 +758,14 @@ class StockAnalysisAPI:
                 cause=e
             ) from e
     
-    async def get_all_symbols_analysis(self, request: Optional[Request] = None) -> List[Dict[str, Any]]:
+    async def get_all_symbols_analysis(self, basic_analyzer: Optional[TechnicalAnalyzer] = None,
+                                       enhanced_collector: Optional[StockDataCollector] = None) -> List[Dict[str, Any]]:
         try:
             results = []
             for symbol in settings.ANALYSIS_SYMBOLS:
                 try:
-                    if request:
-                        analysis = await self.get_basic_analysis(symbol, request)
+                    if basic_analyzer and enhanced_collector:
+                        analysis = await self.get_basic_analysis(symbol, basic_analyzer, enhanced_collector)
                     else:
                         analysis = await self.get_advanced_analysis(symbol)
                     results.append(analysis)
@@ -788,12 +787,9 @@ class StockAnalysisAPI:
                 cause=e
             ) from e
     
-    async def get_historical_data(self, symbol: str, days: int, request: Request) -> Dict[str, Any]:
+    async def get_historical_data(self, symbol: str, days: int, basic_analyzer: TechnicalAnalyzer) -> Dict[str, Any]:
         try:
-            from analysis_engine.technical_analyzer import TechnicalAnalyzer
-            basic_analyzer = request.app.state.basic_analyzer
-            
-            historical_data = self._load_historical_data(symbol, request)
+            historical_data = self._load_historical_data(symbol)
             analyzed_data = basic_analyzer.calculate_all_indicators(historical_data)
             
             chart_data = []
@@ -826,6 +822,8 @@ class StockAnalysisAPI:
             ) from e
 
 def get_stock_api(request: Request) -> StockAnalysisAPI:
+    if not hasattr(request.app.state, 'data_collector'):
+        raise HTTPException(status_code=503, detail="서비스 초기화 중입니다")
     return StockAnalysisAPI(
         data_collector=request.app.state.data_collector,
         analyzer=request.app.state.analyzer,
@@ -833,6 +831,21 @@ def get_stock_api(request: Request) -> StockAnalysisAPI:
         error_manager=request.app.state.error_manager,
         news_collector=NewsCollector()
     )
+
+def get_enhanced_collector(request: Request) -> StockDataCollector:
+    if not hasattr(request.app.state, 'enhanced_collector'):
+        raise HTTPException(status_code=503, detail="서비스 초기화 중입니다")
+    return request.app.state.enhanced_collector
+
+def get_basic_analyzer(request: Request) -> TechnicalAnalyzer:
+    if not hasattr(request.app.state, 'basic_analyzer'):
+        raise HTTPException(status_code=503, detail="서비스 초기화 중입니다")
+    return request.app.state.basic_analyzer
+
+def get_notification_service(request: Request) -> NotificationService:
+    if not hasattr(request.app.state, 'notification_service'):
+        raise HTTPException(status_code=503, detail="서비스 초기화 중입니다")
+    return request.app.state.notification_service
 
 @app.get("/", 
          summary="API 서버 정보",
@@ -974,10 +987,11 @@ async def get_symbols():
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_all_analysis(
-    request: Request,
-    api: StockAnalysisAPI = Depends(get_stock_api)
+    api: StockAnalysisAPI = Depends(get_stock_api),
+    basic_analyzer: TechnicalAnalyzer = Depends(get_basic_analyzer),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
-    return await api.get_all_symbols_analysis(request)
+    return await api.get_all_symbols_analysis(basic_analyzer, enhanced_collector)
 
 @app.get("/api/analysis/{symbol}",
          summary="기술적 분석 결과",
@@ -989,11 +1003,12 @@ async def get_all_analysis(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_basic_analysis_endpoint(
-    request: Request,
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
-    api: StockAnalysisAPI = Depends(get_stock_api)
+    api: StockAnalysisAPI = Depends(get_stock_api),
+    basic_analyzer: TechnicalAnalyzer = Depends(get_basic_analyzer),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
-    result = await api.get_basic_analysis(symbol, request)
+    result = await api.get_basic_analysis(symbol, basic_analyzer, enhanced_collector)
     return TechnicalAnalysisResponse(**result)
 
 @app.get("/api/historical/{symbol}",
@@ -1005,12 +1020,12 @@ async def get_basic_analysis_endpoint(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_historical_data(
-    request: Request,
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     days: int = Query(30, description="조회할 일수", ge=1, le=365),
-    api: StockAnalysisAPI = Depends(get_stock_api)
+    api: StockAnalysisAPI = Depends(get_stock_api),
+    basic_analyzer: TechnicalAnalyzer = Depends(get_basic_analyzer)
 ):
-    return await api.get_historical_data(symbol, days, request)
+    return await api.get_historical_data(symbol, days, basic_analyzer)
 
 @app.get("/api/alpha-vantage/search/{keywords}",
          summary="Alpha Vantage 종목 검색",
@@ -1020,11 +1035,10 @@ async def get_historical_data(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def search_symbols(
-    request: Request,
-    keywords: str = Path(..., description="검색 키워드", example="Apple")
+    keywords: str = Path(..., description="검색 키워드", example="Apple"),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
     try:
-        enhanced_collector = request.app.state.enhanced_collector
         return enhanced_collector.search_alpha_vantage_symbols(keywords)
     except Exception as e:
         logger.error("종목 검색 오류", keywords=keywords, exception=e)
@@ -1039,13 +1053,12 @@ async def search_symbols(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_intraday(
-    request: Request,
     symbol: str = Path(..., description="주식 심볼", example="AAPL"),
     interval: str = Query("5min", description="시간 간격", example="5min"),
-    outputsize: str = Query("compact", description="출력 크기", example="compact")
+    outputsize: str = Query("compact", description="출력 크기", example="compact"),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
     try:
-        enhanced_collector = request.app.state.enhanced_collector
         data = enhanced_collector.get_alpha_vantage_intraday_data(symbol, interval, outputsize)
         if data.empty:
             raise HTTPException(status_code=404, detail=f"분별 데이터를 찾을 수 없습니다: {symbol}")
@@ -1071,11 +1084,10 @@ async def get_alpha_vantage_intraday(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_weekly(
-    request: Request,
-    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
     try:
-        enhanced_collector = request.app.state.enhanced_collector
         data = enhanced_collector.get_alpha_vantage_weekly_data(symbol)
         if data.empty:
             raise HTTPException(status_code=404, detail=f"주별 데이터를 찾을 수 없습니다: {symbol}")
@@ -1101,11 +1113,10 @@ async def get_alpha_vantage_weekly(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def get_alpha_vantage_monthly(
-    request: Request,
-    symbol: str = Path(..., description="주식 심볼", example="AAPL")
+    symbol: str = Path(..., description="주식 심볼", example="AAPL"),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
 ):
     try:
-        enhanced_collector = request.app.state.enhanced_collector
         data = enhanced_collector.get_alpha_vantage_monthly_data(symbol)
         if data.empty:
             raise HTTPException(status_code=404, detail=f"월별 데이터를 찾을 수 없습니다: {symbol}")
@@ -1132,11 +1143,11 @@ async def get_alpha_vantage_monthly(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def send_email_notification(
-    request: Request,
     to_email: Optional[str] = Query(None, description="수신자 이메일"),
     subject: Optional[str] = Query(None, description="이메일 제목"),
     body: Optional[str] = Query(None, description="이메일 내용"),
-    request_body: Optional[EmailNotificationRequest] = Body(None, description="요청 본문")
+    request_body: Optional[EmailNotificationRequest] = Body(None, description="요청 본문"),
+    notification_service: NotificationService = Depends(get_notification_service)
 ):
     try:
         if request_body:
@@ -1149,8 +1160,6 @@ async def send_email_notification(
                 status_code=400,
                 detail="to_email, subject, body는 필수입니다."
             )
-        
-        notification_service = request.app.state.notification_service
         success = notification_service.send_email(
             to_email=to_email,
             subject=subject,
@@ -1201,11 +1210,11 @@ async def send_email_notification(
              500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
          })
 async def send_sms_notification(
-    request: Request,
     from_phone: Optional[str] = Query(None, description="발신번호 (01012345678 형식)"),
     to_phone: Optional[str] = Query(None, description="수신번호 (01012345678 형식)"),
     message: Optional[str] = Query(None, description="메시지 내용"),
-    request_body: Optional[SmsNotificationRequest] = Body(None, description="요청 본문")
+    request_body: Optional[SmsNotificationRequest] = Body(None, description="요청 본문"),
+    notification_service: NotificationService = Depends(get_notification_service)
 ):
     try:
         if request_body:
@@ -1242,8 +1251,6 @@ async def send_sms_notification(
                 status_code=400,
                 detail="수신번호 형식이 올바르지 않습니다. (01012345678 형식)"
             )
-        
-        notification_service = request.app.state.notification_service
         success = notification_service.send_sms(
             from_phone=from_phone,
             to_phone=to_phone,
@@ -1319,6 +1326,10 @@ async def websocket_endpoint(websocket: WebSocket, client_ip: str = "unknown") -
 async def websocket_realtime(websocket: WebSocket, client_ip: str = "unknown") -> None:
     await manager.connect(websocket, client_ip)
     try:
+        if not hasattr(websocket.app.state, 'data_collector'):
+            await manager.send_personal_message(json.dumps({"error": "서비스 초기화 중입니다"}), websocket)
+            return
+        
         api = StockAnalysisAPI(
             data_collector=websocket.app.state.data_collector,
             analyzer=websocket.app.state.analyzer,

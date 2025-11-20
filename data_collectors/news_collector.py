@@ -73,28 +73,74 @@ class NewsCollector:
         self.hf_translator = None
         self.translator = None
         
-        if HUGGINGFACE_AVAILABLE:
+        use_hf_translation = os.getenv("USE_HF_TRANSLATION", "true").lower() == "true"
+        
+        if HUGGINGFACE_AVAILABLE and use_hf_translation:
             try:
-                tokenizer_name = "paust/pko-t5-base"
-                model_path = "Darong/BlueT"
-                tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
-                self.hf_translator = pipeline(
-                    "translation",
-                    model=model_path,
-                    tokenizer=tokenizer,
-                    max_length=255,
-                    device=0 if torch.cuda.is_available() else -1
+                try:
+                    import psutil
+                    available_memory_gb = psutil.virtual_memory().available / (1024**3)
+                    if available_memory_gb < 2.0:
+                        logging.warning(f"사용 가능한 메모리가 부족합니다 ({available_memory_gb:.2f}GB). Hugging Face 번역 모델 로드를 건너뜁니다.")
+                        self.hf_translator = None
+                    else:
+                        tokenizer_name = "paust/pko-t5-base"
+                        model_path = "Darong/BlueT"
+                        tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
+                        self.hf_translator = pipeline(
+                            "translation",
+                            model=model_path,
+                            tokenizer=tokenizer,
+                            max_length=255,
+                            device=0 if torch.cuda.is_available() else -1
+                        )
+                        logging.info("Hugging Face BlueT 번역 모델 로드 완료")
+                except ImportError:
+                    tokenizer_name = "paust/pko-t5-base"
+                    model_path = "Darong/BlueT"
+                    tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
+                    self.hf_translator = pipeline(
+                        "translation",
+                        model=model_path,
+                        tokenizer=tokenizer,
+                        max_length=255,
+                        device=0 if torch.cuda.is_available() else -1
+                    )
+                    logging.info("Hugging Face BlueT 번역 모델 로드 완료")
+            except OSError as e:
+                error_msg = str(e)
+                error_code = getattr(e, 'winerror', None) if hasattr(e, 'winerror') else None
+                if "1455" in error_msg or "페이징 파일" in error_msg or "paging file" in error_msg.lower() or "memory allocation" in error_msg.lower():
+                    logging.warning(
+                        "메모리/페이징 파일 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
+                        "googletrans를 대신 사용하거나, Windows 페이징 파일 크기를 늘려주세요. "
+                        "또는 환경 변수 USE_HF_TRANSLATION=false로 설정하여 Hugging Face 번역을 비활성화할 수 있습니다."
+                    )
+                else:
+                    logging.warning(f"Hugging Face 번역 모델 초기화 실패 (OSError): {error_msg}")
+                self.hf_translator = None
+            except MemoryError as e:
+                logging.warning(
+                    "메모리 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
+                    "googletrans를 대신 사용하거나, 환경 변수 USE_HF_TRANSLATION=false로 설정하여 Hugging Face 번역을 비활성화할 수 있습니다."
                 )
-                logging.info("Hugging Face BlueT 번역 모델 로드 완료")
+                self.hf_translator = None
             except Exception as e:
                 error_msg = str(e)
                 if "401" in error_msg or "Unauthorized" in error_msg:
                     logging.warning("Hugging Face Hub 접근 실패. 인터넷 연결 또는 인증 문제일 수 있습니다.")
                 elif "Repository Not Found" in error_msg:
                     logging.warning("Hugging Face 모델을 찾을 수 없습니다. 모델 이름을 확인하세요.")
+                elif "1455" in error_msg or "페이징 파일" in error_msg or "paging file" in error_msg.lower():
+                    logging.warning(
+                        "페이징 파일 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
+                        "Windows 페이징 파일 크기를 늘리거나, 환경 변수 USE_HF_TRANSLATION=false로 설정하세요."
+                    )
                 else:
                     logging.warning(f"Hugging Face 번역 모델 초기화 실패: {error_msg}")
                 self.hf_translator = None
+        elif not use_hf_translation:
+            logging.info("환경 변수 USE_HF_TRANSLATION=false로 인해 Hugging Face 번역이 비활성화되었습니다.")
         
         if not self.hf_translator and GOOGLETRANS_AVAILABLE:
             try:

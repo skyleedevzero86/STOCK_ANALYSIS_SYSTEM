@@ -68,7 +68,8 @@
 
         newsDetailContent.innerHTML = '<div class="loading">뉴스를 불러오는 중...</div>';
 
-        const apiUrl = `/api/news/detail?url=${encodeURIComponent(decodedUrl)}`;
+        const autoTranslate = localStorage.getItem('newsAutoTranslate') === 'true' || true;
+        const apiUrl = `/api/news/detail?url=${encodeURIComponent(decodedUrl)}&autoTranslate=${autoTranslate}`;
 
         axios.get(apiUrl, {
             timeout: 40000

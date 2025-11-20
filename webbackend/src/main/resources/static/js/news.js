@@ -298,9 +298,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (includeKoreanCheckbox) {
         includeKoreanCheckbox.addEventListener('change', function() {
             const autoTranslate = this.checked;
+            localStorage.setItem('newsAutoTranslate', autoTranslate.toString());
             loadNews(currentSymbol, false, autoTranslate);
             startNewsAutoRefresh(currentSymbol, false, autoTranslate);
         });
+        
+        const savedAutoTranslate = localStorage.getItem('newsAutoTranslate');
+        if (savedAutoTranslate !== null) {
+            includeKoreanCheckbox.checked = savedAutoTranslate === 'true';
+        }
     }
 
     if (refreshNewsBtn) {

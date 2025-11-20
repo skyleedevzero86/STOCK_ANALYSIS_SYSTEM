@@ -11,6 +11,8 @@ import java.util.concurrent.CompletableFuture
 class DeepLTranslationService(
     @Value("\${deepl.api.key:}")
     private val apiKey: String,
+    @Value("\${deepl.api.base-url:https://api.deepl.com/v2}")
+    private val baseUrl: String,
     @Value("\${deepl.api.enabled:true}")
     private val enabled: Boolean
 ) {
@@ -18,7 +20,10 @@ class DeepLTranslationService(
     
     private val translator: Translator? = try {
         if (enabled && apiKey.isNotBlank()) {
-            Translator(apiKey)
+            val translatorOptions = TranslatorOptions()
+                .setServerUrl(baseUrl)
+                .setSendPlatformInfo(false)
+            Translator(apiKey, translatorOptions)
         } else {
             logger.warn("DeepL API가 비활성화되었거나 API 키가 설정되지 않았습니다.")
             null
@@ -39,10 +44,13 @@ class DeepLTranslationService(
         
         return Mono.fromCallable {
             try {
+                val options = TextTranslationOptions()
+                    .setFormality(Formality.PreferMore)
                 val result = translator!!.translateText(
                     text,
-                    Language.EN,
-                    Language.KO
+                    null,
+                    Language.KO,
+                    options
                 )
                 result.text
             } catch (e: Exception) {
@@ -72,10 +80,13 @@ class DeepLTranslationService(
                 val futures = nonEmptyTexts.map { text ->
                     CompletableFuture.supplyAsync {
                         try {
+                            val options = TextTranslationOptions()
+                                .setFormality(Formality.PreferMore)
                             translator!!.translateText(
                                 text,
-                                Language.EN,
-                                Language.KO
+                                null,
+                                Language.KO,
+                                options
                             ).text
                         } catch (e: Exception) {
                             logger.warn("DeepL 번역 실패 (개별): ${e.message}, 원본 텍스트 반환", e)

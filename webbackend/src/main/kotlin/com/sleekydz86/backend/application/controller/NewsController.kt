@@ -140,10 +140,12 @@ class NewsController(
     )
     fun getNewsDetail(
         @Parameter(description = "뉴스 URL", required = true)
-        @RequestParam url: String
+        @RequestParam url: String,
+        @Parameter(description = "자동 번역 사용 여부 (기본값: true)", required = false)
+        @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<News> {
         val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
-        logger.info("뉴스 상세 조회 요청: url={}", url.take(100))
+        logger.info("뉴스 상세 조회 요청: url={}, autoTranslate={}", url.take(100), autoTranslate)
         
         return circuitBreakerManager.executeWithCircuitBreaker("newsDetail") {
             val decodedUrl = try {
@@ -155,6 +157,26 @@ class NewsController(
             pythonApiClient.getNewsByUrl(decodedUrl)
         }
             .timeout(Duration.ofSeconds(35))
+            .flatMap { news ->
+                if (autoTranslate && deepLTranslationService.isAvailable()) {
+                    val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
+                    val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
+                        (news.description != null && news.descriptionKo == news.description)
+                    val needsContentTranslation = news.contentKo.isNullOrBlank() || 
+                        (news.content != null && news.contentKo == news.content)
+                    
+                    if ((needsTitleTranslation && !isKoreanText(news.title)) || 
+                        (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) ||
+                        (needsContentTranslation && news.content != null && !isKoreanText(news.content))) {
+                        logger.info("뉴스 상세 번역 필요: url={}", url.take(100))
+                        translateNewsDetailWithDeepL(news)
+                    } else {
+                        Mono.just(news)
+                    }
+                } else {
+                    Mono.just(news)
+                }
+            }
             .doOnError { error ->
                 logger.error("뉴스 상세 조회 실패: url={}, error={}", url.take(100), error.message, error)
             }
@@ -176,6 +198,60 @@ class NewsController(
                         Mono.error(ExternalApiException("뉴스 상세 정보를 가져오는데 실패했습니다: ${error.message}", error))
                     }
                 }
+            }
+    }
+    
+    private fun translateNewsDetailWithDeepL(news: News): Mono<News> {
+        val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        
+        val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
+        val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
+            (news.description != null && news.descriptionKo == news.description)
+        val needsContentTranslation = news.contentKo.isNullOrBlank() || 
+            (news.content != null && news.contentKo == news.content)
+        
+        val titleMono = if (needsTitleTranslation && !isKoreanText(news.title)) {
+            deepLTranslationService.translateToKorean(news.title)
+        } else {
+            Mono.just(news.titleKo ?: news.title)
+        }
+        
+        val descriptionMono = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
+            deepLTranslationService.translateToKorean(news.description)
+        } else {
+            Mono.just(news.descriptionKo ?: news.description ?: "")
+        }
+        
+        val contentMono = if (needsContentTranslation && news.content != null && !isKoreanText(news.content)) {
+            deepLTranslationService.translateToKorean(news.content)
+        } else {
+            Mono.just(news.contentKo ?: news.content ?: "")
+        }
+        
+        return Mono.zip(titleMono, descriptionMono, contentMono)
+            .map { (translatedTitle, translatedDescription, translatedContent) ->
+                news.copy(
+                    titleKo = if (needsTitleTranslation && !isKoreanText(news.title)) {
+                        translatedTitle
+                    } else {
+                        news.titleKo ?: news.title
+                    },
+                    descriptionKo = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
+                        translatedDescription
+                    } else {
+                        news.descriptionKo ?: news.description
+                    },
+                    contentKo = if (needsContentTranslation && news.content != null && !isKoreanText(news.content)) {
+                        translatedContent
+                    } else {
+                        news.contentKo ?: news.content
+                    }
+                )
+            }
+            .timeout(Duration.ofSeconds(15))
+            .onErrorResume { error ->
+                logger.warn("뉴스 상세 DeepL 번역 실패, 원본 뉴스 반환: ${error.message}", error)
+                Mono.just(news)
             }
     }
 

@@ -214,6 +214,17 @@ class StockDataCollector:
         }
         
         response = self.session.get(url, params=params, timeout=10)
+        
+        # 429 에러 특별 처리
+        if response.status_code == 429:
+            logger.warning("Yahoo Finance rate limit (429)", symbol=symbol, component="StockDataCollector")
+            time.sleep(60)  # 1분 대기
+            raise RateLimitError(
+                f"Yahoo Finance API rate limit exceeded for {symbol}",
+                service_name="Yahoo Finance",
+                retry_after=60
+            )
+        
         response.raise_for_status()
         data = response.json()
         

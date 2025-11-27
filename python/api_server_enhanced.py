@@ -1779,6 +1779,77 @@ async def get_multiple_stock_news(
         logger.error(f"다중 종목 뉴스 조회 예상치 못한 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=f"다중 종목 뉴스 조회 오류: {str(e)}") from e
 
+@app.get("/api/sectors",
+         summary="섹터별 분석",
+         description="섹터별로 그룹화된 종목 분석 결과를 조회합니다.",
+         responses={
+             200: {"description": "성공적으로 섹터별 분석 결과를 조회했습니다."},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def get_sectors_analysis(
+    api: StockAnalysisAPI = Depends(get_stock_api),
+    basic_analyzer: TechnicalAnalyzer = Depends(get_basic_analyzer),
+    enhanced_collector: StockDataCollector = Depends(get_enhanced_collector)
+):
+    try:
+        from collections import defaultdict
+        
+        sector_mapping = {
+            "AAPL": "Technology",
+            "GOOGL": "Technology",
+            "MSFT": "Technology",
+            "NVDA": "Technology",
+            "META": "Technology",
+            "AMZN": "Consumer Discretionary",
+            "TSLA": "Consumer Discretionary",
+            "NFLX": "Communication Services"
+        }
+        
+        results = await api.get_all_symbols_analysis(basic_analyzer, enhanced_collector)
+        sectors = defaultdict(list)
+        
+        for result in results:
+            symbol = result.get('symbol', '')
+            sector = sector_mapping.get(symbol, 'Other')
+            change_percent = result.get('changePercent', 0.0)
+            current_price = result.get('currentPrice', 0.0)
+            volume = result.get('volume', 0)
+            signals = result.get('signals', {})
+            confidence = signals.get('confidence', 0.0) if isinstance(signals, dict) else 0.0
+            
+            sectors[sector].append({
+                'symbol': symbol,
+                'currentPrice': current_price,
+                'changePercent': change_percent,
+                'volume': volume,
+                'confidence': confidence,
+                'signal': signals.get('signal', 'hold') if isinstance(signals, dict) else 'hold'
+            })
+        
+        sector_data = []
+        for sector_name, stocks in sectors.items():
+            if not stocks:
+                continue
+                
+            avg_change = sum(s['changePercent'] for s in stocks) / len(stocks)
+            total_volume = sum(s['volume'] for s in stocks)
+            avg_confidence = sum(s['confidence'] for s in stocks) / len(stocks)
+            
+            sector_data.append({
+                'sector': sector_name,
+                'stocks': stocks,
+                'avgChangePercent': avg_change,
+                'totalVolume': total_volume,
+                'avgConfidence': avg_confidence,
+                'stockCount': len(stocks)
+            })
+        
+        sector_data.sort(key=lambda x: x['avgChangePercent'], reverse=True)
+        return sector_data
+    except Exception as e:
+        logger.error(f"섹터별 분석 오류: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"섹터별 분석 오류: {str(e)}") from e
+
 @app.get("/api/news/detail",
          summary="뉴스 상세보기",
          description="뉴스 URL로 상세 정보를 조회합니다.")

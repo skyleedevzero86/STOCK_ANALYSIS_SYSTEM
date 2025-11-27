@@ -192,6 +192,100 @@ class StockController(
             }
     }
 
+    @GetMapping("/top-performers")
+    @Operation(summary = "최고 성과 종목 추천", description = "가장 높은 수익률, RSI, MACD 신호를 가진 종목을 추천합니다")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 최고 성과 종목을 조회했습니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
+    fun getTopPerformers(
+        @Parameter(description = "최대 반환 개수 (기본값: 3)", required = false)
+        @RequestParam(defaultValue = "3") limit: Int
+    ): Mono<List<Map<String, Any>>> {
+        return circuitBreakerManager.executeFluxWithCircuitBreaker("allAnalysis") {
+            pythonApiClient.getAllAnalysis()
+        }
+            .timeout(Duration.ofSeconds(30))
+            .collectList()
+            .map { analysisList: List<TechnicalAnalysis> ->
+                val scored = analysisList.map { analysis: TechnicalAnalysis ->
+                    val score = calculatePerformanceScore(analysis)
+                    mapOf<String, Any>(
+                        "symbol" to analysis.symbol,
+                        "currentPrice" to analysis.currentPrice,
+                        "changePercent" to analysis.changePercent,
+                        "rsi" to (analysis.signals.rsi ?: 0.0),
+                        "macd" to (analysis.signals.macd ?: 0.0),
+                        "confidence" to analysis.signals.confidence,
+                        "trendStrength" to analysis.trendStrength,
+                        "signal" to analysis.signals.signal,
+                        "score" to score
+                    )
+                }
+                scored.sortedByDescending { item -> item["score"] as Double }.take(limit)
+            }
+            .onErrorResume { error: Throwable ->
+                when (error) {
+                    is CircuitBreakerOpenException ->
+                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
+                    is java.util.concurrent.TimeoutException ->
+                        Mono.error(ExternalApiException("Request timeout", error))
+                    else ->
+                        Mono.error(ExternalApiException("Failed to fetch top performers", error))
+                }
+            }
+    }
+
+    private fun calculatePerformanceScore(analysis: TechnicalAnalysis): Double {
+        val changeScore = analysis.changePercent * 10.0
+        val rsiScore = when {
+            analysis.signals.rsi != null && analysis.signals.rsi!! in 50.0..70.0 -> 20.0
+            analysis.signals.rsi != null && analysis.signals.rsi!! > 70.0 -> 10.0
+            else -> 0.0
+        }
+        val macdScore = when {
+            analysis.signals.macd != null && analysis.signals.macdSignal != null -> {
+                if (analysis.signals.macd!! > analysis.signals.macdSignal!!) 15.0 else 0.0
+            }
+            else -> 0.0
+        }
+        val confidenceScore = analysis.signals.confidence * 10.0
+        val trendScore = analysis.trendStrength * 15.0
+        val signalScore = when (analysis.signals.signal.lowercase()) {
+            "buy", "strong_buy" -> 20.0
+            "hold" -> 5.0
+            else -> 0.0
+        }
+        return changeScore + rsiScore + macdScore + confidenceScore + trendScore + signalScore
+    }
+
+    @GetMapping("/sectors")
+    @Operation(summary = "섹터별 분석", description = "섹터별로 그룹화된 종목 분석 결과를 조회합니다")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "성공적으로 섹터별 분석을 조회했습니다"),
+            ApiResponse(responseCode = "503", description = "서비스가 일시적으로 사용 불가능합니다")
+        ]
+    )
+    fun getSectorsAnalysis(): Mono<List<Map<String, Any>>> {
+        return circuitBreakerManager.executeWithCircuitBreaker("sectors") {
+            pythonApiClient.getSectorsAnalysis()
+        }
+            .timeout(Duration.ofSeconds(30))
+            .onErrorResume { error: Throwable ->
+                when (error) {
+                    is CircuitBreakerOpenException ->
+                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
+                    is java.util.concurrent.TimeoutException ->
+                        Mono.error(ExternalApiException("Request timeout", error))
+                    else ->
+                        Mono.error(ExternalApiException("Failed to fetch sectors analysis", error))
+                }
+            }
+    }
+
     @GetMapping("/circuit-breaker/status")
     fun getCircuitBreakerStatus(): Mono<Map<String, Map<String, Any>>> {
         return Mono.just(circuitBreakerManager.getAllCircuitBreakerStatus())

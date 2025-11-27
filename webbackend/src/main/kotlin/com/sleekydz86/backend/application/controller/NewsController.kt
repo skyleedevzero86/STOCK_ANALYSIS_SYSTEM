@@ -43,22 +43,12 @@ class NewsController(
         val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
         
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
-            pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, autoTranslate)
+            pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, false)
         }
-            .timeout(Duration.ofSeconds(25))
+            .timeout(Duration.ofSeconds(20))
             .flatMap { newsList ->
-                if (autoTranslate && deepLTranslationService.isAvailable()) {
-                    val needsTranslation = newsList.any { news ->
-                        (news.titleKo.isNullOrBlank() || news.titleKo == news.title) &&
-                        !isKoreanText(news.title)
-                    }
-                    
-                    if (needsTranslation) {
-                        logger.info("Python API 번역이 불완전합니다. DeepL 번역을 시도합니다: $symbol")
-                        translateNewsWithDeepL(newsList)
-                    } else {
-                        Mono.just(newsList)
-                    }
+                if (autoTranslate && deepLTranslationService.isAvailable() && newsList.isNotEmpty()) {
+                    translateNewsWithDeepL(newsList)
                 } else {
                     Mono.just(newsList)
                 }
@@ -84,40 +74,56 @@ class NewsController(
     private fun translateNewsWithDeepL(newsList: List<News>): Mono<List<News>> {
         val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
         
-        return Flux.fromIterable(newsList)
+        val newsToTranslate = newsList.filter { news ->
+            val needsTitle = (news.titleKo.isNullOrBlank() || news.titleKo == news.title) && !isKoreanText(news.title)
+            val needsDesc = news.description != null && 
+                (news.descriptionKo.isNullOrBlank() || news.descriptionKo == news.description) && 
+                !isKoreanText(news.description)
+            needsTitle || needsDesc
+        }
+        
+        if (newsToTranslate.isEmpty()) {
+            return Mono.just(newsList)
+        }
+        
+        return Flux.fromIterable(newsToTranslate)
             .flatMap { news ->
-                val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
-                val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
-                    (news.description != null && news.descriptionKo == news.description)
+                val needsTitle = (news.titleKo.isNullOrBlank() || news.titleKo == news.title) && !isKoreanText(news.title)
+                val needsDesc = news.description != null && 
+                    (news.descriptionKo.isNullOrBlank() || news.descriptionKo == news.description) && 
+                    !isKoreanText(news.description)
                 
-                if ((needsTitleTranslation && !isKoreanText(news.title)) || 
-                    (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description))) {
-                    deepLTranslationService.translateNews(
-                        news.title,
-                        news.description
-                    ).map { (translatedTitle, translatedDescription) ->
+                val titleMono = if (needsTitle) {
+                    deepLTranslationService.translateToKorean(news.title)
+                } else {
+                    Mono.just(news.titleKo ?: news.title)
+                }
+                
+                val descriptionMono = if (needsDesc) {
+                    deepLTranslationService.translateToKorean(news.description!!)
+                } else {
+                    Mono.just(news.descriptionKo ?: news.description ?: "")
+                }
+                
+                Mono.zip(titleMono, descriptionMono)
+                    .map { tuple ->
                         news.copy(
-                            titleKo = if (needsTitleTranslation && !isKoreanText(news.title)) {
-                                translatedTitle
-                            } else {
-                                news.titleKo ?: news.title
-                            },
-                            descriptionKo = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
-                                translatedDescription
-                            } else {
-                                news.descriptionKo ?: news.description
-                            }
+                            titleKo = if (needsTitle) tuple.t1 else (news.titleKo ?: news.title),
+                            descriptionKo = if (needsDesc) tuple.t2 else (news.descriptionKo ?: news.description)
                         )
                     }
-                } else {
-                    Mono.just(news)
-                }
+                    .timeout(Duration.ofSeconds(8))
+                    .onErrorReturn(news)
             }
             .collectList()
-            .onErrorResume { error ->
-                logger.warn("DeepL 번역 실패, 원본 뉴스 반환: ${error.message}", error)
-                Mono.just(newsList)
+            .map { translated ->
+                val translatedMap = translated.associateBy { it.url }
+                newsList.map { news ->
+                    translatedMap[news.url] ?: news
+                }
             }
+            .timeout(Duration.ofSeconds(20))
+            .onErrorReturn(newsList)
     }
     
     private fun isKoreanText(text: String): Boolean {
@@ -156,23 +162,10 @@ class NewsController(
             }
             pythonApiClient.getNewsByUrl(decodedUrl)
         }
-            .timeout(Duration.ofSeconds(35))
+            .timeout(Duration.ofSeconds(30))
             .flatMap { news ->
                 if (autoTranslate && deepLTranslationService.isAvailable()) {
-                    val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
-                    val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
-                        (news.description != null && news.descriptionKo == news.description)
-                    val needsContentTranslation = news.contentKo.isNullOrBlank() || 
-                        (news.content != null && news.contentKo == news.content)
-                    
-                    if ((needsTitleTranslation && !isKoreanText(news.title)) || 
-                        (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) ||
-                        (needsContentTranslation && news.content != null && !isKoreanText(news.content))) {
-                        logger.info("뉴스 상세 번역 필요: url={}", url.take(100))
-                        translateNewsDetailWithDeepL(news)
-                    } else {
-                        Mono.just(news)
-                    }
+                    translateNewsDetailWithDeepL(news)
                 } else {
                     Mono.just(news)
                 }
@@ -202,60 +195,46 @@ class NewsController(
     }
     
     private fun translateNewsDetailWithDeepL(news: News): Mono<News> {
-        val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        val needsTitle = (news.titleKo.isNullOrBlank() || news.titleKo == news.title) && !isKoreanText(news.title)
+        val needsDesc = news.description != null && 
+            (news.descriptionKo.isNullOrBlank() || news.descriptionKo == news.description) && 
+            !isKoreanText(news.description)
+        val needsContent = news.content != null && 
+            (news.contentKo.isNullOrBlank() || news.contentKo == news.content) && 
+            !isKoreanText(news.content)
         
-        val needsTitleTranslation = news.titleKo.isNullOrBlank() || news.titleKo == news.title
-        val needsDescriptionTranslation = news.descriptionKo.isNullOrBlank() || 
-            (news.description != null && news.descriptionKo == news.description)
-        val needsContentTranslation = news.contentKo.isNullOrBlank() || 
-            (news.content != null && news.contentKo == news.content)
+        if (!needsTitle && !needsDesc && !needsContent) {
+            return Mono.just(news)
+        }
         
-        val titleMono = if (needsTitleTranslation && !isKoreanText(news.title)) {
+        val titleMono = if (needsTitle) {
             deepLTranslationService.translateToKorean(news.title)
         } else {
             Mono.just(news.titleKo ?: news.title)
         }
         
-        val descriptionMono = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
-            deepLTranslationService.translateToKorean(news.description)
+        val descriptionMono = if (needsDesc) {
+            deepLTranslationService.translateToKorean(news.description!!)
         } else {
             Mono.just(news.descriptionKo ?: news.description ?: "")
         }
         
-        val contentMono = if (needsContentTranslation && news.content != null && !isKoreanText(news.content)) {
-            deepLTranslationService.translateToKorean(news.content)
+        val contentMono = if (needsContent) {
+            deepLTranslationService.translateToKorean(news.content!!)
         } else {
             Mono.just(news.contentKo ?: news.content ?: "")
         }
         
         return Mono.zip(titleMono, descriptionMono, contentMono)
             .map { tuple ->
-                val translatedTitle = tuple.t1
-                val translatedDescription = tuple.t2
-                val translatedContent = tuple.t3
                 news.copy(
-                    titleKo = if (needsTitleTranslation && !isKoreanText(news.title)) {
-                        translatedTitle
-                    } else {
-                        news.titleKo ?: news.title
-                    },
-                    descriptionKo = if (needsDescriptionTranslation && news.description != null && !isKoreanText(news.description)) {
-                        translatedDescription
-                    } else {
-                        news.descriptionKo ?: news.description
-                    },
-                    contentKo = if (needsContentTranslation && news.content != null && !isKoreanText(news.content)) {
-                        translatedContent
-                    } else {
-                        news.contentKo ?: news.content
-                    }
+                    titleKo = if (needsTitle) tuple.t1 else (news.titleKo ?: news.title),
+                    descriptionKo = if (needsDesc) tuple.t2 else (news.descriptionKo ?: news.description),
+                    contentKo = if (needsContent) tuple.t3 else (news.contentKo ?: news.content)
                 )
             }
-            .timeout(Duration.ofSeconds(15))
-            .onErrorResume { error ->
-                logger.warn("뉴스 상세 DeepL 번역 실패, 원본 뉴스 반환: ${error.message}", error)
-                Mono.just(news)
-            }
+            .timeout(Duration.ofSeconds(12))
+            .onErrorReturn(news)
     }
 
     @GetMapping("/search")

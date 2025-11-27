@@ -493,7 +493,7 @@ class PythonApiClient(
                             failure.cause?.message ?: "없음")
                     }
             )
-            .timeout(java.time.Duration.ofSeconds(25))
+            .timeout(java.time.Duration.ofSeconds(20))
             .doOnError { error ->
                 when (error) {
                     is java.util.concurrent.TimeoutException -> {
@@ -864,6 +864,19 @@ class PythonApiClient(
                         Mono.just(emptyMap())
                     }
                 }
+            }
+    }
+
+    fun getSectorsAnalysis(): Mono<List<Map<String, Any>>> {
+        return webClient.get()
+            .uri("/api/sectors")
+            .retrieve()
+            .bodyToFlux(Map::class.java)
+            .collectList()
+            .timeout(java.time.Duration.ofSeconds(30))
+            .onErrorResume { error ->
+                logger.warn("섹터별 분석 조회 실패: {}", error.message)
+                Mono.just(emptyList())
             }
     }
 }

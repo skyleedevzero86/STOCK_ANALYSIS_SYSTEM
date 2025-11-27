@@ -321,6 +321,14 @@
               <span class="status-label">연결 실패:</span>
               <span id="reconnectCount" class="status-value neutral">0</span>
             </div>
+            <div class="status-item">
+              <span class="status-label">최고 성과:</span>
+              <span id="topPerformer" class="status-value neutral">-</span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">응답 시간:</span>
+              <span id="responseTime" class="status-value neutral">-</span>
+            </div>
             <div class="status-controls">
               <button class="btn-small" onclick="dashboard.checkSystemHealth()">
                 시스템 체크
@@ -390,6 +398,20 @@
           </div>
           <div id="newsContainer" class="news-container">
             <div class="loading">뉴스를 불러오는 중...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>오늘 뜨는 섹터</h3>
+          </div>
+          <div class="sector-comparison-container">
+            <div class="sector-bubble-chart-container">
+              <canvas id="sectorBubbleChart"></canvas>
+            </div>
+            <div class="sector-stocks-comparison" id="sectorStocksComparison">
+              <div class="loading">섹터 데이터를 불러오는 중...</div>
+            </div>
           </div>
         </div>
       </section>

@@ -12,6 +12,7 @@ class StockDashboard {
         this.wsReconnectAttempts = 0;
         this.wsMessageCount = 0;
         this.lastUpdateTime = null;
+        this.lastResponseTime = null;
         this.init();
     }
 
@@ -21,6 +22,10 @@ class StockDashboard {
         this.setupWebSocket();
         this.startHealthCheck();
         this.updateConnectionStatus();
+        this.loadTopPerformers();
+        this.loadSectorsAnalysis();
+        setInterval(() => this.loadTopPerformers(), 60000);
+        setInterval(() => this.loadSectorsAnalysis(), 120000);
     }
 
     setupEventListeners() {
@@ -434,6 +439,21 @@ class StockDashboard {
                 ? "status-value warning"
                 : "status-value neutral";
         }
+
+        const responseTimeEl = document.getElementById('responseTime');
+        if (responseTimeEl) {
+            if (this.lastResponseTime !== null) {
+                responseTimeEl.textContent = `${this.lastResponseTime}ms`;
+                responseTimeEl.className = this.lastResponseTime < 500
+                    ? "status-value positive"
+                    : this.lastResponseTime < 1000
+                    ? "status-value neutral"
+                    : "status-value warning";
+            } else {
+                responseTimeEl.textContent = "-";
+                responseTimeEl.className = "status-value neutral";
+            }
+        }
     }
 
     async checkSystemHealth() {
@@ -540,6 +560,217 @@ class StockDashboard {
             pythonApiStatusEl.textContent = status;
             pythonApiStatusEl.className = `status-value ${className}`;
         }
+    }
+
+    async loadTopPerformers() {
+        try {
+            const startTime = performance.now();
+            const response = await axios.get(`${this.apiBaseUrl}/api/stocks/top-performers?limit=1`, {
+                timeout: 10000
+            });
+            const endTime = performance.now();
+            this.lastResponseTime = Math.round(endTime - startTime);
+
+            if (response.data && response.data.length > 0) {
+                const top = response.data[0];
+                const topPerformerEl = document.getElementById('topPerformer');
+                if (topPerformerEl) {
+                    const changePercent = top.changePercent || 0;
+                    const changeText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+                    topPerformerEl.textContent = `${top.symbol} ${changeText}`;
+                    topPerformerEl.className = changePercent >= 0
+                        ? "status-value positive"
+                        : "status-value negative";
+                }
+            }
+            this.updateConnectionStatus();
+        } catch (error) {
+            const topPerformerEl = document.getElementById('topPerformer');
+            if (topPerformerEl) {
+                topPerformerEl.textContent = "-";
+                topPerformerEl.className = "status-value neutral";
+            }
+        }
+    }
+
+    async loadSectorsAnalysis() {
+        try {
+            const response = await axios.get(`${this.apiBaseUrl}/api/stocks/sectors`, {
+                timeout: 15000
+            });
+
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                this.renderSectorBubbleChart(response.data);
+                this.renderSectorStocksComparison(response.data);
+            }
+        } catch (error) {
+            const comparisonEl = document.getElementById('sectorStocksComparison');
+            if (comparisonEl) {
+                comparisonEl.innerHTML = '<div class="error">섹터 데이터를 불러올 수 없습니다.</div>';
+            }
+        }
+    }
+
+    renderSectorBubbleChart(sectors) {
+        const canvas = document.getElementById('sectorBubbleChart');
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (this.charts.sectorBubble) {
+            this.charts.sectorBubble.destroy();
+        }
+
+        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22'];
+        
+        const data = sectors.map((sector, index) => {
+            const avgChange = sector.avgChangePercent || 0;
+            const size = Math.max(20, Math.min(100, Math.abs(avgChange) * 5 + 30));
+            return {
+                x: index * 30 + 50,
+                y: 50,
+                r: size,
+                label: sector.sector,
+                change: avgChange,
+                stockCount: sector.stockCount || 0
+            };
+        });
+
+        this.charts.sectorBubble = new Chart(ctx, {
+            type: 'bubble',
+            data: {
+                datasets: [{
+                    label: '섹터',
+                    data: data,
+                    backgroundColor: data.map((d, i) => {
+                        const alpha = d.change >= 0 ? 0.6 : 0.3;
+                        return colors[i % colors.length].replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                    }),
+                    borderColor: data.map((d, i) => colors[i % colors.length]),
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.raw;
+                                return [
+                                    `섹터: ${point.label}`,
+                                    `평균 변동률: ${point.change >= 0 ? '+' : ''}${point.change.toFixed(2)}%`,
+                                    `종목 수: ${point.stockCount}개`
+                                ];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        min: 0,
+                        max: 100,
+                        display: false
+                    },
+                    y: {
+                        min: 0,
+                        max: 100,
+                        display: false
+                    }
+                },
+                onClick: (event, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const sector = sectors[index];
+                        this.showSectorStocks(sector);
+                    }
+                }
+            }
+        });
+    }
+
+    renderSectorStocksComparison(sectors) {
+        const container = document.getElementById('sectorStocksComparison');
+        if (!container) return;
+
+        if (sectors.length === 0) {
+            container.innerHTML = '<div class="no-data">섹터 데이터가 없습니다.</div>';
+            return;
+        }
+
+        const sortedSectors = [...sectors].sort((a, b) => (b.avgChangePercent || 0) - (a.avgChangePercent || 0));
+        
+        const html = sortedSectors.map(sector => {
+            const stocks = sector.stocks || [];
+            const avgChange = sector.avgChangePercent || 0;
+            const changeClass = avgChange >= 0 ? 'positive' : 'negative';
+            const changeText = avgChange >= 0 ? `+${avgChange.toFixed(2)}%` : `${avgChange.toFixed(2)}%`;
+            
+            const stocksHtml = stocks.map(stock => {
+                const stockChange = stock.changePercent || 0;
+                const stockChangeClass = stockChange >= 0 ? 'positive' : 'negative';
+                const stockChangeText = stockChange >= 0 ? `+${stockChange.toFixed(2)}%` : `${stockChange.toFixed(2)}%`;
+                
+                return `
+                    <div class="sector-stock-item">
+                        <span class="stock-symbol">${stock.symbol}</span>
+                        <span class="stock-price">$${stock.currentPrice?.toFixed(2) || '0.00'}</span>
+                        <span class="stock-change ${stockChangeClass}">${stockChangeText}</span>
+                        <span class="stock-signal">${stock.signal || 'hold'}</span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="sector-comparison-item">
+                    <div class="sector-header">
+                        <h4 class="sector-name">${sector.sector}</h4>
+                        <span class="sector-avg-change ${changeClass}">${changeText}</span>
+                        <span class="sector-count">${sector.stockCount || 0}개 종목</span>
+                    </div>
+                    <div class="sector-stocks-list">
+                        ${stocksHtml}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+    }
+
+    showSectorStocks(sector) {
+        const container = document.getElementById('sectorStocksComparison');
+        if (!container) return;
+
+        const stocks = sector.stocks || [];
+        const html = `
+            <div class="sector-detail">
+                <div class="sector-detail-header">
+                    <h4>${sector.sector} 상세</h4>
+                    <button onclick="dashboard.loadSectorsAnalysis()" class="btn-small">전체 보기</button>
+                </div>
+                <div class="sector-stocks-list">
+                    ${stocks.map(stock => {
+                        const change = stock.changePercent || 0;
+                        const changeClass = change >= 0 ? 'positive' : 'negative';
+                        const changeText = change >= 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
+                        return `
+                            <div class="sector-stock-item">
+                                <span class="stock-symbol">${stock.symbol}</span>
+                                <span class="stock-price">$${stock.currentPrice?.toFixed(2) || '0.00'}</span>
+                                <span class="stock-change ${changeClass}">${changeText}</span>
+                                <span class="stock-volume">거래량: ${(stock.volume || 0).toLocaleString()}</span>
+                                <span class="stock-signal">${stock.signal || 'hold'}</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+        container.innerHTML = html;
     }
 
     startHealthCheck() {

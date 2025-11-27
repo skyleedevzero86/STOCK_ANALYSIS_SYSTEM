@@ -872,6 +872,7 @@ class PythonApiClient(
             .uri("/api/sectors")
             .retrieve()
             .bodyToFlux(Map::class.java)
+            .map { it as Map<String, Any> }
             .collectList()
             .timeout(java.time.Duration.ofSeconds(30))
             .onErrorResume { error ->

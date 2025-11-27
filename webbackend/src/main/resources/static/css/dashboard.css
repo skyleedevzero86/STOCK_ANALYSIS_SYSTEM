@@ -998,6 +998,177 @@ tr:hover {
   color: #222;
 }
 
+.top-performers-container {
+  padding: 16px 0;
+  min-height: 200px;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.top-performer-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s ease;
+}
+
+.top-performer-item:hover {
+  background: #f0f0f0;
+  border-color: #60bde6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.performer-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #60bde6 0%, #3498db 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.25rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.top-performer-item:first-child .performer-rank {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.top-performer-item:nth-child(2) .performer-rank {
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+}
+
+.top-performer-item:nth-child(3) .performer-rank {
+  background: linear-gradient(135deg, #cd7f32 0%, #a0522d 100%);
+}
+
+.performer-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.performer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.performer-symbol {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #222;
+}
+
+.performer-price {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #34495e;
+}
+
+.performer-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.performer-change {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.performer-change.positive {
+  color: #27ae60;
+  background: #d5f4e6;
+}
+
+.performer-change.negative {
+  color: #e74c3c;
+  background: #fadbd8;
+}
+
+.performer-signal {
+  font-size: 0.875rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.performer-signal.signal-buy {
+  background: #d5f4e6;
+  color: #27ae60;
+}
+
+.performer-signal.signal-strong_buy {
+  background: #a8e6cf;
+  color: #1e8449;
+}
+
+.performer-signal.signal-sell {
+  background: #fadbd8;
+  color: #e74c3c;
+}
+
+.performer-signal.signal-hold {
+  background: #ecf0f1;
+  color: #7f8c8d;
+}
+
+.performer-score {
+  font-size: 0.875rem;
+  color: #7f8c8d;
+  font-weight: 500;
+}
+
+.performer-metrics {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.performer-metric {
+  font-size: 0.8125rem;
+  color: #7f8c8d;
+  padding: 2px 8px;
+  background: #ecf0f1;
+  border-radius: 4px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.card-header h3 {
+  margin: 0;
+}
+
 @media (max-width: 1024px) {
   .sector-comparison-container {
     grid-template-columns: 1fr;
@@ -1006,6 +1177,60 @@ tr:hover {
   .sector-bubble-chart-container {
     height: 250px;
   }
+
+  .performer-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .performer-details {
+    width: 100%;
+  }
+}
+
+.no-data,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+  color: #7f8c8d;
+  font-size: 1rem;
+  padding: 40px 20px;
+  margin: 0 auto;
+}
+
+.error {
+  color: #e74c3c;
+  background: #fadbd8;
+  border-radius: 8px;
+  border: 1px solid #f1948a;
+}
+
+.no-data {
+  color: #7f8c8d;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.news-container .no-data,
+.news-container .error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+}
+
+.sector-stocks-comparison .error,
+.sector-stocks-comparison .no-data {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
 }
   }
 

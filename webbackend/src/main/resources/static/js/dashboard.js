@@ -563,34 +563,64 @@ class StockDashboard {
     }
 
     async loadTopPerformers() {
+        const container = document.getElementById('topPerformersContainer');
+        if (!container) return;
+
         try {
             const startTime = performance.now();
-            const response = await axios.get(`${this.apiBaseUrl}/api/stocks/top-performers?limit=1`, {
+            const response = await axios.get(`${this.apiBaseUrl}/api/stocks/top-performers?limit=5`, {
                 timeout: 10000
             });
             const endTime = performance.now();
             this.lastResponseTime = Math.round(endTime - startTime);
 
-            if (response.data && response.data.length > 0) {
-                const top = response.data[0];
-                const topPerformerEl = document.getElementById('topPerformer');
-                if (topPerformerEl) {
-                    const changePercent = top.changePercent || 0;
-                    const changeText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
-                    topPerformerEl.textContent = `${top.symbol} ${changeText}`;
-                    topPerformerEl.className = changePercent >= 0
-                        ? "status-value positive"
-                        : "status-value negative";
-                }
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                this.renderTopPerformers(response.data);
+            } else {
+                container.innerHTML = '<div class="no-data">최고 성과 종목 데이터가 없습니다.</div>';
             }
             this.updateConnectionStatus();
         } catch (error) {
-            const topPerformerEl = document.getElementById('topPerformer');
-            if (topPerformerEl) {
-                topPerformerEl.textContent = "-";
-                topPerformerEl.className = "status-value neutral";
-            }
+            container.innerHTML = '<div class="error">최고 성과 종목을 불러올 수 없습니다.</div>';
         }
+    }
+
+    renderTopPerformers(performers) {
+        const container = document.getElementById('topPerformersContainer');
+        if (!container) return;
+
+        const html = performers.map((stock, index) => {
+            const changePercent = stock.changePercent || 0;
+            const changeClass = changePercent >= 0 ? 'positive' : 'negative';
+            const changeText = changePercent >= 0 ? `+${changePercent.toFixed(2)}%` : `${changePercent.toFixed(2)}%`;
+            const score = stock.score || 0;
+            const signal = stock.signal || 'hold';
+            const signalClass = signal.toLowerCase().includes('buy') ? 'buy' : signal.toLowerCase().includes('sell') ? 'sell' : 'hold';
+
+            return `
+                <div class="top-performer-item">
+                    <div class="performer-rank">${index + 1}</div>
+                    <div class="performer-info">
+                        <div class="performer-header">
+                            <span class="performer-symbol">${stock.symbol}</span>
+                            <span class="performer-price">$${stock.currentPrice?.toFixed(2) || '0.00'}</span>
+                        </div>
+                        <div class="performer-details">
+                            <span class="performer-change ${changeClass}">${changeText}</span>
+                            <span class="performer-signal signal-${signalClass}">${signal}</span>
+                            <span class="performer-score">점수: ${score.toFixed(1)}</span>
+                        </div>
+                        <div class="performer-metrics">
+                            <span class="performer-metric">RSI: ${stock.rsi?.toFixed(1) || '-'}</span>
+                            <span class="performer-metric">신뢰도: ${(stock.confidence * 100)?.toFixed(0) || 0}%</span>
+                            <span class="performer-metric">트렌드: ${stock.trendStrength?.toFixed(2) || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
     }
 
     async loadSectorsAnalysis() {

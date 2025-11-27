@@ -290,7 +290,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="systemMonitorCard" style="display: none;">
           <h3>연결 상태 & 시스템 모니터</h3>
           <div id="connectionStatus">
             <div class="status-item">
@@ -322,10 +322,6 @@
               <span id="reconnectCount" class="status-value neutral">0</span>
             </div>
             <div class="status-item">
-              <span class="status-label">최고 성과:</span>
-              <span id="topPerformer" class="status-value neutral">-</span>
-            </div>
-            <div class="status-item">
               <span class="status-label">응답 시간:</span>
               <span id="responseTime" class="status-value neutral">-</span>
             </div>
@@ -340,6 +336,18 @@
                 통계 리셋
               </button>
             </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>최고 성과 종목 추천</h3>
+          </div>
+          <div id="topPerformersContainer" class="top-performers-container">
+            <div class="loading">최고 성과 종목을 불러오는 중...</div>
+          </div>
+          <div class="card-footer">
+            <button class="btn-small" onclick="dashboard.loadTopPerformers()">새로고침</button>
           </div>
         </div>
 
@@ -401,7 +409,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card table-card">
           <div class="card-header">
             <h3>오늘 뜨는 섹터</h3>
           </div>

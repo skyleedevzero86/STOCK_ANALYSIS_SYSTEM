@@ -85,6 +85,15 @@ function updateNavigation() {
         }
     }
 
+    const systemMonitorCard = document.getElementById('systemMonitorCard');
+    if (systemMonitorCard) {
+        if (isLoggedIn && isMainPage) {
+            systemMonitorCard.style.display = 'block';
+        } else {
+            systemMonitorCard.style.display = 'none';
+        }
+    }
+
     const symbolSelectLinks = document.querySelectorAll('.nav-link.btn-nav');
     symbolSelectLinks.forEach(link => {
         if (isLoginPage || isSubscriptionPage) {

@@ -7,6 +7,8 @@ from fastapi.security import HTTPBearer
 from typing import Protocol, TypedDict, List, Dict, Optional, Union, Any
 import asyncio
 import json
+import os
+import smtplib
 import pandas as pd
 from datetime import datetime, timedelta
 import uvicorn
@@ -761,19 +763,28 @@ class StockAnalysisAPI:
     async def get_all_symbols_analysis(self, basic_analyzer: Optional[TechnicalAnalyzer] = None,
                                        enhanced_collector: Optional[StockDataCollector] = None) -> List[Dict[str, Any]]:
         try:
+            import asyncio
             results = []
-            for symbol in settings.ANALYSIS_SYMBOLS:
+            for idx, symbol in enumerate(settings.ANALYSIS_SYMBOLS):
                 try:
                     if basic_analyzer and enhanced_collector:
                         analysis = await self.get_basic_analysis(symbol, basic_analyzer, enhanced_collector)
                     else:
                         analysis = await self.get_advanced_analysis(symbol)
                     results.append(analysis)
+                    
+                    if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
+                        await asyncio.sleep(3.0)
+                        
                 except (StockAnalysisError, StockDataCollectionError) as e:
                     logger.error("종목 분석 오류", symbol=symbol, exception=e)
+                    if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
+                        await asyncio.sleep(2.0)
                     continue
                 except Exception as e:
                     logger.error("종목 분석 예상치 못한 오류", symbol=symbol, exception=e)
+                    if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
+                        await asyncio.sleep(2.0)
                     continue
             return results
         except StockAnalysisError as e:
@@ -1385,6 +1396,155 @@ async def get_sms_config():
             f"SMS 설정 조회 실패: {str(e)}",
             error_code="SMS_CONFIG_READ_FAILED",
             cause=e
+        ) from e
+
+@app.post("/api/notifications/realtime-email",
+         summary="실시간 이메일 발송",
+         description="Airflow 스케줄러를 거치지 않고 즉시 이메일을 발송합니다. 이벤트 발생 시 실시간으로 알림을 보낼 때 사용합니다.",
+         response_model=EmailNotificationResponse,
+         responses={
+             200: {"description": "이메일이 성공적으로 발송되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def send_realtime_email(
+    to_email: str = Query(..., description="수신자 이메일"),
+    subject: str = Query(..., description="이메일 제목"),
+    body: str = Query(..., description="이메일 내용"),
+    notification_service: NotificationService = Depends(get_notification_service)
+):
+    try:
+        logger.info("실시간 이메일 발송 요청", to_email=to_email, subject=subject)
+        
+        success = notification_service.send_email(
+            to_email=to_email,
+            subject=subject,
+            body=body
+        )
+        
+        NotificationLogger.log_notification(
+            user_email=to_email,
+            notification_type='email',
+            message=f"[실시간발송] {subject}\n{body}",
+            status="sent" if success else "failed",
+            error_message=None if success else "이메일 발송에 실패했습니다."
+        )
+        
+        if success:
+            logger.info("실시간 이메일 발송 성공", to_email=to_email)
+            return EmailNotificationResponse(
+                success=True,
+                message="이메일이 성공적으로 발송되었습니다."
+            )
+        else:
+            logger.warning("실시간 이메일 발송 실패", to_email=to_email)
+            return EmailNotificationResponse(
+                success=False,
+                message="이메일 발송에 실패했습니다."
+            )
+    except HTTPException:
+        raise
+    except EmailNotificationError as e:
+        logger.error("실시간 이메일 발송 오류", exception=e, to_email=to_email)
+        raise HTTPException(status_code=500, detail=f"이메일 발송 오류: {str(e)}") from e
+    except (smtplib.SMTPException, ConnectionError, TimeoutError) as e:
+        logger.error("실시간 이메일 발송 네트워크 오류", exception=e, to_email=to_email)
+        raise HTTPException(status_code=503, detail=f"이메일 발송 네트워크 오류: {str(e)}") from e
+    except Exception as e:
+        logger.error("실시간 이메일 발송 예상치 못한 오류", exception=e, to_email=to_email)
+        raise EmailNotificationError(
+            f"이메일 발송 실패: {str(e)}",
+            error_code="EMAIL_SEND_FAILED",
+            cause=e
+        ) from e
+
+@app.post("/api/airflow/trigger-dag",
+         summary="Airflow DAG 트리거",
+         description="지정된 Airflow DAG를 즉시 실행합니다. 실시간 이벤트 발생 시 DAG를 트리거할 때 사용합니다.",
+         responses={
+             200: {"description": "DAG가 성공적으로 트리거되었습니다."},
+             400: {"description": "잘못된 요청입니다.", "model": ErrorResponse},
+             500: {"description": "서버 내부 오류가 발생했습니다.", "model": ErrorResponse}
+         })
+async def trigger_airflow_dag(
+    dag_id: str = Query(..., description="트리거할 DAG ID (예: email_notification_dag)"),
+    airflow_host: Optional[str] = Query(None, description="Airflow 호스트 (기본값: localhost)"),
+    airflow_port: Optional[int] = Query(None, description="Airflow 포트 (기본값: 8081)"),
+    conf: Optional[Dict[str, Any]] = Body(None, description="DAG 실행 시 전달할 설정 (JSON)")
+):
+    try:
+        import requests
+        
+        airflow_host = airflow_host or os.getenv('AIRFLOW_HOST', 'localhost')
+        airflow_port = airflow_port or int(os.getenv('AIRFLOW_PORT', '8081'))
+        
+        airflow_url = f"http://{airflow_host}:{airflow_port}"
+        trigger_url = f"{airflow_url}/api/v1/dags/{dag_id}/dagRuns"
+        
+        airflow_username = os.getenv('AIRFLOW_USERNAME', 'airflow')
+        airflow_password = os.getenv('AIRFLOW_PASSWORD', 'airflow')
+        
+        logger.info("Airflow DAG 트리거 시도", dag_id=dag_id, airflow_url=airflow_url)
+        
+        payload = {
+            "dag_run_id": f"manual__{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "conf": conf or {}
+        }
+        
+        response = requests.post(
+            trigger_url,
+            json=payload,
+            auth=(airflow_username, airflow_password),
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            logger.info("Airflow DAG 트리거 성공", dag_id=dag_id, dag_run_id=result.get('dag_run_id'))
+            return {
+                "success": True,
+                "message": f"DAG '{dag_id}'가 성공적으로 트리거되었습니다.",
+                "dag_run_id": result.get('dag_run_id'),
+                "state": result.get('state')
+            }
+        elif response.status_code == 401:
+            logger.error("Airflow 인증 실패", dag_id=dag_id)
+            raise HTTPException(
+                status_code=401,
+                detail="Airflow 인증에 실패했습니다. AIRFLOW_USERNAME과 AIRFLOW_PASSWORD를 확인하세요."
+            )
+        elif response.status_code == 404:
+            logger.error("Airflow DAG를 찾을 수 없음", dag_id=dag_id)
+            raise HTTPException(
+                status_code=404,
+                detail=f"DAG '{dag_id}'를 찾을 수 없습니다."
+            )
+        else:
+            error_msg = response.text
+            logger.error("Airflow DAG 트리거 실패", dag_id=dag_id, status_code=response.status_code, error=error_msg)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Airflow DAG 트리거 실패: {error_msg}"
+            )
+    except requests.exceptions.ConnectionError as e:
+        logger.error("Airflow 연결 실패", exception=e, dag_id=dag_id)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Airflow 서버에 연결할 수 없습니다. Airflow가 실행 중인지 확인하세요."
+        ) from e
+    except requests.exceptions.Timeout as e:
+        logger.error("Airflow 요청 타임아웃", exception=e, dag_id=dag_id)
+        raise HTTPException(
+            status_code=504,
+            detail="Airflow 서버 응답 시간이 초과되었습니다."
+        ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Airflow DAG 트리거 예상치 못한 오류", exception=e, dag_id=dag_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Airflow DAG 트리거 중 오류 발생: {str(e)}"
         ) from e
 
 @app.websocket("/ws")

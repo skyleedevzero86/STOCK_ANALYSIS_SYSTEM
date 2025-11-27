@@ -39,7 +39,10 @@ class StockDataCollector:
         self.alpha_vantage_api_key = settings.ALPHA_VANTAGE_API_KEY
         self.mock_data_cache = {}
         self.alpha_vantage_cache = {}
-        self.rate_limit_delay = 12
+        self.rate_limit_delay = 3.0 
+        self.last_request_time = {}  
+        self.rate_limit_backoff = {} 
+        self.min_delay_between_requests = 2.0  
         
     def get_historical_data(self, symbol: str, period: str = "1mo") -> pd.DataFrame:
         if self.use_mock_data:
@@ -69,6 +72,24 @@ class StockDataCollector:
             logger.warning("과거 데이터 수집 예상치 못한 오류, 모의 데이터 사용", symbol=symbol, exception=e)
             return self._generate_mock_historical_data(symbol, period)
     
+    def _wait_if_needed(self, source_name: str):
+        current_time = time.time()
+        last_time = self.last_request_time.get(source_name, 0)
+        backoff_time = self.rate_limit_backoff.get(source_name, 0)
+        
+        if backoff_time > current_time:
+            wait_time = backoff_time - current_time
+            logger.info(f"{source_name} 백오프 대기: {wait_time:.1f}초", component="StockDataCollector")
+            time.sleep(wait_time)
+            self.rate_limit_backoff[source_name] = 0
+        
+        elapsed = current_time - last_time
+        if elapsed < self.min_delay_between_requests:
+            wait_time = self.min_delay_between_requests - elapsed
+            time.sleep(wait_time)
+        
+        self.last_request_time[source_name] = time.time()
+    
     def get_realtime_data(self, symbol: str) -> Dict:
         if self.use_mock_data:
             logger.warning("Mock 데이터 모드: 모의 데이터를 반환합니다", symbol=symbol, component="StockDataCollector")
@@ -87,11 +108,15 @@ class StockDataCollector:
                 if source_name == 'alpha_vantage' and not self.use_alpha_vantage:
                     continue
                 
+                self._wait_if_needed(source_name)
+                
                 logger.info("데이터 수집 시도", symbol=symbol, source=source_name, component="StockDataCollector")
                 result = fetch_func(symbol)
                 
                 if result and result.get('price', 0) > 0:
                     logger.info("데이터 수집 성공", symbol=symbol, source=source_name, price=result['price'], component="StockDataCollector")
+                    if source_name in self.rate_limit_backoff:
+                        self.rate_limit_backoff[source_name] = 0
                     return result
                 else:
                     raise StockDataCollectionError(
@@ -103,18 +128,38 @@ class StockDataCollector:
             except (StockDataCollectionError, StockNotFoundError, InvalidSymbolError) as e:
                 last_exception = e
                 logger.warning("데이터 수집 실패", symbol=symbol, source=source_name, exception=e)
+                time.sleep(0.5)
                 continue
             except (TimeoutError, ConnectionError, NetworkError, RateLimitError) as e:
                 last_exception = e
                 logger.warning("데이터 수집 네트워크 오류", symbol=symbol, source=source_name, exception=e)
+                if isinstance(e, RateLimitError) and hasattr(e, 'retry_after'):
+                    backoff_until = time.time() + e.retry_after
+                    self.rate_limit_backoff[source_name] = backoff_until
+                    logger.warning(f"{source_name} 레이트 리밋으로 인해 {e.retry_after}초 대기", symbol=symbol, component="StockDataCollector")
+                time.sleep(1.0)
                 continue
             except (YahooFinanceError, AlphaVantageError, ExternalServiceError) as e:
                 last_exception = e
                 logger.warning("데이터 수집 외부 서비스 오류", symbol=symbol, source=source_name, exception=e)
+                time.sleep(0.5)
                 continue
             except Exception as e:
                 last_exception = e
-                logger.warning("데이터 수집 예상치 못한 오류", symbol=symbol, source=source_name, exception=e)
+                error_str = str(e)
+                if '429' in error_str or 'Too Many Requests' in error_str:
+                    current_backoff = self.rate_limit_backoff.get(source_name, 0)
+                    if current_backoff <= time.time():
+                        backoff_duration = 60
+                    else:
+                        backoff_duration = 120
+                    backoff_until = time.time() + backoff_duration
+                    self.rate_limit_backoff[source_name] = backoff_until
+                    logger.warning(f"{source_name} 429 에러로 인해 {backoff_duration}초 백오프", symbol=symbol, component="StockDataCollector")
+                    time.sleep(2.0)
+                else:
+                    logger.warning("데이터 수집 예상치 못한 오류", symbol=symbol, source=source_name, exception=e)
+                time.sleep(0.5)
                 continue
         
         if self.fallback_to_mock:
@@ -137,8 +182,31 @@ class StockDataCollector:
             }
     
     def _fetch_yfinance_data(self, symbol: str) -> Dict:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            
+            if not info or 'currentPrice' not in info:
+                raise YahooFinanceError(
+                    f"Yahoo Finance에서 {symbol} 정보를 가져올 수 없습니다.",
+                    service_name="Yahoo Finance",
+                    cause=None
+                )
+        except (YahooFinanceError, RateLimitError):
+            raise
+        except Exception as e:
+            error_str = str(e)
+            if '429' in error_str or 'Too Many Requests' in error_str:
+                raise RateLimitError(
+                    f"Yahoo Finance API rate limit exceeded for {symbol}",
+                    service_name="Yahoo Finance",
+                    retry_after=60
+                )
+            raise YahooFinanceError(
+                f"Yahoo Finance에서 {symbol} 정보를 가져오는 중 오류 발생: {error_str}",
+                service_name="Yahoo Finance",
+                cause=e
+            )
         
         if not info or 'currentPrice' not in info:
             raise YahooFinanceError(
@@ -213,16 +281,25 @@ class StockDataCollector:
             'corsDomain': 'finance.yahoo.com'
         }
         
-        response = self.session.get(url, params=params, timeout=10)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         
-        # 429 에러 특별 처리
+        response = self.session.get(url, params=params, headers=headers, timeout=15)
+        
         if response.status_code == 429:
-            logger.warning("Yahoo Finance rate limit (429)", symbol=symbol, component="StockDataCollector")
-            time.sleep(60)  # 1분 대기
+            retry_after = 60
+            if 'Retry-After' in response.headers:
+                try:
+                    retry_after = int(response.headers['Retry-After'])
+                except ValueError:
+                    retry_after = 60
+            
+            logger.warning(f"Yahoo Finance rate limit (429), {retry_after}초 대기 필요", symbol=symbol, component="StockDataCollector")
             raise RateLimitError(
                 f"Yahoo Finance API rate limit exceeded for {symbol}",
                 service_name="Yahoo Finance",
-                retry_after=60
+                retry_after=retry_after
             )
         
         response.raise_for_status()
@@ -275,11 +352,13 @@ class StockDataCollector:
     def get_multiple_realtime_data(self) -> List[Dict]:
         results = []
         
-        for symbol in self.symbols:
+        for idx, symbol in enumerate(self.symbols):
             data = self.get_realtime_data(symbol)
             if data:
                 results.append(data)
-            time.sleep(0.1)
+            
+            if idx < len(self.symbols) - 1:
+                time.sleep(self.rate_limit_delay)
             
         return results
     

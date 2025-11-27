@@ -17,6 +17,8 @@ class PythonApiClient(
     @Value("\${python.api.base-url:http://localhost:9000}")
     private val baseUrl: String
 ) {
+    private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
+    
     private val httpClient = HttpClient.create()
         .responseTimeout(Duration.ofSeconds(60))
         .doOnConnected { connection ->
@@ -28,19 +30,35 @@ class PythonApiClient(
         .baseUrl(baseUrl)
         .clientConnector(ReactorClientHttpConnector(httpClient))
         .build()
+    
+    fun checkHealth(): Mono<Boolean> {
+        return webClient.get()
+            .uri("/api/health")
+            .retrieve()
+            .bodyToMono(Map::class.java)
+            .map { response ->
+                val status = response["status"] as? String
+                status == "healthy" || status == "initializing"
+            }
+            .timeout(Duration.ofSeconds(5))
+            .onErrorResume { error ->
+                logger.warn("Python API 헬스 체크 실패: baseUrl={}, error={}", baseUrl, error.message)
+                Mono.just(false)
+            }
+    }
 
     private val mapToStockData: (Map<*, *>) -> StockData = { data ->
         try {
-            val symbol = (data["symbol"] as? String) ?: throw IllegalArgumentException("Missing or invalid symbol field: $data")
+            val symbol = (data["symbol"] as? String) ?: throw IllegalArgumentException("종목 필드가 없거나 잘못되었습니다: $data")
             
             val currentPrice = try {
                 val priceValue = (data["currentPrice"] as? Number) ?: (data["price"] as? Number)
                 if (priceValue == null) {
-                    throw IllegalArgumentException("Missing or invalid price field")
+                    throw IllegalArgumentException("가격 필드가 없거나 잘못되었습니다")
                 }
                 priceValue.toDouble()
             } catch (e: Exception) {
-                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid price data format: ${e.message}", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("가격 데이터 형식이 잘못되었습니다: ${e.message}", e)
             }
             
             val volume = try {
@@ -51,17 +69,17 @@ class PythonApiClient(
                     else -> (volumeValue as? Number)?.toLong() ?: 0L
                 }
             } catch (e: Exception) {
-                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid volume data format: ${e.message}", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("거래량 데이터 형식이 잘못되었습니다: ${e.message}", e)
             }
             
             val changePercent = try {
                 val changePercentValue = (data["changePercent"] as? Number) ?: (data["change_percent"] as? Number)
                 if (changePercentValue == null) {
-                    throw IllegalArgumentException("Missing or invalid changePercent field")
+                    throw IllegalArgumentException("변동률 필드가 없거나 잘못되었습니다")
                 }
                 changePercentValue.toDouble()
             } catch (e: Exception) {
-                throw com.sleekydz86.backend.global.exception.DataProcessingException("Invalid changePercent data format: ${e.message}", e)
+                throw com.sleekydz86.backend.global.exception.DataProcessingException("변동률 데이터 형식이 잘못되었습니다: ${e.message}", e)
             }
             
             val confidenceScore = (data["confidenceScore"] as? Number ?: data["confidence_score"] as? Number)?.toDouble()
@@ -79,7 +97,7 @@ class PythonApiClient(
                 throw e
             }
             throw com.sleekydz86.backend.global.exception.DataProcessingException(
-                "Failed to parse stock data from Python API: ${e.message}. Response data: $data",
+                "Python API에서 주식 데이터 파싱 실패: ${e.message}. 응답 데이터: $data",
                 e
             )
         }
@@ -108,7 +126,7 @@ class PythonApiClient(
                         when (e) {
                             is com.sleekydz86.backend.global.exception.DataProcessingException -> e
                             else -> com.sleekydz86.backend.global.exception.DataProcessingException(
-                                "Failed to parse stock data from Python API response: ${e.message}",
+                                "Python API 응답에서 주식 데이터 파싱 실패: ${e.message}",
                                 e
                             )
                         }
@@ -436,8 +454,7 @@ class PythonApiClient(
                     .defaultIfEmpty("")
                     .flatMap { body ->
                         val statusCode = response.statusCode().value()
-                        org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
-                            .warn("Python API error ($statusCode): $body for $symbol")
+                        logger.warn("Python API 오류 ({}): {} 종목: {}", statusCode, body, symbol)
                         Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
                             "Python API 서버 오류 ($statusCode): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
                         ))
@@ -446,11 +463,109 @@ class PythonApiClient(
             .bodyToFlux(Map::class.java)
             .map(mapToNews)
             .collectList()
+            .retryWhen(
+                Retry.backoff(2, Duration.ofSeconds(1))
+                    .filter { error ->
+                        val cause = error.cause
+                        when {
+                            error is reactor.netty.http.client.PrematureCloseException -> true
+                            error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException || 
+                                cause is java.net.ConnectException ||
+                                error.message?.contains("Connection prematurely closed") == true ||
+                                error.message?.contains("Connection refused") == true
+                            }
+                            error is org.springframework.web.reactive.function.client.WebClientException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException
+                            }
+                            error is java.net.ConnectException -> true
+                            error is java.util.concurrent.TimeoutException -> true
+                            else -> false
+                        }
+                    }
+                    .doBeforeRetry { retrySignal ->
+                        val failure = retrySignal.failure()
+                        logger.info("뉴스 조회 재시도: symbol={}, 시도 횟수={}, 오류={}, 원인={}", 
+                            symbol,
+                            retrySignal.totalRetries() + 1, 
+                            failure.message,
+                            failure.cause?.message ?: "없음")
+                    }
+            )
             .timeout(java.time.Duration.ofSeconds(25))
+            .doOnError { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("뉴스 조회 타임아웃: symbol={}, timeout=25초, baseUrl={}", symbol, baseUrl)
+                    }
+                    is java.net.ConnectException -> {
+                        logger.warn("Python API 연결 실패: symbol={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", symbol, baseUrl)
+                    }
+                    is reactor.netty.http.client.PrematureCloseException -> {
+                        logger.warn("Python API 연결 조기 종료: symbol={}, baseUrl={}", symbol, baseUrl)
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        val cause = error.cause
+                        when {
+                            cause is java.net.ConnectException -> {
+                                logger.warn("Python API 연결 실패: symbol={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요. (시작 명령: python start_python_api.py 또는 python api_server_enhanced.py)", symbol, baseUrl)
+                            }
+                            else -> {
+                                logger.warn("WebClient 오류: symbol={}, error={}", symbol, error.message)
+                            }
+                        }
+                    }
+                    else -> {
+                        logger.warn("뉴스 조회 오류: symbol={}, error={}", symbol, error.message)
+                    }
+                }
+            }
             .onErrorResume { error ->
-                org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
-                    .warn("Error fetching news for $symbol: ${error.message}, returning empty list", error)
-                Mono.just(emptyList())
+                when {
+                    error.message?.contains("Retries exhausted") == true || 
+                    error.javaClass.simpleName == "RetryExhaustedException" -> {
+                        val cause = error.cause
+                        when {
+                            cause is java.net.ConnectException -> {
+                                logger.warn("종목 {} 뉴스 조회 실패: 재시도 모두 실패, {}에 연결할 수 없습니다. 빈 목록을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbol, baseUrl)
+                            }
+                            cause is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                                val innerCause = cause.cause
+                                if (innerCause is java.net.ConnectException) {
+                                    logger.warn("종목 {} 뉴스 조회 실패: 재시도 모두 실패, {}에 연결할 수 없습니다. 빈 목록을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbol, baseUrl)
+                                } else {
+                                    logger.warn("종목 {} 뉴스 조회 실패: 재시도 모두 실패, {}. 빈 목록을 반환합니다.", symbol, cause.message)
+                                }
+                            }
+                            else -> {
+                                logger.warn("종목 {} 뉴스 조회 실패: 재시도 모두 실패, {}. 빈 목록을 반환합니다.", symbol, error.message)
+                            }
+                        }
+                        Mono.just(emptyList())
+                    }
+                    error is java.net.ConnectException -> {
+                        logger.warn("종목 {} 뉴스 조회 실패: {}에 연결할 수 없습니다. 빈 목록을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbol, baseUrl)
+                        Mono.just(emptyList())
+                    }
+                    error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        val cause = error.cause
+                        if (cause is java.net.ConnectException) {
+                            logger.warn("종목 {} 뉴스 조회 실패: {}에 연결할 수 없습니다. 빈 목록을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbol, baseUrl)
+                        } else {
+                            logger.warn("종목 {} 뉴스 조회 실패: {}. 빈 목록을 반환합니다.", symbol, error.message)
+                        }
+                        Mono.just(emptyList())
+                    }
+                    error is java.util.concurrent.TimeoutException -> {
+                        logger.warn("종목 {} 뉴스 조회 타임아웃: 25초 후 타임아웃. 빈 목록을 반환합니다.", symbol)
+                        Mono.just(emptyList())
+                    }
+                    else -> {
+                        logger.warn("종목 {} 뉴스 조회 실패: {}. 빈 목록을 반환합니다.", symbol, error.message)
+                        Mono.just(emptyList())
+                    }
+                }
             }
     }
     
@@ -653,15 +768,99 @@ class PythonApiClient(
                     (entry.value as? List<*>)?.map { it as Map<*, *> }?.map(mapToNews) ?: emptyList()
                 }
             }
+            .retryWhen(
+                Retry.backoff(2, Duration.ofSeconds(1))
+                    .filter { error ->
+                        val cause = error.cause
+                        when {
+                            error is reactor.netty.http.client.PrematureCloseException -> true
+                            error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException || 
+                                cause is java.net.ConnectException ||
+                                error.message?.contains("Connection prematurely closed") == true ||
+                                error.message?.contains("Connection refused") == true
+                            }
+                            error is org.springframework.web.reactive.function.client.WebClientException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException
+                            }
+                            error is java.net.ConnectException -> true
+                            error is java.util.concurrent.TimeoutException -> true
+                            else -> false
+                        }
+                    }
+                    .doBeforeRetry { retrySignal ->
+                        val failure = retrySignal.failure()
+                        logger.info("다중 종목 뉴스 조회 재시도: symbols={}, 시도 횟수={}, 오류={}, 원인={}", 
+                            symbolsParam,
+                            retrySignal.totalRetries() + 1, 
+                            failure.message,
+                            failure.cause?.message ?: "없음")
+                    }
+            )
             .timeout(java.time.Duration.ofSeconds(20))
-            .onErrorResume { error ->
+            .doOnError { error ->
                 when (error) {
-                    is java.util.concurrent.TimeoutException,
-                    is org.springframework.web.reactive.function.client.WebClientException,
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("다중 종목 뉴스 조회 타임아웃: symbols={}, timeout=20초, baseUrl={}", symbolsParam, baseUrl)
+                    }
                     is java.net.ConnectException -> {
+                        logger.warn("Python API 연결 실패: symbols={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", symbolsParam, baseUrl)
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        val cause = error.cause
+                        if (cause is java.net.ConnectException) {
+                            logger.warn("Python API 연결 실패: symbols={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요. (시작 명령: python start_python_api.py)", symbolsParam, baseUrl)
+                        }
+                    }
+                }
+            }
+            .onErrorResume { error ->
+                when {
+                    error.message?.contains("Retries exhausted") == true || 
+                    error.javaClass.simpleName == "RetryExhaustedException" -> {
+                        val cause = error.cause
+                        when {
+                            cause is java.net.ConnectException -> {
+                                logger.warn("다중 종목 뉴스 조회 실패: 재시도 모두 실패, 종목={}, {}에 연결할 수 없습니다. 빈 맵을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbolsParam, baseUrl)
+                            }
+                            cause is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                                val innerCause = cause.cause
+                                if (innerCause is java.net.ConnectException) {
+                                    logger.warn("다중 종목 뉴스 조회 실패: 재시도 모두 실패, 종목={}, {}에 연결할 수 없습니다. 빈 맵을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbolsParam, baseUrl)
+                                } else {
+                                    logger.warn("다중 종목 뉴스 조회 실패: 재시도 모두 실패, 종목={}, {}. 빈 맵을 반환합니다.", symbolsParam, cause.message)
+                                }
+                            }
+                            else -> {
+                                logger.warn("다중 종목 뉴스 조회 실패: 재시도 모두 실패, 종목={}, {}. 빈 맵을 반환합니다.", symbolsParam, error.message)
+                            }
+                        }
+                        Mono.just(emptyMap())
+                    }
+                    error is java.util.concurrent.TimeoutException -> {
+                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 타임아웃. 빈 맵을 반환합니다.", symbolsParam)
+                        Mono.just(emptyMap())
+                    }
+                    error is org.springframework.web.reactive.function.client.WebClientException -> {
+                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 오류={}. 빈 맵을 반환합니다.", symbolsParam, error.message)
+                        Mono.just(emptyMap())
+                    }
+                    error is java.net.ConnectException -> {
+                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, {}에 연결할 수 없습니다. 빈 맵을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbolsParam, baseUrl)
+                        Mono.just(emptyMap())
+                    }
+                    error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        val cause = error.cause
+                        if (cause is java.net.ConnectException) {
+                            logger.warn("다중 종목 뉴스 조회 실패: 종목={}, {}에 연결할 수 없습니다. 빈 맵을 반환합니다. Python API 서버를 시작하세요: python start_python_api.py", symbolsParam, baseUrl)
+                        } else {
+                            logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 오류={}. 빈 맵을 반환합니다.", symbolsParam, error.message)
+                        }
                         Mono.just(emptyMap())
                     }
                     else -> {
+                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 오류={}. 빈 맵을 반환합니다.", symbolsParam, error.message)
                         Mono.just(emptyMap())
                     }
                 }

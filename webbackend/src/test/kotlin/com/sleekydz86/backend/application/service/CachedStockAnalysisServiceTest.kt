@@ -37,9 +37,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 주식 데이터 조회 - 캐시에 데이터가 있을 때 캐시 데이터 반환")
+    @DisplayName("?�시�?주식 ?�이??조회 - 캐시???�이?��? ?�을 ??캐시 ?�이??반환")
     fun `getRealtimeStockData - should return cached data when available`() {
-        //given
+
         val symbol = "AAPL"
         val cachedStockData = StockData(
             symbol = symbol,
@@ -53,10 +53,8 @@ class CachedStockAnalysisServiceTest {
         every { cacheManager.updateCacheHitRate(true) } returns Mono.just(true)
         every { cacheManager.updateCacheStats(any(), any()) } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.getRealtimeStockData(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(cachedStockData)
             .verifyComplete()
@@ -65,9 +63,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 주식 데이터 조회 - 캐시에 없을 때 서비스에서 조회 후 캐시에 저장")
+    @DisplayName("?�시�?주식 ?�이??조회 - 캐시???�을 ???�비?�에??조회 ??캐시???�??)
     fun `getRealtimeStockData - should fetch from service and cache when not in cache`() {
-        //given
+
         val symbol = "AAPL"
         val stockData = StockData(
             symbol = symbol,
@@ -84,10 +82,8 @@ class CachedStockAnalysisServiceTest {
         every { cacheManager.updateCacheHitRate(true) } returns Mono.just(true)
         every { cacheManager.updateCacheStats(any(), any()) } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.getRealtimeStockData(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(stockData)
             .verifyComplete()
@@ -97,9 +93,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("주식 분석 조회 - 캐시에 데이터가 있을 때 캐시 데이터 반환")
+    @DisplayName("주식 분석 조회 - 캐시???�이?��? ?�을 ??캐시 ?�이??반환")
     fun `getStockAnalysis - should return cached analysis when available`() {
-        //given
+
         val symbol = "AAPL"
         val cachedAnalysis = TechnicalAnalysis(
             symbol = symbol,
@@ -117,10 +113,8 @@ class CachedStockAnalysisServiceTest {
         every { cacheManager.updateCacheHitRate(true) } returns Mono.just(true)
         every { cacheManager.updateCacheStats(any(), any()) } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.getStockAnalysis(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(cachedAnalysis)
             .verifyComplete()
@@ -129,19 +123,17 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 무효화 - 특정 심볼의 캐시 무효화")
+    @DisplayName("캐시 무효??- ?�정 ?�볼??캐시 무효??)
     fun `invalidateStockCache - should invalidate cache for symbol`() {
-        //given
+
         val symbol = "AAPL"
 
         every { stockCacheService.invalidateStockData(symbol) } returns Mono.just(true)
         every { stockCacheService.invalidateHistoricalData(symbol) } returns Mono.just(true)
         every { cacheManager.updateCacheStats(any(), any()) } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.invalidateStockCache(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(true)
             .verifyComplete()
@@ -150,17 +142,15 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("전체 캐시 무효화 - 모든 캐시 무효화")
+    @DisplayName("?�체 캐시 무효??- 모든 캐시 무효??)
     fun `invalidateAllCache - should invalidate all cache`() {
-        //given
+
         every { stockCacheService.invalidateAllStockData() } returns Mono.just(true)
         every { cacheManager.invalidateAllCache() } returns Mono.just(true)
         every { cacheManager.updateCacheStats(any()) } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.invalidateAllCache()
 
-        //then
         StepVerifier.create(result)
             .expectNext(true)
             .verifyComplete()
@@ -169,9 +159,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 헬스 조회 - 캐시 상태 정보 반환")
+    @DisplayName("캐시 ?�스 조회 - 캐시 ?�태 ?�보 반환")
     fun `getCacheHealth - should return cache health information`() {
-        //given
+
         val healthData = mapOf(
             "status" to "healthy",
             "hit_rate" to 0.85,
@@ -180,10 +170,8 @@ class CachedStockAnalysisServiceTest {
 
         every { cacheManager.getCacheHealth() } returns Mono.just(healthData)
 
-        //when
         val result = cachedStockAnalysisService.getCacheHealth()
 
-        //then
         StepVerifier.create(result)
             .expectNext(healthData)
             .verifyComplete()
@@ -191,9 +179,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 메트릭 조회 - 캐시 메트릭 정보 반환")
+    @DisplayName("캐시 메트�?조회 - 캐시 메트�??�보 반환")
     fun `getCacheMetrics - should return cache metrics`() {
-        //given
+
         val metrics = mapOf<String, Any>(
             "hit_rate" to 0.85,
             "miss_rate" to 0.15,
@@ -202,10 +190,8 @@ class CachedStockAnalysisServiceTest {
 
         every { cacheManager.getCacheMetrics() } returns Mono.just(metrics)
 
-        //when
         val result = cachedStockAnalysisService.getCacheMetrics()
 
-        //then
         StepVerifier.create(result)
             .expectNext(metrics)
             .verifyComplete()
@@ -213,9 +199,9 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 통계 조회 - 캐시 통계 정보 반환")
+    @DisplayName("캐시 ?�계 조회 - 캐시 ?�계 ?�보 반환")
     fun `getCacheStats - should return cache statistics`() {
-        //given
+
         val stats = mapOf<String, Any>(
             "total_operations" to 1000,
             "cache_hits" to 850,
@@ -224,10 +210,8 @@ class CachedStockAnalysisServiceTest {
 
         every { cacheManager.getCacheStats() } returns Mono.just(stats)
 
-        //when
         val result = cachedStockAnalysisService.getCacheStats()
 
-        //then
         StepVerifier.create(result)
             .expectNext(stats)
             .verifyComplete()
@@ -235,15 +219,13 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 워밍업 - 캐시 미리 로드")
+    @DisplayName("캐시 ?�밍??- 캐시 미리 로드")
     fun `warmUpCache - should warm up cache`() {
-        //given
+
         every { cacheManager.warmUpCache() } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.warmUpCache()
 
-        //then
         StepVerifier.create(result)
             .expectNext(true)
             .verifyComplete()
@@ -251,15 +233,13 @@ class CachedStockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 최적화 - 캐시 최적화 수행")
+    @DisplayName("캐시 최적??- 캐시 최적???�행")
     fun `optimizeCache - should optimize cache`() {
-        //given
+
         every { cacheManager.optimizeCache() } returns Mono.just(true)
 
-        //when
         val result = cachedStockAnalysisService.optimizeCache()
 
-        //then
         StepVerifier.create(result)
             .expectNext(true)
             .verifyComplete()

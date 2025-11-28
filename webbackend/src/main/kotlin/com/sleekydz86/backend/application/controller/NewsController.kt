@@ -35,19 +35,21 @@ class NewsController(
     fun getStockNews(
         @Parameter(description = "주식 심볼 (예: AAPL, GOOGL)", required = true)
         @PathVariable symbol: String,
-        @Parameter(description = "한글 번역 포함 여부 (기본값: true)", required = false)
-        @RequestParam(defaultValue = "true") includeKorean: Boolean,
-        @Parameter(description = "자동 번역 사용 여부 (기본값: true)", required = false)
+        @Parameter(description = "한글 번역 포함 여부 (기본값: false)", required = false)
+        @RequestParam(defaultValue = "false") includeKorean: Boolean,
+        @Parameter(description = "자동 번역 사용 여부 (기본값: true, includeKorean이 true이면 자동으로 true)", required = false)
         @RequestParam(defaultValue = "true") autoTranslate: Boolean
     ): Mono<List<News>> {
         val logger = org.slf4j.LoggerFactory.getLogger(NewsController::class.java)
+        
+        val shouldTranslate = includeKorean || autoTranslate
         
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
             pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, false)
         }
             .timeout(Duration.ofSeconds(45))
             .flatMap { newsList ->
-                if (autoTranslate && deepLTranslationService.isAvailable() && newsList.isNotEmpty()) {
+                if (shouldTranslate && deepLTranslationService.isAvailable() && newsList.isNotEmpty()) {
                     translateNewsWithDeepL(newsList)
                 } else {
                     Mono.just(newsList)

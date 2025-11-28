@@ -783,6 +783,13 @@ class StockAnalysisAPI:
             symbols_count = len(settings.ANALYSIS_SYMBOLS)
             logger.info(f"전체 종목 분석 시작: {symbols_count}개 종목")
             
+            if symbols_count == 0:
+                logger.warning("분석할 종목이 설정되어 있지 않습니다. ANALYSIS_SYMBOLS를 확인하세요.")
+                return []
+            
+            success_count = 0
+            failure_count = 0
+            
             for idx, symbol in enumerate(settings.ANALYSIS_SYMBOLS):
                 try:
                     logger.info(f"종목 분석 중 ({idx+1}/{symbols_count}): {symbol}")
@@ -793,25 +800,31 @@ class StockAnalysisAPI:
                     
                     if analysis:
                         results.append(analysis)
+                        success_count += 1
                         logger.info(f"종목 분석 성공: {symbol}")
                     else:
+                        failure_count += 1
                         logger.warning(f"종목 분석 결과가 None: {symbol}")
                     
                     if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
                         await asyncio.sleep(0.5)
                         
                 except (StockAnalysisError, StockDataCollectionError) as e:
-                    logger.error("종목 분석 오류", symbol=symbol, exception=e)
+                    failure_count += 1
+                    logger.error(f"종목 분석 오류: {symbol}", exception=e)
                     if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
                         await asyncio.sleep(0.3)
                     continue
                 except Exception as e:
-                    logger.error("종목 분석 예상치 못한 오류", symbol=symbol, exception=e, exc_info=True)
+                    failure_count += 1
+                    logger.error(f"종목 분석 예상치 못한 오류: {symbol}", exception=e, exc_info=True)
                     if idx < len(settings.ANALYSIS_SYMBOLS) - 1:
                         await asyncio.sleep(0.3)
                     continue
             
-            logger.info(f"전체 종목 분석 완료: {len(results)}/{symbols_count}개 성공")
+            logger.info(f"전체 종목 분석 완료: {success_count}개 성공, {failure_count}개 실패 (총 {symbols_count}개)")
+            if len(results) == 0:
+                logger.warning("모든 종목 분석이 실패했습니다. API 키나 네트워크 연결을 확인하세요.")
             return results
         except StockAnalysisError as e:
             logger.error("전체 종목 분석 오류", exception=e)
@@ -1039,7 +1052,7 @@ async def get_all_analysis(
         raise HTTPException(status_code=500, detail=f"전체 종목 분석 실패: {str(e)}") from e
     
     if not results:
-        logger.warning("전체 종목 분석 결과가 비어있습니다")
+        logger.warning("전체 종목 분석 결과가 비어있습니다. 종목 설정이나 데이터 수집 상태를 확인하세요.")
         return []
     
     valid_results = []
@@ -1361,6 +1374,13 @@ async def send_email_notification(
                     )
                     raise HTTPException(status_code=500, detail=error_msg)
             except EmailNotificationError as e:
+                error_code = getattr(e, 'error_code', 'EMAIL_SEND_FAILED')
+                if error_code == 'EMAIL_RECIPIENT_NOT_EXISTS':
+                    logger.error("이메일 발송 실패: 수신자 이메일 주소가 존재하지 않음", 
+                               exception=e, to_email=to_email, error_code=error_code)
+                elif error_code == 'EMAIL_INVALID_ADDRESS':
+                    logger.error("이메일 발송 실패: 유효하지 않은 이메일 주소", 
+                               exception=e, to_email=to_email, error_code=error_code)
                 raise
             except Exception as e:
                 logger.error("이메일 발송 중 예상치 못한 오류", exception=e, to_email=to_email, exc_info=True)
@@ -1775,48 +1795,18 @@ async def _fetch_news_with_fallback(api: StockAnalysisAPI, symbol: str, include_
             asyncio.to_thread(
                 api.news_collector.get_stock_news,
                 symbol.upper(),
-                include_korean=include_korean,
-                auto_translate=auto_translate
+                include_korean=include_korean
             ),
             timeout=timeout
         )
         return news if news else []
     except (asyncio.TimeoutError, TimeoutError):
-        if auto_translate:
-            logger.warning(f"번역 타임아웃: {symbol}, 번역 없이 재시도")
-            try:
-                news = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        api.news_collector.get_stock_news,
-                        symbol.upper(),
-                        include_korean=include_korean,
-                        auto_translate=False
-                    ),
-                    timeout=15.0
-                )
-                return news if news else []
-            except Exception as e:
-                logger.warning(f"번역 없이 뉴스 수집 실패: {symbol} - {str(e)}")
+        logger.warning(f"뉴스 수집 타임아웃: {symbol}")
         return []
     except (ConnectionError, NetworkError) as e:
         logger.warning(f"뉴스 조회 네트워크 오류: {symbol} - {str(e)}")
         return []
     except Exception as e:
-        if "timeout" in str(e).lower() or "timed out" in str(e).lower():
-            if auto_translate:
-                try:
-                    news = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            api.news_collector.get_stock_news,
-                            symbol.upper(),
-                            include_korean=include_korean,
-                            auto_translate=False
-                        ),
-                        timeout=15.0
-                    )
-                    return news if news else []
-                except Exception:
-                    pass
         logger.warning(f"뉴스 조회 오류: {symbol} - {str(e)}")
         return []
 
@@ -1837,8 +1827,8 @@ async def get_stock_news(
 ) -> List[NewsResponse]:
     logger.info(f"뉴스 조회 요청: {symbol}, include_korean={include_korean}, auto_translate={auto_translate}")
     
-    timeout_seconds = 25.0 if auto_translate else 20.0
-    news = await _fetch_news_with_fallback(api, symbol, include_korean, auto_translate, timeout_seconds)
+    timeout_seconds = 20.0
+    news = await _fetch_news_with_fallback(api, symbol, include_korean, False, timeout_seconds)
     
     if not news:
         logger.info(f"뉴스 조회 결과 없음: {symbol}")

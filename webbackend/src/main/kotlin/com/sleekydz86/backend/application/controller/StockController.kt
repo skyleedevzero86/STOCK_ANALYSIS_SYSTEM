@@ -210,34 +210,39 @@ class StockController(
         return circuitBreakerManager.executeFluxWithCircuitBreaker("allAnalysis") {
             pythonApiClient.getAllAnalysis()
         }
-            .timeout(Duration.ofSeconds(70))
+            .timeout(Duration.ofSeconds(90))
             .collectList()
             .doOnNext { analysisList ->
                 logger.info("최고 성과 종목 조회: {}개 분석 데이터 수신", analysisList.size)
             }
             .map { analysisList: List<TechnicalAnalysis> ->
                 if (analysisList.isEmpty()) {
-                    logger.warn("최고 성과 종목 조회: 분석 데이터가 비어있습니다. Python API 응답을 확인하세요.")
+                    logger.warn("최고 성과 종목 조회: 분석 데이터가 비어있습니다. Python API 서버 상태를 확인하세요.")
                     return@map emptyList<Map<String, Any>>()
                 }
                 
                 logger.info("최고 성과 종목 점수 계산 시작: {}개 종목", analysisList.size)
-                val scored = analysisList.map { analysis: TechnicalAnalysis ->
-                    val score = calculatePerformanceScore(analysis)
-                    mapOf<String, Any>(
-                        "symbol" to analysis.symbol,
-                        "currentPrice" to analysis.currentPrice,
-                        "changePercent" to analysis.changePercent,
-                        "rsi" to (analysis.signals.rsi ?: 0.0),
-                        "macd" to (analysis.signals.macd ?: 0.0),
-                        "confidence" to analysis.signals.confidence,
-                        "trendStrength" to analysis.trendStrength,
-                        "signal" to analysis.signals.signal,
-                        "score" to score
-                    )
+                val scored = analysisList.mapNotNull { analysis: TechnicalAnalysis ->
+                    try {
+                        val score = calculatePerformanceScore(analysis)
+                        mapOf<String, Any>(
+                            "symbol" to analysis.symbol,
+                            "currentPrice" to analysis.currentPrice,
+                            "changePercent" to analysis.changePercent,
+                            "rsi" to (analysis.signals.rsi ?: 0.0),
+                            "macd" to (analysis.signals.macd ?: 0.0),
+                            "confidence" to analysis.signals.confidence,
+                            "trendStrength" to analysis.trendStrength,
+                            "signal" to analysis.signals.signal,
+                            "score" to score
+                        )
+                    } catch (e: Exception) {
+                        logger.warn("종목 점수 계산 실패: symbol={}, error={}", analysis.symbol, e.message)
+                        null
+                    }
                 }
                 val topPerformers = scored.sortedByDescending { item -> item["score"] as Double }.take(limit)
-                logger.info("최고 성과 종목 조회 완료: {}개 반환", topPerformers.size)
+                logger.info("최고 성과 종목 조회 완료: {}개 반환 (요청: {}개)", topPerformers.size, limit)
                 topPerformers
             }
             .onErrorResume { error: Throwable ->

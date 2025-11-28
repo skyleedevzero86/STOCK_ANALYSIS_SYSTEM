@@ -24,16 +24,14 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - 성공 시 CLOSED 상태 유지")
+    @DisplayName("?�로 차단�??�행 - ?�공 ??CLOSED ?�태 ?��?")
     fun `execute - should remain CLOSED when operation succeeds`() {
-        //given
+
         val data = "success"
         val operation = { Mono.just(data) }
 
-        //when
         val result = circuitBreaker.execute(operation)
 
-        //then
         StepVerifier.create(result)
             .expectNext(data)
             .verifyComplete()
@@ -42,9 +40,9 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - 실패 횟수가 임계값 미만일 때 CLOSED 상태 유지")
+    @DisplayName("?�로 차단�??�행 - ?�패 ?�수가 ?�계�?미만????CLOSED ?�태 ?��?")
     fun `execute - should remain CLOSED when failure count is below threshold`() {
-        //given
+
         val error = RuntimeException("Error")
         var callCount = 0
         val operation = {
@@ -52,7 +50,6 @@ class CircuitBreakerTest {
             if (callCount < 3) Mono.error(error) else Mono.just("success")
         }
 
-        //when & then
         StepVerifier.create(circuitBreaker.execute(operation))
             .expectError(RuntimeException::class.java)
             .verify()
@@ -66,29 +63,27 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - 실패 횟수가 임계값에 도달하면 OPEN 상태로 전환")
+    @DisplayName("?�로 차단�??�행 - ?�패 ?�수가 ?�계값에 ?�달?�면 OPEN ?�태�??�환")
     fun `execute - should transition to OPEN when failure threshold is reached`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Mono.error<String>(error) }
 
-        //when
         repeat(3) {
             StepVerifier.create(circuitBreaker.execute(operation))
                 .expectError()
                 .verify()
         }
 
-        //then
         assertEquals(CircuitState.OPEN, circuitBreaker.getState())
         assertTrue(circuitBreaker.isOpen())
         assertFalse(circuitBreaker.isClosed())
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - OPEN 상태일 때 CircuitBreakerOpenException 발생")
+    @DisplayName("?�로 차단�??�행 - OPEN ?�태????CircuitBreakerOpenException 발생")
     fun `execute - should throw CircuitBreakerOpenException when OPEN`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Mono.error<String>(error) }
 
@@ -98,19 +93,17 @@ class CircuitBreakerTest {
                 .verify()
         }
 
-        //when
         val result = circuitBreaker.execute { Mono.just("test") }
 
-        //then
         StepVerifier.create(result)
             .expectError(CircuitBreakerOpenException::class.java)
             .verify()
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - 재시도 시간 후 HALF_OPEN 상태로 전환")
+    @DisplayName("?�로 차단�??�행 - ?�시???�간 ??HALF_OPEN ?�태�??�환")
     fun `execute - should transition to HALF_OPEN after retry duration`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Mono.error<String>(error) }
 
@@ -122,10 +115,8 @@ class CircuitBreakerTest {
 
         assertEquals(CircuitState.OPEN, circuitBreaker.getState())
 
-        //when
         Thread.sleep(1100)
 
-        //then
         val result = circuitBreaker.execute { Mono.just("test") }
         StepVerifier.create(result)
             .expectError(CircuitBreakerOpenException::class.java)
@@ -133,9 +124,9 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 실행 - HALF_OPEN 상태에서 성공 시 CLOSED로 복귀")
+    @DisplayName("?�로 차단�??�행 - HALF_OPEN ?�태?�서 ?�공 ??CLOSED�?복�?")
     fun `execute - should return to CLOSED when HALF_OPEN operation succeeds`() {
-        //given
+
         val error = RuntimeException("Error")
         val failureOperation = { Mono.error<String>(error) }
 
@@ -147,11 +138,9 @@ class CircuitBreakerTest {
 
         Thread.sleep(1100)
 
-        //when
         val successOperation = { Mono.just("success") }
         val result = circuitBreaker.execute(successOperation)
 
-        //then
         StepVerifier.create(result)
             .expectNext("success")
             .verifyComplete()
@@ -160,16 +149,14 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 Flux 실행 - 성공 시 CLOSED 상태 유지")
+    @DisplayName("?�로 차단�?Flux ?�행 - ?�공 ??CLOSED ?�태 ?��?")
     fun `executeFlux - should remain CLOSED when operation succeeds`() {
-        //given
+
         val data = listOf("item1", "item2")
         val operation = { Flux.fromIterable(data) }
 
-        //when
         val result = circuitBreaker.executeFlux(operation)
 
-        //then
         StepVerifier.create(result)
             .expectNext("item1")
             .expectNext("item2")
@@ -178,9 +165,9 @@ class CircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("회로 차단기 Flux 실행 - OPEN 상태일 때 CircuitBreakerOpenException 발생")
+    @DisplayName("?�로 차단�?Flux ?�행 - OPEN ?�태????CircuitBreakerOpenException 발생")
     fun `executeFlux - should throw CircuitBreakerOpenException when OPEN`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Flux.error<String>(error) }
 
@@ -190,71 +177,63 @@ class CircuitBreakerTest {
                 .verify()
         }
 
-        //when
         val result = circuitBreaker.executeFlux { Flux.just("test") }
 
-        //then
         StepVerifier.create(result)
             .expectError(CircuitBreakerOpenException::class.java)
             .verify()
     }
 
     @Test
-    @DisplayName("회로 차단기 상태 확인 - isClosed 메서드")
+    @DisplayName("?�로 차단�??�태 ?�인 - isClosed 메서??)
     fun `isClosed - should return true when circuit is CLOSED`() {
-        //given
+
         val operation = { Mono.just("success") }
 
-        //when
         StepVerifier.create(circuitBreaker.execute(operation))
             .expectNext("success")
             .verifyComplete()
 
-        //then
         assertTrue(circuitBreaker.isClosed())
         assertFalse(circuitBreaker.isOpen())
         assertFalse(circuitBreaker.isHalfOpen())
     }
 
     @Test
-    @DisplayName("회로 차단기 상태 확인 - isOpen 메서드")
+    @DisplayName("?�로 차단�??�태 ?�인 - isOpen 메서??)
     fun `isOpen - should return true when circuit is OPEN`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Mono.error<String>(error) }
 
-        //when
         repeat(3) {
             StepVerifier.create(circuitBreaker.execute(operation))
                 .expectError()
                 .verify()
         }
 
-        //then
         assertTrue(circuitBreaker.isOpen())
         assertFalse(circuitBreaker.isClosed())
     }
 
     @Test
-    @DisplayName("회로 차단기 실패 횟수 확인 - 실패 후 카운트 증가")
+    @DisplayName("?�로 차단�??�패 ?�수 ?�인 - ?�패 ??카운??증�?")
     fun `getFailureCount - should increment after failures`() {
-        //given
+
         val error = RuntimeException("Error")
         val operation = { Mono.error<String>(error) }
 
-        //when
         StepVerifier.create(circuitBreaker.execute(operation))
             .expectError()
             .verify()
 
-        //then
         assertEquals(1, circuitBreaker.getFailureCount())
     }
 
     @Test
-    @DisplayName("회로 차단기 실패 횟수 확인 - 성공 시 카운트 리셋")
+    @DisplayName("?�로 차단�??�패 ?�수 ?�인 - ?�공 ??카운??리셋")
     fun `getFailureCount - should reset count after success`() {
-        //given
+
         val error = RuntimeException("Error")
         val failureOperation = { Mono.error<String>(error) }
         val successOperation = { Mono.just("success") }
@@ -265,12 +244,10 @@ class CircuitBreakerTest {
 
         assertEquals(1, circuitBreaker.getFailureCount())
 
-        //when
         StepVerifier.create(circuitBreaker.execute(successOperation))
             .expectNext("success")
             .verifyComplete()
 
-        //then
         assertEquals(0, circuitBreaker.getFailureCount())
     }
 }

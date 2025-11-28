@@ -414,7 +414,6 @@ ul, ol {
   }
 }
 
-/* Sample Style Components */
 .section-title {
   font-size: 2rem;
   font-weight: 700;
@@ -761,7 +760,6 @@ ul, ol {
   }
 }
 
-/* Welcome Popup Styles */
 .popup-overlay {
   position: fixed;
   top: 0;
@@ -909,7 +907,6 @@ ul, ol {
   line-height: 1.6;
 }
 
-/* Index Container Styles */
 .index-container {
   background: #f6f7f7;
   border-radius: 12px;
@@ -966,7 +963,6 @@ ul, ol {
   margin-top: 8px;
 }
 
-/* Sector Bubble Container */
 .sector-bubble-container {
   background: #f6f7f7;
   border-radius: 12px;
@@ -1066,7 +1062,6 @@ ul, ol {
   color: #0066cc;
 }
 
-/* Popular Stocks Card */
 .popular-stocks-card {
   background: #f6f7f7;
   border-radius: 12px;
@@ -1153,7 +1148,6 @@ ul, ol {
   cursor: pointer;
 }
 
-/* Navigation Arrows */
 .popup-nav {
   position: absolute;
   top: 50%;
@@ -1191,7 +1185,6 @@ ul, ol {
   cursor: not-allowed;
 }
 
-/* Pagination Dots */
 .popup-pagination {
   display: flex;
   justify-content: center;
@@ -1217,7 +1210,6 @@ ul, ol {
   background: #aaa;
 }
 
-/* Popup Footer */
 .popup-footer {
   padding: 20px 30px;
   border-top: 1px solid #e0e0e0;
@@ -1248,7 +1240,6 @@ ul, ol {
   color: #222;
 }
 
-/* Responsive Design for Popup */
 @media (max-width: 768px) {
   .popup-container {
     width: 95%;

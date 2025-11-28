@@ -13,9 +13,7 @@ class WebControllerTest {
 
     @Test
     fun `index - should return index html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))
@@ -23,9 +21,7 @@ class WebControllerTest {
 
     @Test
     fun `adminDashboard - should return admin dashboard html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/admin-dashboard"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))
@@ -33,9 +29,7 @@ class WebControllerTest {
 
     @Test
     fun `adminLogin - should return admin login html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/admin-login"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))
@@ -43,9 +37,7 @@ class WebControllerTest {
 
     @Test
     fun `apiView - should return api view html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/api-view"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))
@@ -53,9 +45,7 @@ class WebControllerTest {
 
     @Test
     fun `emailSubscription - should return email subscription html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/email-subscription"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))
@@ -63,9 +53,7 @@ class WebControllerTest {
 
     @Test
     fun `templateManagement - should return template management html`() {
-        //given
-        
-        //when & then
+
         mockMvc.perform(get("/template-management"))
             .andExpect(status().isOk)
             .andExpect(content().contentTypeCompatibleWith("text/html"))

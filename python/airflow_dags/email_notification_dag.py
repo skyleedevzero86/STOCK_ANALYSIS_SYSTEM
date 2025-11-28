@@ -24,7 +24,6 @@ dag = DAG(
     default_args=default_args,
     description='주식 분석 이메일 알림 발송',
     schedule='*/1 * * * *',
-    #schedule_interval='0 9 * * 1-5',  # 평일 오전 9시
     catchup=False,
     tags=['stock', 'email', 'notification']
 )
@@ -94,26 +93,55 @@ def send_email_notification(to_email, subject, body, source="airflow"):
                                },
                                timeout=10)
         
+        success = False
+        error_message = None
+        
         if response.status_code == 200:
             try:
-                requests.post(
-                    f'http://{backend_host}:8080/api/admin/save-notification-log',
-                    json={
-                        'userEmail': to_email,
-                        'subject': subject,
-                        'message': body,
-                        'status': 'sent',
-                        'source': source,
-                        'notificationType': 'email'
-                    },
-                    timeout=5
-                )
-            except Exception as e:
-                logging.warning(f"이메일 발송 로그 저장 실패: {str(e)}")
+                response_data = response.json()
+                success = response_data.get('success', False)
+                if not success:
+                    error_message = response_data.get('message', '이메일 발송 실패')
+                    logging.error(f"이메일 발송 실패 ({to_email}): {error_message}")
+            except (ValueError, KeyError) as e:
+                logging.warning(f"응답 파싱 실패 ({to_email}): {str(e)}, 응답: {response.text[:200]}")
+                success = True
+        else:
+            try:
+                response_data = response.json()
+                error_message = response_data.get('detail', response_data.get('message', f'HTTP {response.status_code}'))
+            except (ValueError, KeyError):
+                error_message = f'HTTP {response.status_code}: {response.text[:200]}'
+            logging.error(f"이메일 발송 API 오류 ({to_email}): {error_message}")
         
-        return response.status_code == 200
+        try:
+            requests.post(
+                f'http://{backend_host}:8080/api/admin/save-notification-log',
+                json={
+                    'userEmail': to_email,
+                    'subject': subject,
+                    'message': body,
+                    'status': 'sent' if success else 'failed',
+                    'source': source,
+                    'notificationType': 'email',
+                    'errorMessage': error_message if not success else None
+                },
+                timeout=5
+            )
+        except Exception as e:
+            logging.warning(f"이메일 발송 로그 저장 실패: {str(e)}")
+        
+        return success
+    except requests.exceptions.Timeout:
+        logging.error(f"이메일 발송 타임아웃 ({to_email})")
+        return False
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"이메일 발송 연결 오류 ({to_email}): {str(e)}")
+        return False
     except Exception as e:
         logging.error(f"이메일 발송 실패 ({to_email}): {str(e)}")
+        import traceback
+        logging.error(traceback.format_exc())
         return False
 
 def send_sms_notification(to_phone, message, source="airflow", user_email=None):

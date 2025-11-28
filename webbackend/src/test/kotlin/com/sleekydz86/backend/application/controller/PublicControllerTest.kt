@@ -13,9 +13,6 @@ class PublicControllerTest {
 
     @Test
     fun `health - should return health status`() {
-        //given
-        
-        //when & then
         mockMvc.perform(get("/api/public/health"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.status").value("UP"))
@@ -25,9 +22,6 @@ class PublicControllerTest {
 
     @Test
     fun `info - should return service information`() {
-        //given
-        
-        //when & then
         mockMvc.perform(get("/api/public/info"))
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.name").value("Stock Analysis System"))

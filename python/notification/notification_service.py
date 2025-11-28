@@ -1,5 +1,6 @@
 import smtplib
 import requests
+import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from email.mime.text import MIMEText
@@ -51,8 +52,23 @@ class NotificationService:
         else:
             self.message_service = None
         
+    def _validate_email(self, email: str) -> bool:
+        """이메일 주소 형식 검증"""
+        if not email or not isinstance(email, str):
+            return False
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email.strip()) is not None
+    
     def send_email(self, to_email: str, subject: str, body: str) -> bool:
         try:
+            if not self._validate_email(to_email):
+                logger.error("유효하지 않은 이메일 주소", to_email=to_email, component="NotificationService")
+                raise EmailNotificationError(
+                    f"유효하지 않은 이메일 주소: {to_email}",
+                    error_code="EMAIL_INVALID_ADDRESS",
+                    cause=None
+                )
+            
             if not self.email_config:
                 logger.warning("이메일 설정이 없습니다", component="NotificationService")
                 return False
@@ -65,6 +81,14 @@ class NotificationService:
             if not all([smtp_server, user, password]):
                 logger.warning("이메일 설정이 완전하지 않습니다", component="NotificationService")
                 return False
+            
+            if not self._validate_email(user):
+                logger.error("유효하지 않은 발신자 이메일 주소", user=user, component="NotificationService")
+                raise EmailNotificationError(
+                    f"유효하지 않은 발신자 이메일 주소: {user}",
+                    error_code="EMAIL_INVALID_SENDER",
+                    cause=None
+                )
             
             msg = MIMEMultipart()
             msg['From'] = user
@@ -87,18 +111,41 @@ class NotificationService:
                 logger.info("SMTP 로그인 성공", to_email=to_email, component="NotificationService")
                 
                 logger.info("이메일 발송 시도", to_email=to_email, subject=subject, component="NotificationService")
+                
                 failed_recipients = server.send_message(msg)
                 logger.info("send_message 반환값", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
                 
                 if failed_recipients:
-                    logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
-                    raise EmailNotificationError(
-                        f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
-                        error_code="EMAIL_SEND_FAILED",
-                        cause=None
-                    )
+                    error_details = []
+                    for failed_email, error_info in failed_recipients.items():
+                        if isinstance(error_info, tuple) and len(error_info) >= 2:
+                            error_code, error_message = error_info[0], error_info[1]
+                            error_details.append(f"{failed_email}: {error_code} {error_message}")
+                        else:
+                            error_details.append(f"{failed_email}: {error_info}")
+                    
+                    error_msg = f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {'; '.join(error_details)}"
+                    logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", 
+                               to_email=to_email, 
+                               failed_recipients=failed_recipients,
+                               error_details=error_details,
+                               component="NotificationService")
+                    
+                    if any('550' in str(err) or '5.1.1' in str(err) or 'user does not exist' in str(err).lower() 
+                           for err in error_details):
+                        raise EmailNotificationError(
+                            f"이메일 발송 실패: 수신자 이메일 주소가 존재하지 않습니다 ({to_email}). {error_msg}",
+                            error_code="EMAIL_RECIPIENT_NOT_EXISTS",
+                            cause=None
+                        )
+                    else:
+                        raise EmailNotificationError(
+                            error_msg,
+                            error_code="EMAIL_SEND_FAILED",
+                            cause=None
+                        )
                 
-                logger.info("이메일 발송 성공 (SMTP 서버 응답 확인됨)", to_email=to_email, subject=subject, failed_recipients=failed_recipients, component="NotificationService")
+                logger.info("이메일 발송 성공 (SMTP 서버 응답 확인됨)", to_email=to_email, subject=subject, component="NotificationService")
                 return True
             finally:
                 if server:

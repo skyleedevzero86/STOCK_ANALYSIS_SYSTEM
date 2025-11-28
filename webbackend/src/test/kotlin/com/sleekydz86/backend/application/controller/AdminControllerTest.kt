@@ -41,7 +41,7 @@ class AdminControllerTest {
 
     @Test
     fun `login - should return success response when credentials are valid`() {
-        //given
+
         val request = AdminLoginRequest("admin@example.com", "password123")
         val response = AdminLoginResponse(
             token = "token123",
@@ -50,7 +50,6 @@ class AdminControllerTest {
 
         every { adminService.login(request) } returns Mono.just(response)
 
-        //when & then
         mockMvc.perform(
             post("/api/admin/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -66,12 +65,11 @@ class AdminControllerTest {
 
     @Test
     fun `login - should return failure response when credentials are invalid`() {
-        //given
+
         val request = AdminLoginRequest("admin@example.com", "wrongPassword")
 
-        every { adminService.login(request) } returns Mono.error(IllegalArgumentException("로그인에 실패했습니다."))
+        every { adminService.login(request) } returns Mono.error(IllegalArgumentException("로그?�에 ?�패?�습?�다."))
 
-        //when & then
         mockMvc.perform(
             post("/api/admin/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -85,7 +83,7 @@ class AdminControllerTest {
 
     @Test
     fun `getSubscriptions - should return subscriptions when token is valid`() {
-        //given
+
         val token = "Bearer validToken"
         val subscriptions = listOf(
             EmailSubscription(
@@ -103,7 +101,6 @@ class AdminControllerTest {
         every { emailSubscriptionService.maskEmail(any()) } answers { callOriginal<EmailSubscriptionService>().maskEmail(firstArg()) }
         every { emailSubscriptionService.maskPhone(any<String?>()) } answers { callOriginal<EmailSubscriptionService>().maskPhone(firstArg()) }
 
-        //when & then
         mockMvc.perform(
             get("/api/admin/subscriptions")
                 .header("Authorization", token)
@@ -118,19 +115,18 @@ class AdminControllerTest {
 
     @Test
     fun `getSubscriptions - should return failure when token is invalid`() {
-        //given
+
         val token = "Bearer invalidToken"
 
         every { adminService.validateToken(token) } returns Mono.just(false)
 
-        //when & then
         mockMvc.perform(
             get("/api/admin/subscriptions")
                 .header("Authorization", token)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(false))
-            .andExpect(jsonPath("$.message").value("인증이 필요합니다."))
+            .andExpect(jsonPath("$.message").value("?�증???�요?�니??"))
 
         verify(exactly = 1) { adminService.validateToken(token) }
         verify(exactly = 0) { emailSubscriptionService.getAllActiveSubscriptions() }
@@ -138,7 +134,7 @@ class AdminControllerTest {
 
     @Test
     fun `getEmailConsentList - should return subscriptions with email consent when token is valid`() {
-        //given
+
         val token = "Bearer validToken"
         val subscriptions = listOf(
             EmailSubscription(
@@ -155,7 +151,6 @@ class AdminControllerTest {
         every { emailSubscriptionService.getActiveSubscriptionsWithEmailConsent() } returns Mono.just(subscriptions)
         every { emailSubscriptionService.maskPhone(any<String?>()) } answers { callOriginal<EmailSubscriptionService>().maskPhone(firstArg()) }
 
-        //when & then
         mockMvc.perform(
             get("/api/admin/email-consent-list")
                 .header("Authorization", token)
@@ -170,19 +165,18 @@ class AdminControllerTest {
 
     @Test
     fun `getEmailConsentList - should return failure when token is invalid`() {
-        //given
+
         val token = "Bearer invalidToken"
 
         every { adminService.validateToken(token) } returns Mono.just(false)
 
-        //when & then
         mockMvc.perform(
             get("/api/admin/email-consent-list")
                 .header("Authorization", token)
         )
             .andExpect(status().isOk)
             .andExpect(jsonPath("$.success").value(false))
-            .andExpect(jsonPath("$.message").value("인증이 필요합니다."))
+            .andExpect(jsonPath("$.message").value("?�증???�요?�니??"))
 
         verify(exactly = 1) { adminService.validateToken(token) }
         verify(exactly = 0) { emailSubscriptionService.getActiveSubscriptionsWithEmailConsent() }

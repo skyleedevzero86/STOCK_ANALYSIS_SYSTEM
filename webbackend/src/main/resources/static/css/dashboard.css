@@ -861,43 +861,74 @@ tr:hover {
   position: relative;
 }
 
-.sector-stocks-comparison {
-  max-height: 500px;
-  overflow-y: auto;
-}
-
 .sector-comparison-container {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
+.sector-slider-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
 .sector-stocks-comparison {
   display: flex;
-  overflow-x: auto;
   gap: 24px;
-  padding-bottom: 16px;
-  scroll-behavior: smooth;
-  scrollbar-width: thin;
-  scrollbar-color: #60bde6 #f0f0f0;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: hidden;
+  flex: 1;
+  user-select: none;
+  order: 2;
+  will-change: transform;
+  min-width: 0;
 }
 
-.sector-stocks-comparison::-webkit-scrollbar {
-  height: 8px;
+.sector-slider-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #3498db, #2ecc71);
+  color: #fff;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
-.sector-stocks-comparison::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
+.sector-slider-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2980b9, #27ae60);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
 }
 
-.sector-stocks-comparison::-webkit-scrollbar-thumb {
-  background: #60bde6;
-  border-radius: 4px;
+.sector-slider-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
-.sector-stocks-comparison::-webkit-scrollbar-thumb:hover {
-  background: #3498db;
+.sector-slider-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.sector-slider-btn-prev {
+  order: 1;
+}
+
+.sector-slider-btn-next {
+  order: 3;
 }
 
 .sector-table-card {
@@ -909,7 +940,7 @@ tr:hover {
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  min-width: 400px;
+  width: 450px;
   flex-shrink: 0;
 }
 
@@ -1223,6 +1254,11 @@ tr:hover {
   padding-top: 16px;
   margin-top: 16px;
   border-top: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+.card-footer .btn-small {
+  margin: 0 auto;
 }
 
 .top-performer-item {
@@ -1478,6 +1514,16 @@ tr:hover {
 }
 
 @media (max-width: 768px) {
+  .sector-slider-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .sector-slider-wrapper {
+    gap: 8px;
+  }
+
   .sector-table-card {
     min-width: 320px;
     padding: 16px;
@@ -1517,6 +1563,16 @@ tr:hover {
 
   .metrics {
     grid-template-columns: 1fr;
+  }
+
+  .sector-slider-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .sector-slider-wrapper {
+    gap: 6px;
   }
 
   .sector-table-card {

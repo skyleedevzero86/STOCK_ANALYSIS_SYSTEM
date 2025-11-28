@@ -39,9 +39,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 - 유효한 자격증명일 때 토큰 반환")
+    @DisplayName("로그??- ?�효???�격증명?????�큰 반환")
     fun `login - should return tokens when credentials are valid`() {
-        //given
+
         val loginRequest = LoginRequest(username = "testuser", password = "password123")
         val role = Role(name = "ROLE_USER")
         val user = User(
@@ -64,7 +64,6 @@ class AuthControllerTest {
         every { authService.authenticate("testuser", "password123") } returns authentication
         every { authService.generateTokens(user) } returns tokens
 
-        //when & then
         mockMvc.perform(
             post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -82,9 +81,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 - 새 사용자 등록 성공")
+    @DisplayName("?�원가??- ???�용???�록 ?�공")
     fun `register - should register new user successfully`() {
-        //given
+
         val registerRequest = RegisterRequest(
             username = "newuser",
             email = "new@example.com",
@@ -114,7 +113,6 @@ class AuthControllerTest {
         every { userService.createUser("newuser", "new@example.com", "password123", "Jane", "Smith") } returns user
         every { authService.generateTokens(user) } returns tokens
 
-        //when & then
         mockMvc.perform(
             post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -130,9 +128,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 - 이미 존재하는 사용자명일 때 400 에러 반환")
+    @DisplayName("?�원가??- ?��? 존재?�는 ?�용?�명????400 ?�러 반환")
     fun `register - should return 400 when username already exists`() {
-        //given
+
         val registerRequest = RegisterRequest(
             username = "existinguser",
             email = "new@example.com",
@@ -141,7 +139,6 @@ class AuthControllerTest {
 
         every { userService.existsByUsername("existinguser") } returns true
 
-        //when & then
         mockMvc.perform(
             post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -155,9 +152,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("회원가입 - 이미 존재하는 이메일일 때 400 에러 반환")
+    @DisplayName("?�원가??- ?��? 존재?�는 ?�메?�일 ??400 ?�러 반환")
     fun `register - should return 400 when email already exists`() {
-        //given
+
         val registerRequest = RegisterRequest(
             username = "newuser",
             email = "existing@example.com",
@@ -167,7 +164,6 @@ class AuthControllerTest {
         every { userService.existsByUsername("newuser") } returns false
         every { userService.existsByEmail("existing@example.com") } returns true
 
-        //when & then
         mockMvc.perform(
             post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -181,9 +177,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("토큰 갱신 - 유효한 Refresh Token으로 새 토큰 발급")
+    @DisplayName("?�큰 갱신 - ?�효??Refresh Token?�로 ???�큰 발급")
     fun `refreshToken - should return new tokens with valid refresh token`() {
-        //given
+
         val refreshTokenRequest = RefreshTokenRequest(refreshToken = "valid.refresh.token")
         val role = Role(name = "ROLE_USER")
         val user = User(
@@ -204,7 +200,6 @@ class AuthControllerTest {
         every { authService.extractUsername("new.access.token") } returns "testuser"
         every { userService.findByUsername("testuser") } returns user
 
-        //when & then
         mockMvc.perform(
             post("/api/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -220,9 +215,9 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그아웃 - 로그아웃 성공 메시지 반환")
+    @DisplayName("로그?�웃 - 로그?�웃 ?�공 메시지 반환")
     fun `logout - should return logout success message`() {
-        //when & then
+
         mockMvc.perform(
             post("/api/auth/logout")
         )

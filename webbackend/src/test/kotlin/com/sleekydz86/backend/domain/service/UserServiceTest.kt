@@ -27,9 +27,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 조회 - 사용자가 존재할 때 사용자 정보 반환")
+    @DisplayName("?�용??조회 - ?�용?��? 존재?????�용???�보 반환")
     fun `loadUserByUsername - should return user details when user exists`() {
-        //given
+
         val username = "testuser"
         val user = User(
             id = 1L,
@@ -40,24 +40,21 @@ class UserServiceTest {
 
         every { userRepository.findByUsernameWithRolesAndPermissions(username) } returns Optional.of(user)
 
-        //when
         val result = userService.loadUserByUsername(username)
 
-        //then
         assertNotNull(result)
         assertEquals(username, result.username)
         verify(exactly = 1) { userRepository.findByUsernameWithRolesAndPermissions(username) }
     }
 
     @Test
-    @DisplayName("사용자 조회 - 사용자를 찾을 수 없을 때 예외 발생")
+    @DisplayName("?�용??조회 - ?�용?��? 찾을 ???�을 ???�외 발생")
     fun `loadUserByUsername - should throw exception when user not found`() {
-        //given
+
         val username = "nonexistent"
 
         every { userRepository.findByUsernameWithRolesAndPermissions(username) } returns Optional.empty()
 
-        //when & then
         assertThrows(UsernameNotFoundException::class.java) {
             userService.loadUserByUsername(username)
         }
@@ -65,9 +62,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자명으로 조회 - 사용자가 존재할 때 사용자 반환")
+    @DisplayName("?�용?�명?�로 조회 - ?�용?��? 존재?????�용??반환")
     fun `findByUsername - should return user when exists`() {
-        //given
+
         val username = "testuser"
         val user = User(
             id = 1L,
@@ -78,35 +75,31 @@ class UserServiceTest {
 
         every { userRepository.findByUsername(username) } returns Optional.of(user)
 
-        //when
         val result = userService.findByUsername(username)
 
-        //then
         assertNotNull(result)
         assertEquals(user, result)
         verify(exactly = 1) { userRepository.findByUsername(username) }
     }
 
     @Test
-    @DisplayName("사용자명으로 조회 - 사용자를 찾을 수 없을 때 null 반환")
+    @DisplayName("?�용?�명?�로 조회 - ?�용?��? 찾을 ???�을 ??null 반환")
     fun `findByUsername - should return null when user not found`() {
-        //given
+
         val username = "nonexistent"
 
         every { userRepository.findByUsername(username) } returns Optional.empty()
 
-        //when
         val result = userService.findByUsername(username)
 
-        //then
         assertNull(result)
         verify(exactly = 1) { userRepository.findByUsername(username) }
     }
 
     @Test
-    @DisplayName("이메일로 조회 - 사용자가 존재할 때 사용자 반환")
+    @DisplayName("?�메?�로 조회 - ?�용?��? 존재?????�용??반환")
     fun `findByEmail - should return user when exists`() {
-        //given
+
         val email = "test@example.com"
         val user = User(
             id = 1L,
@@ -117,35 +110,31 @@ class UserServiceTest {
 
         every { userRepository.findByEmail(email) } returns Optional.of(user)
 
-        //when
         val result = userService.findByEmail(email)
 
-        //then
         assertNotNull(result)
         assertEquals(user, result)
         verify(exactly = 1) { userRepository.findByEmail(email) }
     }
 
     @Test
-    @DisplayName("이메일로 조회 - 사용자를 찾을 수 없을 때 null 반환")
+    @DisplayName("?�메?�로 조회 - ?�용?��? 찾을 ???�을 ??null 반환")
     fun `findByEmail - should return null when user not found`() {
-        //given
+
         val email = "nonexistent@example.com"
 
         every { userRepository.findByEmail(email) } returns Optional.empty()
 
-        //when
         val result = userService.findByEmail(email)
 
-        //then
         assertNull(result)
         verify(exactly = 1) { userRepository.findByEmail(email) }
     }
 
     @Test
-    @DisplayName("사용자 저장 - 사용자 저장 후 반환")
+    @DisplayName("?�용???�??- ?�용???�????반환")
     fun `save - should save and return user`() {
-        //given
+
         val user = User(
             id = 1L,
             username = "testuser",
@@ -155,19 +144,17 @@ class UserServiceTest {
 
         every { userRepository.save(user) } returns user
 
-        //when
         val result = userService.save(user)
 
-        //then
         assertNotNull(result)
         assertEquals(user, result)
         verify(exactly = 1) { userRepository.save(user) }
     }
 
     @Test
-    @DisplayName("사용자 생성 - 암호화된 비밀번호로 사용자 생성")
+    @DisplayName("?�용???�성 - ?�호?�된 비�?번호�??�용???�성")
     fun `createUser - should create user with encoded password`() {
-        //given
+
         val username = "testuser"
         val email = "test@example.com"
         val password = "plainPassword"
@@ -178,10 +165,8 @@ class UserServiceTest {
         every { passwordEncoder.encode(password) } returns encodedPassword
         every { userRepository.save(any()) } answers { firstArg() }
 
-        //when
         val result = userService.createUser(username, email, password, firstName, lastName)
 
-        //then
         assertNotNull(result)
         assertEquals(username, result.username)
         assertEquals(email, result.email)
@@ -193,9 +178,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 생성 - firstName/lastName 없이 사용자 생성")
+    @DisplayName("?�용???�성 - firstName/lastName ?�이 ?�용???�성")
     fun `createUser - should create user without firstName and lastName`() {
-        //given
+
         val username = "testuser"
         val email = "test@example.com"
         val password = "plainPassword"
@@ -204,10 +189,8 @@ class UserServiceTest {
         every { passwordEncoder.encode(password) } returns encodedPassword
         every { userRepository.save(any()) } answers { firstArg() }
 
-        //when
         val result = userService.createUser(username, email, password)
 
-        //then
         assertNotNull(result)
         assertEquals(username, result.username)
         assertEquals(email, result.email)
@@ -219,9 +202,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 변경 - 사용자가 존재할 때 비밀번호 변경")
+    @DisplayName("비�?번호 변�?- ?�용?��? 존재????비�?번호 변�?)
     fun `updatePassword - should update password when user exists`() {
-        //given
+
         val username = "testuser"
         val oldPassword = "oldPassword"
         val newPassword = "newPassword"
@@ -238,10 +221,8 @@ class UserServiceTest {
         every { passwordEncoder.encode(newPassword) } returns encodedNewPassword
         every { userRepository.save(any()) } answers { firstArg<User>().copy(password = encodedNewPassword) }
 
-        //when
         val result = userService.updatePassword(username, newPassword)
 
-        //then
         assertNotNull(result)
         assertEquals(encodedNewPassword, result.password)
         verify(exactly = 1) { userRepository.findByUsername(username) }
@@ -250,15 +231,14 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 변경 - 사용자를 찾을 수 없을 때 예외 발생")
+    @DisplayName("비�?번호 변�?- ?�용?��? 찾을 ???�을 ???�외 발생")
     fun `updatePassword - should throw exception when user not found`() {
-        //given
+
         val username = "nonexistent"
         val newPassword = "newPassword"
 
         every { userRepository.findByUsername(username) } returns Optional.empty()
 
-        //when & then
         assertThrows(UsernameNotFoundException::class.java) {
             userService.updatePassword(username, newPassword)
         }
@@ -268,9 +248,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 활성화 - 사용자가 존재할 때 활성화")
+    @DisplayName("?�용???�성??- ?�용?��? 존재?????�성??)
     fun `activateUser - should activate user when exists`() {
-        //given
+
         val username = "testuser"
         val user = User(
             id = 1L,
@@ -283,10 +263,8 @@ class UserServiceTest {
         every { userRepository.findByUsername(username) } returns Optional.of(user)
         every { userRepository.save(any()) } answers { firstArg<User>().copy(isActive = true) }
 
-        //when
         val result = userService.activateUser(username)
 
-        //then
         assertNotNull(result)
         assertTrue(result.isActive)
         verify(exactly = 1) { userRepository.findByUsername(username) }
@@ -294,14 +272,13 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 활성화 - 사용자를 찾을 수 없을 때 예외 발생")
+    @DisplayName("?�용???�성??- ?�용?��? 찾을 ???�을 ???�외 발생")
     fun `activateUser - should throw exception when user not found`() {
-        //given
+
         val username = "nonexistent"
 
         every { userRepository.findByUsername(username) } returns Optional.empty()
 
-        //when & then
         assertThrows(UsernameNotFoundException::class.java) {
             userService.activateUser(username)
         }
@@ -310,9 +287,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 비활성화 - 사용자가 존재할 때 비활성화")
+    @DisplayName("?�용??비활?�화 - ?�용?��? 존재????비활?�화")
     fun `deactivateUser - should deactivate user when exists`() {
-        //given
+
         val username = "testuser"
         val user = User(
             id = 1L,
@@ -325,10 +302,8 @@ class UserServiceTest {
         every { userRepository.findByUsername(username) } returns Optional.of(user)
         every { userRepository.save(any()) } answers { firstArg<User>().copy(isActive = false) }
 
-        //when
         val result = userService.deactivateUser(username)
 
-        //then
         assertNotNull(result)
         assertFalse(result.isActive)
         verify(exactly = 1) { userRepository.findByUsername(username) }
@@ -336,14 +311,13 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 비활성화 - 사용자를 찾을 수 없을 때 예외 발생")
+    @DisplayName("?�용??비활?�화 - ?�용?��? 찾을 ???�을 ???�외 발생")
     fun `deactivateUser - should throw exception when user not found`() {
-        //given
+
         val username = "nonexistent"
 
         every { userRepository.findByUsername(username) } returns Optional.empty()
 
-        //when & then
         assertThrows(UsernameNotFoundException::class.java) {
             userService.deactivateUser(username)
         }
@@ -352,73 +326,65 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자명 존재 확인 - 사용자명이 존재할 때 true 반환")
+    @DisplayName("?�용?�명 존재 ?�인 - ?�용?�명??존재????true 반환")
     fun `existsByUsername - should return true when username exists`() {
-        //given
+
         val username = "testuser"
 
         every { userRepository.existsByUsername(username) } returns true
 
-        //when
         val result = userService.existsByUsername(username)
 
-        //then
         assertTrue(result)
         verify(exactly = 1) { userRepository.existsByUsername(username) }
     }
 
     @Test
-    @DisplayName("사용자명 존재 확인 - 사용자명이 존재하지 않을 때 false 반환")
+    @DisplayName("?�용?�명 존재 ?�인 - ?�용?�명??존재?��? ?�을 ??false 반환")
     fun `existsByUsername - should return false when username not exists`() {
-        //given
+
         val username = "nonexistent"
 
         every { userRepository.existsByUsername(username) } returns false
 
-        //when
         val result = userService.existsByUsername(username)
 
-        //then
         assertFalse(result)
         verify(exactly = 1) { userRepository.existsByUsername(username) }
     }
 
     @Test
-    @DisplayName("이메일 존재 확인 - 이메일이 존재할 때 true 반환")
+    @DisplayName("?�메??존재 ?�인 - ?�메?�이 존재????true 반환")
     fun `existsByEmail - should return true when email exists`() {
-        //given
+
         val email = "test@example.com"
 
         every { userRepository.existsByEmail(email) } returns true
 
-        //when
         val result = userService.existsByEmail(email)
 
-        //then
         assertTrue(result)
         verify(exactly = 1) { userRepository.existsByEmail(email) }
     }
 
     @Test
-    @DisplayName("이메일 존재 확인 - 이메일이 존재하지 않을 때 false 반환")
+    @DisplayName("?�메??존재 ?�인 - ?�메?�이 존재?��? ?�을 ??false 반환")
     fun `existsByEmail - should return false when email not exists`() {
-        //given
+
         val email = "nonexistent@example.com"
 
         every { userRepository.existsByEmail(email) } returns false
 
-        //when
         val result = userService.existsByEmail(email)
 
-        //then
         assertFalse(result)
         verify(exactly = 1) { userRepository.existsByEmail(email) }
     }
 
     @Test
-    @DisplayName("활성 사용자 목록 조회 - 활성 사용자 목록 반환")
+    @DisplayName("?�성 ?�용??목록 조회 - ?�성 ?�용??목록 반환")
     fun `getAllActiveUsers - should return list of active users`() {
-        //given
+
         val activeUsers = listOf(
             User(id = 1L, username = "user1", email = "user1@example.com", password = "password", isActive = true),
             User(id = 2L, username = "user2", email = "user2@example.com", password = "password", isActive = true)
@@ -426,10 +392,8 @@ class UserServiceTest {
 
         every { userRepository.findByIsActiveTrue() } returns activeUsers
 
-        //when
         val result = userService.getAllActiveUsers()
 
-        //then
         assertNotNull(result)
         assertEquals(2, result.size)
         assertTrue(result.all { it.isActive })
@@ -437,17 +401,15 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("활성 사용자 목록 조회 - 활성 사용자가 없을 때 빈 목록 반환")
+    @DisplayName("?�성 ?�용??목록 조회 - ?�성 ?�용?��? ?�을 ??�?목록 반환")
     fun `getAllActiveUsers - should return empty list when no active users`() {
-        //given
+
         val emptyList = emptyList<User>()
 
         every { userRepository.findByIsActiveTrue() } returns emptyList
 
-        //when
         val result = userService.getAllActiveUsers()
 
-        //then
         assertNotNull(result)
         assertTrue(result.isEmpty())
         verify(exactly = 1) { userRepository.findByIsActiveTrue() }

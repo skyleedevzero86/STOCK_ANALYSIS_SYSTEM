@@ -12,7 +12,6 @@ from notification.notification_service import NotificationService, AlertManager
 from config.settings import settings
 from config.logging_config import get_logger, setup_logging
 
-# 로깅 초기화
 setup_logging(log_file='stock_analysis.log')
 logger = get_logger(__name__, 'stock_analysis.log')
 

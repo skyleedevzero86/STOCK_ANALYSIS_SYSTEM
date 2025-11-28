@@ -15,26 +15,8 @@ from functools import wraps
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
-os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
-
-warnings.filterwarnings("ignore", message=".*Xet Storage.*")
-warnings.filterwarnings("ignore", message=".*sacremoses.*")
-warnings.filterwarnings("ignore", message=".*symlinks.*")
-
-try:
-    from googletrans import Translator
-    GOOGLETRANS_AVAILABLE = True
-except ImportError:
-    GOOGLETRANS_AVAILABLE = False
-    logging.debug("googletrans 모듈이 설치되지 않았습니다. 번역 기능이 비활성화됩니다.")
-
-try:
-    from transformers import pipeline, T5TokenizerFast
-    import torch
-    HUGGINGFACE_AVAILABLE = True
-except ImportError:
-    HUGGINGFACE_AVAILABLE = False
-    logging.debug("transformers 모듈이 설치되지 않았습니다. Hugging Face 번역 기능이 비활성화됩니다.")
+GOOGLETRANS_AVAILABLE = False
+HUGGINGFACE_AVAILABLE = False
 
 def retry_with_backoff(max_retries=3, initial_delay=1, backoff_factor=2):
     def decorator(func):
@@ -72,86 +54,7 @@ class NewsCollector:
         
         self.hf_translator = None
         self.translator = None
-        
-        use_hf_translation = os.getenv("USE_HF_TRANSLATION", "true").lower() == "true"
-        
-        if HUGGINGFACE_AVAILABLE and use_hf_translation:
-            try:
-                try:
-                    import psutil
-                    available_memory_gb = psutil.virtual_memory().available / (1024**3)
-                    if available_memory_gb < 2.0:
-                        logging.warning(f"사용 가능한 메모리가 부족합니다 ({available_memory_gb:.2f}GB). Hugging Face 번역 모델 로드를 건너뜁니다.")
-                        self.hf_translator = None
-                    else:
-                        tokenizer_name = "paust/pko-t5-base"
-                        model_path = "Darong/BlueT"
-                        tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
-                        self.hf_translator = pipeline(
-                            "translation",
-                            model=model_path,
-                            tokenizer=tokenizer,
-                            max_length=255,
-                            device=0 if torch.cuda.is_available() else -1
-                        )
-                        logging.info("Hugging Face BlueT 번역 모델 로드 완료")
-                except ImportError:
-                    tokenizer_name = "paust/pko-t5-base"
-                    model_path = "Darong/BlueT"
-                    tokenizer = T5TokenizerFast.from_pretrained(tokenizer_name)
-                    self.hf_translator = pipeline(
-                        "translation",
-                        model=model_path,
-                        tokenizer=tokenizer,
-                        max_length=255,
-                        device=0 if torch.cuda.is_available() else -1
-                    )
-                    logging.info("Hugging Face BlueT 번역 모델 로드 완료")
-            except OSError as e:
-                error_msg = str(e)
-                error_code = getattr(e, 'winerror', None) if hasattr(e, 'winerror') else None
-                if "1455" in error_msg or "페이징 파일" in error_msg or "paging file" in error_msg.lower() or "memory allocation" in error_msg.lower():
-                    logging.warning(
-                        "메모리/페이징 파일 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
-                        "googletrans를 대신 사용하거나, Windows 페이징 파일 크기를 늘려주세요. "
-                        "또는 환경 변수 USE_HF_TRANSLATION=false로 설정하여 Hugging Face 번역을 비활성화할 수 있습니다."
-                    )
-                else:
-                    logging.warning(f"Hugging Face 번역 모델 초기화 실패 (OSError): {error_msg}")
-                self.hf_translator = None
-            except MemoryError as e:
-                logging.warning(
-                    "메모리 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
-                    "googletrans를 대신 사용하거나, 환경 변수 USE_HF_TRANSLATION=false로 설정하여 Hugging Face 번역을 비활성화할 수 있습니다."
-                )
-                self.hf_translator = None
-            except Exception as e:
-                error_msg = str(e)
-                if "401" in error_msg or "Unauthorized" in error_msg:
-                    logging.warning("Hugging Face Hub 접근 실패. 인터넷 연결 또는 인증 문제일 수 있습니다.")
-                elif "Repository Not Found" in error_msg:
-                    logging.warning("Hugging Face 모델을 찾을 수 없습니다. 모델 이름을 확인하세요.")
-                elif "1455" in error_msg or "페이징 파일" in error_msg or "paging file" in error_msg.lower():
-                    logging.warning(
-                        "페이징 파일 부족으로 Hugging Face 번역 모델을 로드할 수 없습니다. "
-                        "Windows 페이징 파일 크기를 늘리거나, 환경 변수 USE_HF_TRANSLATION=false로 설정하세요."
-                    )
-                else:
-                    logging.warning(f"Hugging Face 번역 모델 초기화 실패: {error_msg}")
-                self.hf_translator = None
-        elif not use_hf_translation:
-            logging.info("환경 변수 USE_HF_TRANSLATION=false로 인해 Hugging Face 번역이 비활성화되었습니다.")
-        
-        if not self.hf_translator and GOOGLETRANS_AVAILABLE:
-            try:
-                self.translator = Translator()
-                logging.info("googletrans 번역기 초기화 완료")
-            except Exception as e:
-                logging.warning(f"googletrans 번역기 초기화 실패: {str(e)}")
-                self.translator = None
-        
-        if not self.hf_translator and not self.translator:
-            logging.warning("번역 모델이 로드되지 않았습니다. 번역 기능이 비활성화됩니다.")
+        logging.info("번역 기능은 Kotlin 백엔드의 DeepL API를 통해 처리됩니다.")
         
     @retry_with_backoff(max_retries=2, initial_delay=0.5)
     def get_newsapi_news(self, symbol: str, language: str = 'en', page_size: int = 10) -> List[Dict]:
@@ -620,58 +523,7 @@ class NewsCollector:
     def translate_text(self, text: str, target_lang: str = 'ko') -> str:
         if not text:
             return text
-        
-        if target_lang == 'ko':
-            if self._is_korean_text(text):
-                logging.debug(f"이미 한글 텍스트입니다. 번역을 건너뜁니다.")
-                return text
-        
-        if target_lang == 'ko' and self.hf_translator:
-            try:
-                prefix = "E2K: "
-                if len(text) > 200:
-                    chunks = [text[i:i+200] for i in range(0, len(text), 200)]
-                    translated_chunks = []
-                    for chunk in chunks:
-                        if self._is_korean_text(chunk):
-                            translated_chunks.append(chunk)
-                        else:
-                            result = self.hf_translator(prefix + chunk)
-                            translated_chunks.append(result[0]['translation_text'])
-                    return ' '.join(translated_chunks)
-                else:
-                    if self._is_korean_text(text):
-                        return text
-                    result = self.hf_translator(prefix + text)
-                    return result[0]['translation_text']
-            except Exception as e:
-                logging.warning(f"Hugging Face 번역 실패: {str(e)}")
-                if self.translator:
-                    pass
-                else:
-                    return text
-        
-        if self.translator:
-            try:
-                if self._is_korean_text(text) and target_lang == 'ko':
-                    return text
-                
-                if len(text) > 5000:
-                    text = text[:5000]
-                
-                result = self.translator.translate(text, dest=target_lang)
-                if result and hasattr(result, 'text'):
-                    translated = result.text
-                    if translated and translated != text:
-                        return translated
-                return text
-            except Exception as e:
-                logging.warning(f"googletrans 번역 실패: {str(e)}")
-                return text
-        
-        if not self.hf_translator and not self.translator:
-            logging.debug("번역 모듈이 설치되지 않았습니다. 원문을 반환합니다.")
-        
+        logging.debug("번역은 Kotlin 백엔드의 DeepL API를 통해 처리됩니다. 원문을 반환합니다.")
         return text
     
     def translate_news(self, news: Dict, translate_to_korean: bool = True) -> Dict:
@@ -682,47 +534,16 @@ class NewsCollector:
         
         if title:
             translated_news['title_original'] = title
-            if self._is_korean_text(title):
-                translated_news['title_ko'] = title
-            elif translate_to_korean and (self.hf_translator or self.translator):
-                try:
-                    translated_title = self.translate_text(title, 'ko')
-                    translated_news['title_ko'] = translated_title if translated_title and translated_title != title else title
-                except Exception as e:
-                    logging.warning(f"제목 번역 실패: {str(e)}")
-                    translated_news['title_ko'] = title
-            else:
-                translated_news['title_ko'] = title
+            translated_news['title_ko'] = title
         
         if description:
             translated_news['description_original'] = description
-            if self._is_korean_text(description):
-                translated_news['description_ko'] = description
-            elif translate_to_korean and (self.hf_translator or self.translator):
-                try:
-                    translated_desc = self.translate_text(description, 'ko')
-                    translated_news['description_ko'] = translated_desc if translated_desc and translated_desc != description else description
-                except Exception as e:
-                    logging.warning(f"설명 번역 실패: {str(e)}")
-                    translated_news['description_ko'] = description
-            else:
-                translated_news['description_ko'] = description
+            translated_news['description_ko'] = description
         
         return translated_news
     
     def get_stock_news_with_translation(self, symbol: str, include_korean: bool = False, translate_to_korean: bool = True) -> List[Dict]:
         news_list = self.get_stock_news(symbol, include_korean)
-        
-        if translate_to_korean and (self.hf_translator or self.translator):
-            translated_news = []
-            for news in news_list:
-                if news.get('provider') in ['newsapi', 'alphavantage', 'yahoo', 'google']:
-                    translated = self.translate_news(news, translate_to_korean=True)
-                    translated_news.append(translated)
-                else:
-                    translated_news.append(news)
-            return translated_news
-        
         return news_list
     
     def get_news_by_url(self, url: str) -> Optional[Dict]:
@@ -868,54 +689,9 @@ class NewsCollector:
                             published_at = elem.get_text(strip=True)
                         break
             
-            title_ko = None
-            description_ko = None
-            content_ko = None
-            try:
-                translate_timeout = 5.0
-                start_time = time.time()
-                
-                if self._is_korean_text(title):
-                    title_ko = title
-                else:
-                    if (self.hf_translator or self.translator) and (time.time() - start_time) < translate_timeout:
-                        try:
-                            title_ko = self.translate_text(title[:200], 'ko')
-                        except Exception as e:
-                            logging.debug(f"제목 번역 실패: {str(e)}")
-                            title_ko = title
-                    else:
-                        title_ko = title
-                
-                if description and (time.time() - start_time) < translate_timeout:
-                    if self._is_korean_text(description):
-                        description_ko = description
-                    else:
-                        if (self.hf_translator or self.translator):
-                            try:
-                                description_ko = self.translate_text(description[:300], 'ko')
-                            except Exception as e:
-                                logging.debug(f"설명 번역 실패: {str(e)}")
-                                description_ko = description
-                        else:
-                            description_ko = description
-                else:
-                    description_ko = description
-                
-                if content and (time.time() - start_time) < translate_timeout:
-                    content_preview = content[:300] if len(content) > 300 else content
-                    if self._is_korean_text(content_preview):
-                        content_ko = content_preview
-                    else:
-                        content_ko = None
-                else:
-                    content_ko = None
-                    
-            except Exception as e:
-                logging.warning(f"뉴스 번역 실패: {str(e)}")
-                title_ko = title
-                description_ko = description
-                content_ko = None
+            title_ko = title
+            description_ko = description
+            content_ko = content if content else None
             
             news_data = {
                 'title': title or '제목 없음',

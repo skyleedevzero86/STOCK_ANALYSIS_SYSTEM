@@ -29,7 +29,7 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `subscribe - should create subscription when email not exists`() {
-        //given
+
         val request = EmailSubscriptionRequest(
             name = "John Doe",
             email = "john@example.com",
@@ -51,10 +51,8 @@ class EmailSubscriptionServiceTest {
         every { emailSubscriptionRepository.findByEmail(request.email) } returns null
         every { emailSubscriptionRepository.save(any()) } returns entity
 
-        //when
         val result = emailSubscriptionService.subscribe(request)
 
-        //then
         StepVerifier.create(result)
             .expectNextMatches { subscription ->
                 subscription.email == request.email &&
@@ -69,7 +67,7 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `subscribe - should throw exception when email already exists`() {
-        //given
+
         val request = EmailSubscriptionRequest(
             name = "John Doe",
             email = "existing@example.com",
@@ -85,12 +83,10 @@ class EmailSubscriptionServiceTest {
 
         every { emailSubscriptionRepository.findByEmail(request.email) } returns existingEntity
 
-        //when
         val result = emailSubscriptionService.subscribe(request)
 
-        //then
         StepVerifier.create(result)
-            .expectErrorMatches { it is IllegalArgumentException && it.message?.contains("이미 등록된 이메일입니다") == true }
+            .expectErrorMatches { it is IllegalArgumentException && it.message?.contains("?��? ?�록???�메?�입?�다") == true }
             .verify()
         verify(exactly = 1) { emailSubscriptionRepository.findByEmail(request.email) }
         verify(exactly = 0) { emailSubscriptionRepository.save(any()) }
@@ -98,7 +94,7 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `getAllActiveSubscriptions - should return list of active subscriptions`() {
-        //given
+
         val entities = listOf(
             EmailSubscriptionEntity(
                 id = 1L,
@@ -120,10 +116,8 @@ class EmailSubscriptionServiceTest {
 
         every { emailSubscriptionRepository.findAllActive() } returns entities
 
-        //when
         val result = emailSubscriptionService.getAllActiveSubscriptions()
 
-        //then
         StepVerifier.create(result)
             .expectNextMatches { subscriptions ->
                 subscriptions.size == 2 &&
@@ -135,7 +129,7 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `getActiveSubscriptionsWithEmailConsent - should return list with email consent`() {
-        //given
+
         val entities = listOf(
             EmailSubscriptionEntity(
                 id = 1L,
@@ -149,10 +143,8 @@ class EmailSubscriptionServiceTest {
 
         every { emailSubscriptionRepository.findAllActiveWithEmailConsent() } returns entities
 
-        //when
         val result = emailSubscriptionService.getActiveSubscriptionsWithEmailConsent()
 
-        //then
         StepVerifier.create(result)
             .expectNextMatches { subscriptions ->
                 subscriptions.size == 1 &&
@@ -164,7 +156,7 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `unsubscribe - should deactivate subscription when exists`() {
-        //given
+
         val email = "user@example.com"
         val entity = EmailSubscriptionEntity(
             id = 1L,
@@ -179,10 +171,8 @@ class EmailSubscriptionServiceTest {
         every { emailSubscriptionRepository.findByEmail(email) } returns entity
         every { emailSubscriptionRepository.save(any()) } returns deactivatedEntity
 
-        //when
         val result = emailSubscriptionService.unsubscribe(email)
 
-        //then
         StepVerifier.create(result)
             .expectNext(true)
             .verifyComplete()
@@ -192,15 +182,13 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `unsubscribe - should return false when subscription not found`() {
-        //given
+
         val email = "nonexistent@example.com"
 
         every { emailSubscriptionRepository.findByEmail(email) } returns null
 
-        //when
         val result = emailSubscriptionService.unsubscribe(email)
 
-        //then
         StepVerifier.create(result)
             .expectNext(false)
             .verifyComplete()
@@ -210,37 +198,31 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `maskEmail - should mask email correctly for short username`() {
-        //given
+
         val email = "ab@example.com"
 
-        //when
         val result = emailSubscriptionService.maskEmail(email)
 
-        //then
         assertEquals("*@example.com", result)
     }
 
     @Test
     fun `maskEmail - should mask email correctly for medium username`() {
-        //given
+
         val email = "abcd@example.com"
 
-        //when
         val result = emailSubscriptionService.maskEmail(email)
 
-        //then
         assertEquals("a***@example.com", result)
     }
 
     @Test
     fun `maskEmail - should mask email correctly for long username`() {
-        //given
+
         val email = "john.doe@example.com"
 
-        //when
         val result = emailSubscriptionService.maskEmail(email)
 
-        //then
         assertTrue(result.startsWith("j"))
         assertTrue(result.contains("*"))
         assertTrue(result.endsWith("@example.com"))
@@ -248,61 +230,51 @@ class EmailSubscriptionServiceTest {
 
     @Test
     fun `maskEmail - should return original email for invalid format`() {
-        //given
+
         val email = "invalid-email"
 
-        //when
         val result = emailSubscriptionService.maskEmail(email)
 
-        //then
         assertEquals(email, result)
     }
 
     @Test
     fun `maskPhone - should return null for null phone`() {
-        //given
+
         val phone: String? = null
 
-        //when
         val result = emailSubscriptionService.maskPhone(phone)
 
-        //then
         assertNull(result)
     }
 
     @Test
     fun `maskPhone - should return null for blank phone`() {
-        //given
+
         val phone = "   "
 
-        //when
         val result = emailSubscriptionService.maskPhone(phone)
 
-        //then
         assertNull(result)
     }
 
     @Test
     fun `maskPhone - should mask phone correctly for short phone`() {
-        //given
+
         val phone = "1234"
 
-        //when
         val result = emailSubscriptionService.maskPhone(phone)
 
-        //then
         assertEquals("****", result)
     }
 
     @Test
     fun `maskPhone - should mask phone correctly for long phone`() {
-        //given
+
         val phone = "010-1234-5678"
 
-        //when
         val result = emailSubscriptionService.maskPhone(phone)
 
-        //then
         assertTrue(result!!.startsWith("01"))
         assertTrue(result.contains("*"))
         assertTrue(result.endsWith("78"))

@@ -27,9 +27,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 주식 데이터 조회 - 심볼이 존재할 때 주식 데이터 반환")
+    @DisplayName("?�시�?주식 ?�이??조회 - ?�볼??존재????주식 ?�이??반환")
     fun `getRealtimeStockData - should return stock data when symbol exists`() {
-        //given
+
         val symbol = "AAPL"
         val stockData = StockData(
             symbol = symbol,
@@ -41,10 +41,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getRealtimeData.invoke(symbol) } returns Mono.just(stockData)
 
-        //when
         val result = stockAnalysisService.getRealtimeStockData(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(stockData)
             .verifyComplete()
@@ -52,18 +50,16 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 주식 데이터 조회 - 심볼을 찾을 수 없을 때 에러 처리")
+    @DisplayName("?�시�?주식 ?�이??조회 - ?�볼??찾을 ???�을 ???�러 처리")
     fun `getRealtimeStockData - should handle error when symbol not found`() {
-        //given
+
         val symbol = "INVALID"
         val error = RuntimeException("Stock not found")
 
         every { stockRepository.getRealtimeData.invoke(symbol) } returns Mono.error(error)
 
-        //when
         val result = stockAnalysisService.getRealtimeStockData(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectError(RuntimeException::class.java)
             .verify()
@@ -71,9 +67,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("전체 실시간 주식 데이터 조회 - 주식 데이터 Flux 반환")
+    @DisplayName("?�체 ?�시�?주식 ?�이??조회 - 주식 ?�이??Flux 반환")
     fun `getAllRealtimeStockData - should return flux of stock data`() {
-        //given
+
         val stockData1 = StockData(
             symbol = "AAPL",
             currentPrice = 150.0,
@@ -92,10 +88,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getAllRealtimeData.invoke() } returns Flux.fromIterable(stockDataList)
 
-        //when
         val result = stockAnalysisService.getAllRealtimeStockData()
 
-        //then
         StepVerifier.create(result)
             .expectNext(stockData1)
             .expectNext(stockData2)
@@ -104,9 +98,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("주식 분석 조회 - 심볼이 존재할 때 기술적 분석 반환")
+    @DisplayName("주식 분석 조회 - ?�볼??존재????기술??분석 반환")
     fun `getStockAnalysis - should return technical analysis when symbol exists`() {
-        //given
+
         val symbol = "AAPL"
         val technicalAnalysis = TechnicalAnalysis(
             symbol = symbol,
@@ -128,10 +122,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getAnalysis.invoke(symbol) } returns Mono.just(technicalAnalysis)
 
-        //when
         val result = stockAnalysisService.getStockAnalysis(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectNext(technicalAnalysis)
             .verifyComplete()
@@ -139,18 +131,16 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("주식 분석 조회 - 분석을 찾을 수 없을 때 에러 처리")
+    @DisplayName("주식 분석 조회 - 분석??찾을 ???�을 ???�러 처리")
     fun `getStockAnalysis - should handle error when analysis not found`() {
-        //given
+
         val symbol = "INVALID"
         val error = RuntimeException("Analysis not found")
 
         every { stockRepository.getAnalysis.invoke(symbol) } returns Mono.error(error)
 
-        //when
         val result = stockAnalysisService.getStockAnalysis(symbol)
 
-        //then
         StepVerifier.create(result)
             .expectError(RuntimeException::class.java)
             .verify()
@@ -158,9 +148,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("전체 주식 분석 조회 - 기술적 분석 Flux 반환")
+    @DisplayName("?�체 주식 분석 조회 - 기술??분석 Flux 반환")
     fun `getAllStockAnalysis - should return flux of technical analysis`() {
-        //given
+
         val analysis1 = TechnicalAnalysis(
             symbol = "AAPL",
             currentPrice = 150.0,
@@ -187,10 +177,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getAllAnalysis.invoke() } returns Flux.fromIterable(analysisList)
 
-        //when
         val result = stockAnalysisService.getAllStockAnalysis()
 
-        //then
         StepVerifier.create(result)
             .expectNext(analysis1)
             .expectNext(analysis2)
@@ -199,9 +187,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("주식 과거 데이터 조회 - 심볼이 존재할 때 과거 데이터 반환")
+    @DisplayName("주식 과거 ?�이??조회 - ?�볼??존재????과거 ?�이??반환")
     fun `getStockHistoricalData - should return historical data when symbol exists`() {
-        //given
+
         val symbol = "AAPL"
         val days = 30
         val historicalData = HistoricalData(
@@ -223,10 +211,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getHistoricalData.invoke(symbol, days) } returns Mono.just(historicalData)
 
-        //when
         val result = stockAnalysisService.getStockHistoricalData(symbol, days)
 
-        //then
         StepVerifier.create(result)
             .expectNext(historicalData)
             .verifyComplete()
@@ -234,19 +220,17 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("주식 과거 데이터 조회 - 과거 데이터를 찾을 수 없을 때 에러 처리")
+    @DisplayName("주식 과거 ?�이??조회 - 과거 ?�이?��? 찾을 ???�을 ???�러 처리")
     fun `getStockHistoricalData - should handle error when historical data not found`() {
-        //given
+
         val symbol = "INVALID"
         val days = 30
         val error = RuntimeException("Historical data not found")
 
         every { stockRepository.getHistoricalData.invoke(symbol, days) } returns Mono.error(error)
 
-        //when
         val result = stockAnalysisService.getStockHistoricalData(symbol, days)
 
-        //then
         StepVerifier.create(result)
             .expectError(RuntimeException::class.java)
             .verify()
@@ -254,17 +238,15 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("사용 가능한 심볼 조회 - 사용 가능한 심볼 목록 반환")
+    @DisplayName("?�용 가?�한 ?�볼 조회 - ?�용 가?�한 ?�볼 목록 반환")
     fun `getAvailableSymbols - should return list of available symbols`() {
-        //given
+
         val symbols = listOf("AAPL", "GOOGL", "MSFT", "AMZN")
 
         every { stockRepository.getAvailableSymbols.invoke() } returns Mono.just(symbols)
 
-        //when
         val result = stockAnalysisService.getAvailableSymbols()
 
-        //then
         StepVerifier.create(result)
             .expectNext(symbols)
             .verifyComplete()
@@ -272,17 +254,15 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("사용 가능한 심볼 조회 - 사용 가능한 심볼이 없을 때 빈 목록 반환")
+    @DisplayName("?�용 가?�한 ?�볼 조회 - ?�용 가?�한 ?�볼???�을 ??�?목록 반환")
     fun `getAvailableSymbols - should return empty list when no symbols available`() {
-        //given
+
         val emptySymbols = emptyList<String>()
 
         every { stockRepository.getAvailableSymbols.invoke() } returns Mono.just(emptySymbols)
 
-        //when
         val result = stockAnalysisService.getAvailableSymbols()
 
-        //then
         StepVerifier.create(result)
             .expectNext(emptySymbols)
             .verifyComplete()
@@ -290,9 +270,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 분석 스트림 - 주기적으로 분석 데이터 방출")
+    @DisplayName("?�시�?분석 ?�트�?- 주기?�으�?분석 ?�이??방출")
     fun `getRealtimeAnalysisStream - should emit analysis periodically`() {
-        //given
+
         val analysis = TechnicalAnalysis(
             symbol = "AAPL",
             currentPrice = 150.0,
@@ -307,10 +287,8 @@ class StockAnalysisServiceTest {
 
         every { stockRepository.getAllAnalysis.invoke() } returns Flux.just(analysis)
 
-        //when
         val result = stockAnalysisService.getRealtimeAnalysisStream()
 
-        //then
         StepVerifier.create(result)
             .expectNextCount(1)
             .thenCancel()
@@ -318,9 +296,9 @@ class StockAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("실시간 분석 스트림(재시도 포함) - 에러 발생 시 재시도")
+    @DisplayName("?�시�?분석 ?�트�??�시???�함) - ?�러 발생 ???�시??)
     fun `getRealtimeAnalysisStreamWithRetry - should retry on error`() {
-        //given
+
         val error = RuntimeException("Connection error")
         val analysis = TechnicalAnalysis(
             symbol = "AAPL",
@@ -339,10 +317,8 @@ class StockAnalysisServiceTest {
             Flux.just(analysis)
         )
 
-        //when
         val result = stockAnalysisService.getRealtimeAnalysisStreamWithRetry()
 
-        //then
         StepVerifier.create(result)
             .expectNext(analysis)
             .thenCancel()

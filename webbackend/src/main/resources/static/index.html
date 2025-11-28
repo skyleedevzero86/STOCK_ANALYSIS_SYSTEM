@@ -3,12 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Permissions-Policy" content="interest-cohort=()" />
     <title>실시간 주식 분석 대시보드</title>
     <link rel="stylesheet" href="css/common.css?v=2.0" />
     <link rel="stylesheet" href="css/dashboard.css?v=2.0" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   </head>
   <body>
     <div class="popup-overlay" id="welcomePopup">
@@ -347,7 +348,7 @@
             <div class="loading">최고 성과 종목을 불러오는 중...</div>
           </div>
           <div class="card-footer">
-            <button class="btn-small" onclick="dashboard.loadTopPerformers()">새로고침</button>
+            <button class="btn-small" onclick="dashboard.loadTopPerformers(0)">새로고침</button>
           </div>
         </div>
 
@@ -417,8 +418,16 @@
             <div class="sector-bubble-chart-container">
               <canvas id="sectorBubbleChart"></canvas>
             </div>
-            <div class="sector-stocks-comparison" id="sectorStocksComparison">
-              <div class="loading">섹터 데이터를 불러오는 중...</div>
+            <div class="sector-slider-wrapper">
+              <button class="sector-slider-btn sector-slider-btn-prev" id="sectorSliderPrev" aria-label="이전 섹터">
+                ‹
+              </button>
+              <div class="sector-stocks-comparison" id="sectorStocksComparison">
+                <div class="loading">섹터 데이터를 불러오는 중...</div>
+              </div>
+              <button class="sector-slider-btn sector-slider-btn-next" id="sectorSliderNext" aria-label="다음 섹터">
+                ›
+              </button>
             </div>
           </div>
         </div>

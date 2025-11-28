@@ -95,7 +95,6 @@ class PerformanceOptimizedCollector:
                 socket_keepalive=True,
                 socket_keepalive_options={}
             )
-            # 연결 테스트 (타임아웃 설정)
             self.redis_client.ping()
             logging.info("Redis 연결 성공")
         except redis.ConnectionError as e:
@@ -159,7 +158,6 @@ class PerformanceOptimizedCollector:
             return False
         
         time_diff = current_time - self.rate_limiter[api_type]
-        # Rate limiting 간격 증가: Yahoo Finance는 2초, Alpha Vantage는 15초
         if api_type == 'yfinance' or api_type == 'yahoo_direct':
             return time_diff < 2.0  # 0.1초 -> 2초로 증가
         elif api_type == 'alpha_vantage':
@@ -261,11 +259,9 @@ class PerformanceOptimizedCollector:
                 self.metrics.error_count += 1
                 self.source_success_rates[source]['failure'] += 1
                 
-                # 429 에러인 경우 특별 처리
                 error_str = str(e).lower()
                 if '429' in error_str or 'rate limit' in error_str:
                     logging.warning(f"{symbol}에 대한 소스 {source} rate limit (429), 다음 소스로 전환")
-                    # Rate limit에 걸린 경우 해당 소스의 rate limiter를 업데이트하여 더 긴 대기 시간 설정
                     if source in ['yahoo_direct', 'yfinance']:
                         self.rate_limiter['yahoo_direct'] = time.time() - 60  # 1분 전으로 설정하여 강제 대기
                     elif source == 'alpha_vantage':
@@ -290,7 +286,6 @@ class PerformanceOptimizedCollector:
         return await self._generate_enhanced_mock_data(symbol)
     
     async def _fetch_yahoo_direct(self, symbol: str, request_type: str) -> Dict:
-        # Rate limiting 체크 및 대기
         if self._is_rate_limited('yahoo_direct'):
             wait_time = 2.0 - (time.time() - self.rate_limiter.get('yahoo_direct', 0))
             if wait_time > 0:
@@ -312,8 +307,7 @@ class PerformanceOptimizedCollector:
                 self._update_rate_limiter('yahoo_direct')
                 return result
             elif response.status == 429:
-                # 429 에러 발생 시 exponential backoff
-                wait_time = 60.0  # 1분 대기
+                wait_time = 60.0
                 logging.warning(f"Yahoo Finance rate limit (429) for {symbol}, waiting {wait_time}s")
                 await asyncio.sleep(wait_time)
                 raise Exception(f"Yahoo Finance API rate limit (429)")
@@ -321,7 +315,6 @@ class PerformanceOptimizedCollector:
                 raise Exception(f"Yahoo Finance API returned status {response.status}")
     
     async def _fetch_alpha_vantage(self, symbol: str, request_type: str) -> Dict:
-        # Rate limiting 체크 및 대기
         if self._is_rate_limited('alpha_vantage'):
             wait_time = 15.0 - (time.time() - self.rate_limiter.get('alpha_vantage', 0))
             if wait_time > 0:
@@ -465,9 +458,8 @@ class PerformanceOptimizedCollector:
         Rate limiting을 피하기 위해 작은 배치로 나누어 순차 처리합니다.
         """
         valid_results = []
-        batch_size = 3  # 한 번에 최대 3개 심볼만 처리
+        batch_size = 3
         
-        # 심볼을 작은 배치로 나누기
         for i in range(0, len(symbols), batch_size):
             batch = symbols[i:i + batch_size]
             tasks = []
@@ -476,7 +468,6 @@ class PerformanceOptimizedCollector:
                 task = self.get_realtime_data_async(symbol)
                 tasks.append(task)
             
-            # 배치 단위로 처리
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             for j, result in enumerate(results):
@@ -486,9 +477,8 @@ class PerformanceOptimizedCollector:
                 if result and result.get('price', 0) > 0:
                     valid_results.append(result)
             
-            # 배치 간 대기 시간 (rate limiting 방지)
             if i + batch_size < len(symbols):
-                await asyncio.sleep(2.0)  # 각 배치 사이에 2초 대기
+                await asyncio.sleep(2.0)
         
         return valid_results
     

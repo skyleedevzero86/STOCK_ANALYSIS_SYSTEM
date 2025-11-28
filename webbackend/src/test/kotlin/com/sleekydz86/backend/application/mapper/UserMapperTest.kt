@@ -12,9 +12,9 @@ import org.junit.jupiter.api.Test
 class UserMapperTest {
 
     @Test
-    @DisplayName("사용자 응답 변환 - User를 UserResponse로 변환")
+    @DisplayName("?�용???�답 변??- User�?UserResponse�?변??)
     fun `toUserResponse - should convert User to UserResponse`() {
-        //given
+
         val role = Role(name = "ROLE_USER")
         val user = User(
             id = 1L,
@@ -28,10 +28,8 @@ class UserMapperTest {
             roles = setOf(role)
         )
 
-        //when
         val result = UserMapper.toUserResponse(user)
 
-        //then
         assertNotNull(result)
         assertEquals(user.id, result.id)
         assertEquals(user.username, result.username)
@@ -44,9 +42,9 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("사용자 응답 변환 - firstName과 lastName이 null인 경우")
+    @DisplayName("?�용???�답 변??- firstName�?lastName??null??경우")
     fun `toUserResponse - should handle null firstName and lastName`() {
-        //given
+
         val user = User(
             id = 1L,
             username = "testuser",
@@ -57,10 +55,8 @@ class UserMapperTest {
             roles = emptySet()
         )
 
-        //when
         val result = UserMapper.toUserResponse(user)
 
-        //then
         assertNotNull(result)
         assertNull(result.firstName)
         assertNull(result.lastName)
@@ -68,9 +64,9 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("사용자 응답 변환 - 여러 역할을 가진 사용자")
+    @DisplayName("?�용???�답 변??- ?�러 ??��??가�??�용??)
     fun `toUserResponse - should handle user with multiple roles`() {
-        //given
+
         val role1 = Role(name = "ROLE_USER")
         val role2 = Role(name = "ROLE_ADMIN")
         val user = User(
@@ -81,10 +77,8 @@ class UserMapperTest {
             roles = setOf(role1, role2)
         )
 
-        //when
         val result = UserMapper.toUserResponse(user)
 
-        //then
         assertNotNull(result)
         assertEquals(2, result.roles.size)
         assertTrue(result.roles.contains("ROLE_USER"))
@@ -92,9 +86,9 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("프로필 응답 변환 - User를 ProfileResponse로 변환")
+    @DisplayName("?�로???�답 변??- User�?ProfileResponse�?변??)
     fun `toProfileResponse - should convert User to ProfileResponse`() {
-        //given
+
         val role = Role(name = "ROLE_USER")
         val user = User(
             id = 1L,
@@ -108,10 +102,8 @@ class UserMapperTest {
             roles = setOf(role)
         )
 
-        //when
         val result = UserMapper.toProfileResponse(user)
 
-        //then
         assertNotNull(result)
         assertEquals(user.id, result.id)
         assertEquals(user.username, result.username)
@@ -124,9 +116,9 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("사용자 정보 변환 - User를 UserInfo로 변환")
+    @DisplayName("?�용???�보 변??- User�?UserInfo�?변??)
     fun `toUserInfo - should convert User to UserInfo`() {
-        //given
+
         val role = Role(name = "ROLE_USER")
         val user = User(
             id = 1L,
@@ -138,10 +130,8 @@ class UserMapperTest {
             roles = setOf(role)
         )
 
-        //when
         val result = UserMapper.toUserInfo(user)
 
-        //then
         assertNotNull(result)
         assertEquals(user.id, result.id)
         assertEquals(user.username, result.username)
@@ -152,9 +142,9 @@ class UserMapperTest {
     }
 
     @Test
-    @DisplayName("사용자 정보 변환 - UserInfo는 isActive와 isEmailVerified 필드가 없음")
+    @DisplayName("?�용???�보 변??- UserInfo??isActive?� isEmailVerified ?�드가 ?�음")
     fun `toUserInfo - should not include isActive and isEmailVerified fields`() {
-        //given
+
         val user = User(
             id = 1L,
             username = "testuser",
@@ -164,19 +154,17 @@ class UserMapperTest {
             isEmailVerified = false
         )
 
-        //when
         val result = UserMapper.toUserInfo(user)
 
-        //then
         assertNotNull(result)
         assertEquals(user.id, result.id)
         assertEquals(user.username, result.username)
     }
 
     @Test
-    @DisplayName("사용자 정보 변환 - 역할이 없는 사용자")
+    @DisplayName("?�용???�보 변??- ??��???�는 ?�용??)
     fun `toUserInfo - should handle user without roles`() {
-        //given
+
         val user = User(
             id = 1L,
             username = "testuser",
@@ -185,10 +173,8 @@ class UserMapperTest {
             roles = emptySet()
         )
 
-        //when
         val result = UserMapper.toUserInfo(user)
 
-        //then
         assertNotNull(result)
         assertTrue(result.roles.isEmpty())
     }

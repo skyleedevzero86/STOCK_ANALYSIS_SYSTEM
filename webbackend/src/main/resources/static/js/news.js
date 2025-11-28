@@ -3,11 +3,11 @@ let newsRefreshInterval = null;
 
 function updateCurrentSymbol(symbol) {
     currentSymbol = symbol;
-    const autoTranslate = document.getElementById('includeKoreanNews')?.checked || false;
-    loadNews(symbol, false, autoTranslate);
+    const includeKorean = document.getElementById('includeKoreanNews')?.checked || false;
+    loadNews(symbol, includeKorean);
 }
 
-function loadNews(symbol, includeKorean = false, autoTranslate = false) {
+function loadNews(symbol, includeKorean = false) {
     const newsContainer = document.getElementById('newsContainer');
     if (!newsContainer) {
         console.error('newsContainer element not found');
@@ -16,7 +16,7 @@ function loadNews(symbol, includeKorean = false, autoTranslate = false) {
     
     newsContainer.innerHTML = '<div class="loading">뉴스를 불러오는 중...</div>';
 
-    const url = `/api/news/${symbol}?includeKorean=${includeKorean}&autoTranslate=${autoTranslate}`;
+    const url = `/api/news/${symbol}?includeKorean=${includeKorean}`;
     
     axios.get(url, {
         timeout: 30000
@@ -262,13 +262,13 @@ function getSentimentText(sentiment) {
     return '중립';
 }
 
-function startNewsAutoRefresh(symbol, includeKorean = false, autoTranslate = false) {
+function startNewsAutoRefresh(symbol, includeKorean = false) {
     if (newsRefreshInterval) {
         clearInterval(newsRefreshInterval);
     }
     
     newsRefreshInterval = setInterval(() => {
-        loadNews(symbol, includeKorean, autoTranslate);
+        loadNews(symbol, includeKorean);
     }, 300000);
 }
 
@@ -297,22 +297,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (includeKoreanCheckbox) {
         includeKoreanCheckbox.addEventListener('change', function() {
-            const autoTranslate = this.checked;
-            localStorage.setItem('newsAutoTranslate', autoTranslate.toString());
-            loadNews(currentSymbol, false, autoTranslate);
-            startNewsAutoRefresh(currentSymbol, false, autoTranslate);
+            const includeKorean = this.checked;
+            localStorage.setItem('newsIncludeKorean', includeKorean.toString());
+            loadNews(currentSymbol, includeKorean);
+            startNewsAutoRefresh(currentSymbol, includeKorean);
         });
         
-        const savedAutoTranslate = localStorage.getItem('newsAutoTranslate');
-        if (savedAutoTranslate !== null) {
-            includeKoreanCheckbox.checked = savedAutoTranslate === 'true';
+        const savedIncludeKorean = localStorage.getItem('newsIncludeKorean');
+        if (savedIncludeKorean !== null) {
+            includeKoreanCheckbox.checked = savedIncludeKorean === 'true';
         }
     }
 
     if (refreshNewsBtn) {
         refreshNewsBtn.addEventListener('click', function() {
-            const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-            loadNews(currentSymbol, false, autoTranslate);
+            const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+            loadNews(currentSymbol, includeKorean);
         });
     }
 
@@ -322,9 +322,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const newSymbol = window.dashboard?.currentSymbol || 'AAPL';
             if (newSymbol !== currentSymbol) {
                 currentSymbol = newSymbol;
-                const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-                loadNews(newSymbol, false, autoTranslate);
-                startNewsAutoRefresh(newSymbol, false, autoTranslate);
+                const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+                loadNews(newSymbol, includeKorean);
+                startNewsAutoRefresh(newSymbol, includeKorean);
             }
         });
         
@@ -332,17 +332,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const newSymbol = window.dashboard?.currentSymbol || 'AAPL';
             if (newSymbol !== currentSymbol) {
                 currentSymbol = newSymbol;
-                const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-                loadNews(newSymbol, false, autoTranslate);
-                startNewsAutoRefresh(newSymbol, false, autoTranslate);
+                const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+                loadNews(newSymbol, includeKorean);
+                startNewsAutoRefresh(newSymbol, includeKorean);
             }
         }, 1000);
     }
     
     window.updateCurrentSymbol = updateCurrentSymbol;
 
-    const autoTranslate = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
-    loadNews(currentSymbol, false, autoTranslate);
-    startNewsAutoRefresh(currentSymbol, false, autoTranslate);
+    const includeKorean = includeKoreanCheckbox ? includeKoreanCheckbox.checked : false;
+    loadNews(currentSymbol, includeKorean);
+    startNewsAutoRefresh(currentSymbol, includeKorean);
 });
 

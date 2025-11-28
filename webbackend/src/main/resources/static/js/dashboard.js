@@ -1,3 +1,15 @@
+window.addEventListener('unhandledrejection', function(event) {
+    const error = event.reason;
+    const errorMessage = error?.message || '';
+    const errorStack = error?.stack || '';
+    
+    if (errorMessage.includes('ERR_CONNECTION_REFUSED') || 
+        errorMessage.includes('Failed to fetch') ||
+        errorStack.includes('/api/health')) {
+        event.preventDefault(); // 콘솔에 오류 표시 방지
+    }
+});
+
 class StockDashboard {
     constructor() {
         this.apiBaseUrl = "http://localhost:8080";
@@ -464,6 +476,9 @@ class StockDashboard {
             checkButton.style.backgroundColor = "#f39c12";
         }
 
+        let kotlinApiSuccess = false;
+        let pythonApiSuccess = false;
+
         try {
             try {
                 const response = await axios.get(`${this.apiBaseUrl}/api/stocks/symbols`, {
@@ -474,6 +489,7 @@ class StockDashboard {
                 });
                 if (response.status === 200) {
                     this.updateApiStatus("정상", "positive");
+                    kotlinApiSuccess = true;
                 } else {
                     this.updateApiStatus("응답 오류", "warning");
                 }
@@ -488,40 +504,48 @@ class StockDashboard {
             }
 
             try {
-                const response = await axios.get(`${this.pythonApiUrl}/api/health`, {
-                    timeout: 5000,
-                    validateStatus: function (status) {
-                        return status >= 200 && status < 500;
-                    }
-                });
-
-                if (response.status === 200) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                let response = null;
+                try {
+                    response = await fetch(`${this.pythonApiUrl}/api/health`, {
+                        method: 'GET',
+                        signal: controller.signal,
+                        cache: 'no-cache',
+                        mode: 'cors'
+                    });
+                } catch (fetchError) {
+                    clearTimeout(timeoutId);
+                    response = null;
+                }
+                
+                clearTimeout(timeoutId);
+                
+                if (response && response.ok) {
                     this.updatePythonApiStatus("정상", "positive");
-                } else {
+                    pythonApiSuccess = true;
+                } else if (response) {
                     this.updatePythonApiStatus("응답 오류", "warning");
+                    pythonApiSuccess = false;
+                } else {
+                    this.updatePythonApiStatus("서버 미실행", "warning");
+                    pythonApiSuccess = false;
                 }
             } catch (error) {
                 const errorCode = error.code || error.response?.status;
                 const errorMessage = error.message || '';
-                const isConnectionRefused =
-                    errorCode === 'ECONNREFUSED' ||
-                    errorCode === 'ERR_CONNECTION_REFUSED' ||
-                    errorMessage.includes('ERR_CONNECTION_REFUSED') ||
-                    errorMessage.includes('Network Error') ||
-                    errorMessage.includes('Failed to fetch');
-
                 const isTimeout =
                     errorCode === 'ECONNABORTED' ||
                     errorMessage.includes('timeout') ||
                     errorMessage.includes('Timeout');
 
-                if (isConnectionRefused) {
-                    this.updatePythonApiStatus("서버 미실행", "warning");
-                } else if (isTimeout) {
+                if (isTimeout) {
                     this.updatePythonApiStatus("타임아웃", "warning");
                 } else {
                     this.updatePythonApiStatus("연결 실패", "warning");
                 }
+                pythonApiSuccess = false;
             }
 
             if (checkButton) {
@@ -533,7 +557,12 @@ class StockDashboard {
                     checkButton.disabled = false;
                 }, 2000);
             }
+            
+            return pythonApiSuccess;
         } catch (error) {
+            if (error.code !== 'ECONNREFUSED' && error.code !== 'ERR_CONNECTION_REFUSED') {
+                console.error("시스템 헬스 체크 중 오류:", error);
+            }
             if (checkButton) {
                 checkButton.textContent = "체크 실패";
                 checkButton.style.backgroundColor = "#e74c3c";
@@ -543,6 +572,7 @@ class StockDashboard {
                     checkButton.disabled = false;
                 }, 2000);
             }
+            return false;
         }
     }
 
@@ -562,9 +592,12 @@ class StockDashboard {
         }
     }
 
-    async loadTopPerformers() {
+    async loadTopPerformers(retryCount = 0) {
         const container = document.getElementById('topPerformersContainer');
         if (!container) return;
+
+        const maxRetries = 2;
+        const retryDelay = 3000;
 
         try {
             container.innerHTML = '<div class="loading">최고 성과 종목을 불러오는 중...</div>';
@@ -582,7 +615,20 @@ class StockDashboard {
             if (response.status === 200 && response.data && Array.isArray(response.data) && response.data.length > 0) {
                 this.renderTopPerformers(response.data);
             } else if (response.status === 200 && (!response.data || !Array.isArray(response.data) || response.data.length === 0)) {
-                container.innerHTML = '<div class="no-data">최고 성과 종목 데이터가 없습니다. 잠시 후 다시 시도해주세요.</div>';
+                if (retryCount < maxRetries) {
+                    console.log(`최고 성과 종목 데이터가 비어있습니다. ${retryDelay/1000}초 후 재시도... (${retryCount + 1}/${maxRetries})`);
+                    container.innerHTML = `<div class="loading">데이터를 기다리는 중... (${retryCount + 1}/${maxRetries} 재시도)</div>`;
+                    setTimeout(() => {
+                        this.loadTopPerformers(retryCount + 1);
+                    }, retryDelay);
+                } else {
+                    container.innerHTML = `
+                        <div class="no-data">
+                            <p style="margin-bottom: 8px;">최고 성과 종목 데이터가 없습니다. 잠시 후</p>
+                            <p style="margin-bottom: 16px;">다시 시도해주세요.</p>
+                        </div>
+                    `;
+                }
             } else {
                 const errorMsg = response.data?.message || response.data?.error || `서버 오류 (${response.status})`;
                 container.innerHTML = `<div class="error">최고 성과 종목을 불러올 수 없습니다: ${errorMsg}</div>`;
@@ -590,6 +636,15 @@ class StockDashboard {
             }
             this.updateConnectionStatus();
         } catch (error) {
+            if (retryCount < maxRetries && (error.code === 'ECONNABORTED' || error.message?.includes('timeout'))) {
+                console.log(`최고 성과 종목 로드 타임아웃. ${retryDelay/1000}초 후 재시도... (${retryCount + 1}/${maxRetries})`);
+                container.innerHTML = `<div class="loading">연결 중... (${retryCount + 1}/${maxRetries} 재시도)</div>`;
+                setTimeout(() => {
+                    this.loadTopPerformers(retryCount + 1);
+                }, retryDelay);
+                return;
+            }
+
             let errorMessage = '최고 성과 종목을 불러올 수 없습니다.';
             if (error.response) {
                 errorMessage = `서버 오류: ${error.response.status} - ${error.response.data?.message || error.response.data?.error || '알 수 없는 오류'}`;
@@ -598,7 +653,11 @@ class StockDashboard {
             } else {
                 errorMessage = `요청 오류: ${error.message}`;
             }
-            container.innerHTML = `<div class="error">${errorMessage}</div>`;
+            container.innerHTML = `
+                <div class="error">
+                    <p>${errorMessage}</p>
+                </div>
+            `;
             console.error('최고 성과 종목 로드 중 예외 발생:', error);
         }
     }
@@ -876,6 +935,154 @@ class StockDashboard {
         }).join('');
 
         container.innerHTML = html;
+        
+        setTimeout(() => {
+            this.initSectorSlider();
+        }, 100);
+    }
+
+    initSectorSlider() {
+        const container = document.getElementById('sectorStocksComparison');
+        const prevBtn = document.getElementById('sectorSliderPrev');
+        const nextBtn = document.getElementById('sectorSliderNext');
+        
+        if (!container || !prevBtn || !nextBtn) {
+            console.warn('슬라이드 요소를 찾을 수 없습니다.');
+            return;
+        }
+
+        const cards = container.querySelectorAll('.sector-table-card');
+        if (cards.length === 0) {
+            console.warn('섹터 카드를 찾을 수 없습니다.');
+            return;
+        }
+
+        if (this.sectorSliderInitialized) {
+            this.sectorSliderInitialized = false;
+        }
+        this.sectorSliderInitialized = true;
+
+        let currentIndex = 0;
+        const getCardWidth = () => {
+            if (cards.length === 0) return 474;
+            const firstCard = cards[0];
+            const computedStyle = window.getComputedStyle(firstCard);
+            const width = parseFloat(computedStyle.width) || 450;
+            const gap = 24;
+            return width + gap;
+        };
+        let cardWidth = getCardWidth();
+        const maxIndex = cards.length - 1;
+        
+        const updateSlider = () => {
+            const translateX = -currentIndex * cardWidth;
+            container.style.transform = `translateX(${translateX}px)`;
+            
+            prevBtn.style.opacity = currentIndex === 0 ? '0.3' : '1';
+            prevBtn.style.pointerEvents = currentIndex === 0 ? 'none' : 'auto';
+            
+            nextBtn.style.opacity = currentIndex >= maxIndex ? '0.3' : '1';
+            nextBtn.style.pointerEvents = currentIndex >= maxIndex ? 'none' : 'auto';
+        };
+
+        const handlePrevClick = () => {
+            if (currentIndex > 0) {
+                currentIndex--;
+                updateSlider();
+            }
+        };
+
+        const handleNextClick = () => {
+            if (currentIndex < maxIndex) {
+                currentIndex++;
+                updateSlider();
+            }
+        };
+
+        prevBtn.removeEventListener('click', handlePrevClick);
+        nextBtn.removeEventListener('click', handleNextClick);
+        
+        prevBtn.addEventListener('click', handlePrevClick);
+        nextBtn.addEventListener('click', handleNextClick);
+        
+        let resizeTimer;
+        const handleResize = () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                cardWidth = getCardWidth();
+                updateSlider();
+            }, 250);
+        };
+        
+        window.removeEventListener('resize', handleResize);
+        window.addEventListener('resize', handleResize);
+
+        let isDragging = false;
+        let startX = 0;
+        let scrollLeft = 0;
+
+        container.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.pageX - container.offsetLeft;
+            scrollLeft = currentIndex * cardWidth;
+            container.style.cursor = 'grabbing';
+        });
+
+        container.addEventListener('mouseleave', () => {
+            isDragging = false;
+            container.style.cursor = 'grab';
+        });
+
+        container.addEventListener('mouseup', () => {
+            isDragging = false;
+            container.style.cursor = 'grab';
+        });
+
+        container.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - container.offsetLeft;
+            const walk = (x - startX) * 2;
+            const newIndex = Math.round((scrollLeft - walk) / cardWidth);
+            if (newIndex >= 0 && newIndex <= maxIndex && newIndex !== currentIndex) {
+                currentIndex = newIndex;
+                updateSlider();
+            }
+        });
+
+        container.style.cursor = 'grab';
+
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        container.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        container.addEventListener('touchend', (e) => {
+            if (!touchStartX || !touchStartY) return;
+            
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const diffX = touchStartX - touchEndX;
+            const diffY = touchStartY - touchEndY;
+            
+            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                if (diffX > 0 && currentIndex < maxIndex) {
+                    currentIndex++;
+                } else if (diffX < 0 && currentIndex > 0) {
+                    currentIndex--;
+                }
+                updateSlider();
+            }
+            
+            touchStartX = 0;
+            touchStartY = 0;
+        }, { passive: true });
+
+        updateSlider();
     }
 
     showSectorStocks(sector) {
@@ -911,13 +1118,64 @@ class StockDashboard {
     }
 
     startHealthCheck() {
+        this.healthCheckState = {
+            consecutiveFailures: 0,
+            checkInterval: 30000,
+            isPaused: false,
+            lastCheckTime: 0
+        };
+
         setTimeout(() => {
-            this.checkSystemHealth();
+            this.performHealthCheck();
         }, 1000);
 
-        this.healthCheckInterval = setInterval(() => {
-            this.checkSystemHealth();
-        }, 30000);
+        this.scheduleNextHealthCheck();
+    }
+
+    async performHealthCheck() {
+        const now = Date.now();
+        const state = this.healthCheckState;
+        
+        if (state.isPaused || (now - state.lastCheckTime < state.checkInterval)) {
+            this.scheduleNextHealthCheck();
+            return;
+        }
+        
+        state.lastCheckTime = now;
+        
+        try {
+            const success = await this.checkSystemHealth().catch((error) => {
+                return false;
+            });
+            
+            if (success) {
+                state.consecutiveFailures = 0;
+                state.checkInterval = 30000;
+                state.isPaused = false;
+            } else {
+                state.consecutiveFailures++;
+                
+                if (state.consecutiveFailures >= 3) {
+                    state.isPaused = true;
+                    state.checkInterval = 300000;
+                } else {
+                    state.checkInterval = Math.min(30000 + (state.consecutiveFailures * 30000), 120000);
+                }
+            }
+        } catch (error) {
+            state.consecutiveFailures++;
+            state.checkInterval = Math.min(30000 + (state.consecutiveFailures * 30000), 120000);
+        } finally {
+            this.scheduleNextHealthCheck();
+        }
+    }
+
+    scheduleNextHealthCheck() {
+        const state = this.healthCheckState;
+        
+        setTimeout(() => {
+            this.performHealthCheck();
+        }, state.checkInterval);
     }
 
     resetConnectionStats() {

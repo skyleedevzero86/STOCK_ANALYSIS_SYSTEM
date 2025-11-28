@@ -94,6 +94,15 @@ function updateNavigation() {
         }
     }
 
+    const statusControls = document.querySelector('.status-controls');
+    if (statusControls) {
+        if (isLoggedIn && isMainPage) {
+            statusControls.style.display = 'flex';
+        } else {
+            statusControls.style.display = 'none';
+        }
+    }
+
     const symbolSelectLinks = document.querySelectorAll('.nav-link.btn-nav');
     symbolSelectLinks.forEach(link => {
         if (isLoginPage || isSubscriptionPage) {
@@ -133,6 +142,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const isDashboardPage = currentPage === '/admin-dashboard.html' || currentPage === '/admin-dashboard';
     const isInquiryPage = currentPage === '/contact-inquiry-list.html' || currentPage === '/contact-inquiry-detail.html';
     
+    updateNavigation();
+    
     if (isDashboardPage || isInquiryPage) {
         setTimeout(function() {
             updateNavigation();
@@ -143,7 +154,6 @@ document.addEventListener('DOMContentLoaded', function() {
             redirectIfNotLoggedIn();
         }, 400);
     } else {
-        updateNavigation();
         redirectIfNotLoggedIn();
     }
 });

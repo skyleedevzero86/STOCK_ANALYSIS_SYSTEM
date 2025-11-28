@@ -168,11 +168,11 @@ class PythonApiClient(
 
     private val mapToTradingSignals: (Map<*, *>) -> TradingSignals = { signalsData ->
         TradingSignals(
-            signal = signalsData["signal"] as String,
-            confidence = (signalsData["confidence"] as Number).toDouble(),
+            signal = (signalsData["signal"] as? String) ?: "hold",
+            confidence = ((signalsData["confidence"] as? Number) ?: 0.0).toDouble(),
             rsi = (signalsData["rsi"] as? Number)?.toDouble(),
             macd = (signalsData["macd"] as? Number)?.toDouble(),
-            macdSignal = (signalsData["macd_signal"] as? Number)?.toDouble()
+            macdSignal = (signalsData["macd_signal"] as? Number)?.toDouble() ?: (signalsData["macdSignal"] as? Number)?.toDouble()
         )
     }
 
@@ -218,26 +218,56 @@ class PythonApiClient(
     }
 
     private val mapToTechnicalAnalysis: (Map<*, *>) -> TechnicalAnalysis = { data ->
-        val signalsData = data["signals"] as Map<*, *>
-        val anomaliesData = data["anomalies"] as List<*>
+        try {
+            val signalsData = (data["signals"] as? Map<*, *>) ?: emptyMap<Any, Any>()
+            val anomaliesData = (data["anomalies"] as? List<*>) ?: emptyList<Any>()
+            
+            val timestampStr = data["timestamp"] as? String
+            val timestamp = if (timestampStr != null) {
+                try {
+                    LocalDateTime.parse(timestampStr)
+                } catch (e: Exception) {
+                    logger.warn("타임스탬프 파싱 실패: {}", timestampStr, e)
+                    LocalDateTime.now()
+                }
+            } else {
+                LocalDateTime.now()
+            }
 
-        TechnicalAnalysis(
-            symbol = data["symbol"] as String,
-            currentPrice = (data["currentPrice"] as? Number ?: data["current_price"] as Number).toDouble(),
-            volume = (data["volume"] as Number).toLong(),
-            changePercent = (data["changePercent"] as? Number ?: data["change_percent"] as Number).toDouble(),
-            trend = data["trend"] as String,
-            trendStrength = (data["trendStrength"] as? Number ?: data["trend_strength"] as Number).toDouble(),
-            signals = mapToTradingSignals(signalsData),
-            anomalies = anomaliesData.map { it as Map<*, *> }.map(mapToAnomaly),
-            timestamp = LocalDateTime.parse(data["timestamp"] as String),
-            marketRegime = data["marketRegime"] as? String ?: data["market_regime"] as? String,
-            patterns = (data["patterns"] as? List<*>)?.map { it as Map<*, *> }?.map(mapToChartPattern),
-            supportResistance = (data["supportResistance"] as? Map<*, *> ?: data["support_resistance"] as? Map<*, *>)?.let(mapToSupportResistance),
-            fibonacciLevels = (data["fibonacciLevels"] as? Map<*, *> ?: data["fibonacci_levels"] as? Map<*, *>)?.let(mapToFibonacciLevels),
-            riskScore = (data["riskScore"] as? Number ?: data["risk_score"] as? Number)?.toDouble(),
-            confidence = (data["confidence"] as? Number)?.toDouble()
-        )
+            TechnicalAnalysis(
+                symbol = (data["symbol"] as? String) ?: "UNKNOWN",
+                currentPrice = ((data["currentPrice"] as? Number) ?: (data["current_price"] as? Number) ?: 0.0).toDouble(),
+                volume = ((data["volume"] as? Number) ?: 0L).toLong(),
+                changePercent = ((data["changePercent"] as? Number) ?: (data["change_percent"] as? Number) ?: 0.0).toDouble(),
+                trend = (data["trend"] as? String) ?: "neutral",
+                trendStrength = ((data["trendStrength"] as? Number) ?: (data["trend_strength"] as? Number) ?: 0.0).toDouble(),
+                signals = mapToTradingSignals(signalsData),
+                anomalies = anomaliesData.mapNotNull { 
+                    try {
+                        (it as? Map<*, *>)?.let(mapToAnomaly)
+                    } catch (e: Exception) {
+                        logger.warn("Anomaly 매핑 실패", e)
+                        null
+                    }
+                },
+                timestamp = timestamp,
+                marketRegime = data["marketRegime"] as? String ?: data["market_regime"] as? String,
+                patterns = (data["patterns"] as? List<*>)?.mapNotNull { 
+                    try {
+                        (it as? Map<*, *>)?.let(mapToChartPattern)
+                    } catch (e: Exception) {
+                        null
+                    }
+                },
+                supportResistance = (data["supportResistance"] as? Map<*, *> ?: data["support_resistance"] as? Map<*, *>)?.let(mapToSupportResistance),
+                fibonacciLevels = (data["fibonacciLevels"] as? Map<*, *> ?: data["fibonacci_levels"] as? Map<*, *>)?.let(mapToFibonacciLevels),
+                riskScore = (data["riskScore"] as? Number ?: data["risk_score"] as? Number)?.toDouble(),
+                confidence = (data["confidence"] as? Number)?.toDouble()
+            )
+        } catch (e: Exception) {
+            logger.error("TechnicalAnalysis 매핑 실패: data keys={}", data.keys, e)
+            throw e
+        }
     }
 
     val getAnalysis: (String) -> Mono<TechnicalAnalysis> = { symbol ->
@@ -310,11 +340,46 @@ class PythonApiClient(
         webClient.get()
             .uri("/api/analysis/all")
             .retrieve()
+            .onStatus({ status -> status.is4xxClientError || status.is5xxServerError }, { response ->
+                response.bodyToMono(String::class.java)
+                    .defaultIfEmpty("")
+                    .flatMap { body ->
+                        val statusCode = response.statusCode().value()
+                        logger.error("Python API 전체 분석 조회 실패 ({}): {}", statusCode, body)
+                        Mono.error<Throwable>(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "Python API 서버 오류 ($statusCode): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
+                        ))
+                    }
+            })
             .bodyToFlux(Map::class.java)
-            .map(mapToTechnicalAnalysis)
-            .timeout(java.time.Duration.ofSeconds(20))
-            .onErrorResume { error ->
-                Flux.empty()
+            .mapNotNull { dataMap ->
+                try {
+                    mapToTechnicalAnalysis(dataMap)
+                } catch (e: Exception) {
+                    logger.error("TechnicalAnalysis 매핑 실패: symbol={}, error={}", 
+                        (dataMap as? Map<*, *>)?.get("symbol"), e.message, e)
+                    null
+                }
+            }
+            .filter { it: TechnicalAnalysis? -> it != null }
+            .map { it: TechnicalAnalysis? -> it as TechnicalAnalysis }
+            .timeout(java.time.Duration.ofSeconds(60))
+            .onErrorResume { error: Throwable ->
+                logger.error("Python API 전체 분석 조회 중 오류 발생: {}", error.message, error)
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.error("Python API 전체 분석 조회 타임아웃")
+                        Flux.empty<TechnicalAnalysis>()
+                    }
+                    is com.sleekydz86.backend.global.exception.ExternalApiException -> {
+                        logger.error("Python API 전체 분석 조회 ExternalApiException: {}", error.message)
+                        Flux.empty<TechnicalAnalysis>()
+                    }
+                    else -> {
+                        logger.error("Python API 전체 분석 조회 예상치 못한 오류", error)
+                        Flux.empty<TechnicalAnalysis>()
+                    }
+                }
             }
     }
 
@@ -383,11 +448,31 @@ class PythonApiClient(
                     .build()
             }
             .retrieve()
+            .onStatus({ status -> status.is4xxClientError || status.is5xxServerError }, { response ->
+                response.bodyToMono(String::class.java)
+                    .defaultIfEmpty("")
+                    .flatMap { body ->
+                        val statusCode = response.statusCode().value()
+                        logger.error("Python API 이메일 발송 실패 ({}): toEmail={}, subject={}, error={}", 
+                            statusCode, toEmail, subject, body)
+                        Mono.error(com.sleekydz86.backend.global.exception.ExternalApiException(
+                            "이메일 발송 실패 ($statusCode): ${if (body.isNotEmpty()) body else "서버가 오류를 반환했습니다"}"
+                        ))
+                    }
+            })
             .bodyToMono(Map::class.java)
             .map { response ->
-                response["success"] as? Boolean ?: false
+                val success = response["success"] as? Boolean ?: false
+                if (success) {
+                    logger.info("이메일 발송 성공: toEmail={}, subject={}", toEmail, subject)
+                } else {
+                    logger.warn("이메일 발송 실패: toEmail={}, subject={}, response={}", toEmail, subject, response)
+                }
+                success
             }
             .onErrorResume { error ->
+                logger.error("이메일 발송 중 오류 발생: toEmail={}, subject={}, error={}", 
+                    toEmail, subject, error.message, error)
                 Mono.just(false)
             }
     }

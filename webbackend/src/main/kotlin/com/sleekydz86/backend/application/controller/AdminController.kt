@@ -268,9 +268,12 @@ class AdminController(
                         return@flatMap Mono.just(ApiResponseBuilder.failure<Map<String, Any>>("이메일 주소, 제목, 내용은 필수입니다.", null))
                     }
                     
+                    logger.info("수기 이메일 발송 시도: toEmail={}, subject={}", toEmail, subject)
+                    
                     pythonApiClient.sendEmail(toEmail, subject, body)
                         .flatMap { success ->
                             if (success) {
+                                logger.info("수기 이메일 발송 성공: toEmail={}, subject={}", toEmail, subject)
                                 notificationLogService.saveEmailLog(
                                     userEmail = toEmail,
                                     subject = subject,
@@ -284,28 +287,42 @@ class AdminController(
                                     )
                                 }
                             } else {
+                                logger.error("수기 이메일 발송 실패: toEmail={}, subject={} - Python API가 false를 반환했습니다.", toEmail, subject)
                                 notificationLogService.saveEmailLog(
                                     userEmail = toEmail,
                                     subject = subject,
                                     message = body,
                                     status = "failed",
-                                    errorMessage = "이메일 발송에 실패했습니다.",
+                                    errorMessage = "Python API가 이메일 발송에 실패했습니다. Python API 서버 로그를 확인하세요.",
                                     source = "manual"
                                 ).map {
-                                    ApiResponseBuilder.failure<Map<String, Any>>("이메일 발송에 실패했습니다.", null)
+                                    ApiResponseBuilder.failure<Map<String, Any>>(
+                                        "이메일 발송에 실패했습니다. Python API 서버 로그를 확인하세요.", 
+                                        null
+                                    )
                                 }
                             }
                         }
                         .onErrorResume { error ->
+                            logger.error("수기 이메일 발송 중 예외 발생: toEmail={}, subject={}, error={}", 
+                                toEmail, subject, error.message, error)
+                            val errorMessage = when (error) {
+                                is com.sleekydz86.backend.global.exception.ExternalApiException -> 
+                                    error.message ?: "Python API 서버 오류"
+                                else -> error.message ?: "이메일 발송 중 오류 발생"
+                            }
                             notificationLogService.saveEmailLog(
                                 userEmail = toEmail,
                                 subject = subject,
                                 message = body,
                                 status = "failed",
-                                errorMessage = error.message ?: "이메일 발송 중 오류 발생",
+                                errorMessage = errorMessage,
                                 source = "manual"
                             ).map {
-                                ApiResponseBuilder.failure<Map<String, Any>>(error.message ?: "이메일 발송에 실패했습니다.", null)
+                                ApiResponseBuilder.failure<Map<String, Any>>(
+                                    errorMessage, 
+                                    null
+                                )
                             }
                         }
                 } else {

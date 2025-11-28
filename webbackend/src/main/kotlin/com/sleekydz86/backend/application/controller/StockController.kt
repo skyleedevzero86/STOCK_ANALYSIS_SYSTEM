@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.time.Duration
+import org.slf4j.LoggerFactory
 
 @RestController
 @RequestMapping("/api/stocks")
@@ -26,6 +27,7 @@ class StockController(
     private val pythonApiClient: PythonApiClient,
     private val circuitBreakerManager: CircuitBreakerManager
 ) {
+    private val logger = LoggerFactory.getLogger(StockController::class.java)
 
     @GetMapping("/symbols")
     @Operation(summary = "사용 가능한 심볼 목록 조회", description = "분석 가능한 주식 심볼 목록을 반환합니다")
@@ -204,12 +206,22 @@ class StockController(
         @Parameter(description = "최대 반환 개수 (기본값: 3)", required = false)
         @RequestParam(defaultValue = "3") limit: Int
     ): Mono<List<Map<String, Any>>> {
+        logger.info("최고 성과 종목 조회 시작: limit={}", limit)
         return circuitBreakerManager.executeFluxWithCircuitBreaker("allAnalysis") {
             pythonApiClient.getAllAnalysis()
         }
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(60))
             .collectList()
+            .doOnNext { analysisList ->
+                logger.info("최고 성과 종목 조회: {}개 분석 데이터 수신", analysisList.size)
+            }
             .map { analysisList: List<TechnicalAnalysis> ->
+                if (analysisList.isEmpty()) {
+                    logger.warn("최고 성과 종목 조회: 분석 데이터가 비어있습니다. Python API 응답을 확인하세요.")
+                    return@map emptyList<Map<String, Any>>()
+                }
+                
+                logger.info("최고 성과 종목 점수 계산 시작: {}개 종목", analysisList.size)
                 val scored = analysisList.map { analysis: TechnicalAnalysis ->
                     val score = calculatePerformanceScore(analysis)
                     mapOf<String, Any>(
@@ -224,16 +236,25 @@ class StockController(
                         "score" to score
                     )
                 }
-                scored.sortedByDescending { item -> item["score"] as Double }.take(limit)
+                val topPerformers = scored.sortedByDescending { item -> item["score"] as Double }.take(limit)
+                logger.info("최고 성과 종목 조회 완료: {}개 반환", topPerformers.size)
+                topPerformers
             }
             .onErrorResume { error: Throwable ->
+                logger.error("최고 성과 종목 조회 실패: error={}, message={}", error.javaClass.simpleName, error.message, error)
                 when (error) {
-                    is CircuitBreakerOpenException ->
-                        Mono.error(ExternalApiException("Service temporarily unavailable", error))
-                    is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
-                    else ->
-                        Mono.error(ExternalApiException("Failed to fetch top performers", error))
+                    is CircuitBreakerOpenException -> {
+                        logger.error("Circuit Breaker가 열려있습니다. Python API 서버 상태를 확인하세요.")
+                        Mono.just(emptyList<Map<String, Any>>())
+                    }
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.error("최고 성과 종목 조회 타임아웃 (60초 초과)")
+                        Mono.just(emptyList<Map<String, Any>>())
+                    }
+                    else -> {
+                        logger.error("최고 성과 종목 조회 예상치 못한 오류", error)
+                        Mono.just(emptyList<Map<String, Any>>())
+                    }
                 }
             }
     }

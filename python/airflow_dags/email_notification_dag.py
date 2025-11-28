@@ -24,6 +24,7 @@ dag = DAG(
     default_args=default_args,
     description='주식 분석 이메일 알림 발송',
     schedule='*/1 * * * *',
+    #schedule_interval='0 9 * * 1-5',  # 평일 오전 9시
     catchup=False,
     tags=['stock', 'email', 'notification']
 )

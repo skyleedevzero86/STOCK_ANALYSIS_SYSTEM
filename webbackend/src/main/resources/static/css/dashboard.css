@@ -866,92 +866,290 @@ tr:hover {
   overflow-y: auto;
 }
 
-.sector-comparison-item {
-  margin-bottom: 20px;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
+.sector-comparison-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.sector-header {
+.sector-stocks-comparison {
+  display: flex;
+  overflow-x: auto;
+  gap: 24px;
+  padding-bottom: 16px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #60bde6 #f0f0f0;
+}
+
+.sector-stocks-comparison::-webkit-scrollbar {
+  height: 8px;
+}
+
+.sector-stocks-comparison::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.sector-stocks-comparison::-webkit-scrollbar-thumb {
+  background: #60bde6;
+  border-radius: 4px;
+}
+
+.sector-stocks-comparison::-webkit-scrollbar-thumb:hover {
+  background: #3498db;
+}
+
+.sector-table-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-width: 400px;
+  flex-shrink: 0;
+}
+
+.sector-table-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+}
+
+.sector-table-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-color: #60bde6;
+}
+
+.sector-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e8e8e8;
+}
+
+.sector-table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+}
+
+.sector-title-group {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e0e0e0;
-}
-
-.sector-name {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #222;
-  margin: 0;
   flex: 1;
 }
 
+.sector-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.sector-rank-badge.rank-1 {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+  box-shadow: 0 2px 8px rgba(243, 156, 18, 0.3);
+}
+
+.sector-rank-badge.rank-2 {
+  background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+  box-shadow: 0 2px 8px rgba(149, 165, 166, 0.3);
+}
+
+.sector-rank-badge.rank-3 {
+  background: linear-gradient(135deg, #cd7f32, #a0522d);
+  box-shadow: 0 2px 8px rgba(205, 127, 50, 0.3);
+}
+
+.sector-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.sector-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .sector-avg-change {
-  font-size: 1rem;
-  font-weight: 600;
-  padding: 4px 12px;
-  border-radius: 6px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.sector-avg-change .change-icon {
+  font-size: 0.875rem;
+  color: #e74c3c;
 }
 
 .sector-avg-change.positive {
   color: #27ae60;
-  background: #d5f4e6;
+  background: linear-gradient(135deg, #d5f4e6, #a8e6cf);
+  box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
+}
+
+.sector-avg-change.positive .change-icon {
+  color: #e74c3c;
 }
 
 .sector-avg-change.negative {
   color: #e74c3c;
-  background: #fadbd8;
+  background: linear-gradient(135deg, #fadbd8, #f1948a);
+  box-shadow: 0 2px 4px rgba(231, 76, 60, 0.2);
+}
+
+.sector-avg-change.negative .change-icon {
+  color: #e74c3c;
 }
 
 .sector-count {
   font-size: 0.875rem;
   color: #7f8c8d;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #ecf0f1;
+  border-radius: 6px;
 }
 
-.sector-stocks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.count-icon {
+  font-size: 0.75rem;
 }
 
-.sector-stock-item {
+.sector-stocks-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.sector-stocks-table thead {
+  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.sector-stocks-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 2px solid #dee2e6;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sector-stocks-table th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.sector-stocks-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.sector-stock-row {
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sector-stock-row:hover {
+  background: #f8f9fa;
+  transform: scale(1.01);
+}
+
+.sector-stock-row:last-child {
+  border-bottom: none;
+}
+
+.stock-symbol-cell {
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.stock-symbol-cell strong {
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+}
+
+.stock-price-cell {
+  padding: 12px 16px;
+  color: #34495e;
+  font-weight: 600;
+}
+
+.stock-change-cell {
+  padding: 12px 16px;
+  font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px;
-  background: #fff;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
-  transition: all 0.2s ease;
+  gap: 4px;
 }
 
-.sector-stock-item:hover {
-  background: #f0f0f0;
-  border-color: #60bde6;
+.stock-change-cell .change-icon {
+  font-size: 0.75rem;
+  color: #e74c3c;
 }
 
-.stock-symbol {
-  font-weight: 600;
-  color: #222;
-  min-width: 60px;
+.stock-change-cell.positive {
+  color: #27ae60;
 }
 
-.stock-price {
-  color: #34495e;
-  min-width: 80px;
+.stock-change-cell.positive .change-icon {
+  color: #e74c3c;
+}
+
+.stock-change-cell.negative {
+  color: #e74c3c;
+}
+
+.stock-change-cell.negative .change-icon {
+  color: #e74c3c;
+}
+
+.stock-signal-cell {
+  padding: 12px 16px;
 }
 
 .stock-change {
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  min-width: 70px;
-  text-align: right;
+  font-size: 0.875rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.stock-change .change-icon {
+  font-size: 0.75rem;
 }
 
 .stock-change.positive {
@@ -966,11 +1164,26 @@ tr:hover {
 
 .stock-signal {
   font-size: 0.75rem;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: #ecf0f1;
-  color: #7f8c8d;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stock-signal.signal-buy {
+  color: #27ae60;
+  background: #d5f4e6;
+}
+
+.stock-signal.signal-sell {
+  color: #e74c3c;
+  background: #fadbd8;
+}
+
+.stock-signal.signal-hold {
+  color: #f39c12;
+  background: #fef5e7;
 }
 
 .stock-volume {
@@ -1178,6 +1391,23 @@ tr:hover {
     height: 250px;
   }
 
+  .sector-table-card {
+    min-width: 350px;
+  }
+
+  .sector-table-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sector-stats {
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .performer-header {
     flex-direction: column;
     align-items: flex-start;
@@ -1247,6 +1477,31 @@ tr:hover {
   }
 }
 
+@media (max-width: 768px) {
+  .sector-table-card {
+    min-width: 320px;
+    padding: 16px;
+  }
+
+  .sector-name {
+    font-size: 1.125rem;
+  }
+
+  .sector-avg-change {
+    font-size: 1rem;
+    padding: 5px 12px;
+  }
+
+  .sector-stocks-table {
+    font-size: 0.85rem;
+  }
+
+  .sector-stocks-table th,
+  .sector-stocks-table td {
+    padding: 10px 12px;
+  }
+}
+
 @media (max-width: 480px) {
   .header h1 {
     font-size: 1.5rem;
@@ -1262,5 +1517,29 @@ tr:hover {
 
   .metrics {
     grid-template-columns: 1fr;
+  }
+
+  .sector-table-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .sector-stats {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sector-stocks-table {
+    font-size: 0.8rem;
+  }
+
+  .sector-stocks-table th,
+  .sector-stocks-table td {
+    padding: 8px 10px;
+  }
+
+  .stock-symbol-cell strong {
+    font-size: 0.9rem;
   }
 }

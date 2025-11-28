@@ -571,7 +571,7 @@ class StockDashboard {
             
             const startTime = performance.now();
             const response = await axios.get(`${this.apiBaseUrl}/api/stocks/top-performers?limit=5`, {
-                timeout: 30000,
+                timeout: 65000,
                 validateStatus: function (status) {
                     return status >= 200 && status < 500;
                 }
@@ -647,7 +647,7 @@ class StockDashboard {
         
         try {
             const response = await axios.get(`${this.apiBaseUrl}/api/stocks/sectors`, {
-                timeout: 15000
+                timeout: 45000
             });
 
             if (response.data && Array.isArray(response.data) && response.data.length > 0) {
@@ -660,7 +660,11 @@ class StockDashboard {
                 this.renderSectorStocksComparison(dummyData);
             }
         } catch (error) {
-            console.error("섹터 데이터 로드 실패:", error);
+            if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                console.warn("섹터 데이터 로드 타임아웃: 더미 데이터를 표시합니다.");
+            } else {
+                console.error("섹터 데이터 로드 실패:", error);
+            }
             const dummyData = this.generateDummySectorData();
             this.renderSectorBubbleChart(dummyData);
             this.renderSectorStocksComparison(dummyData);
@@ -799,36 +803,73 @@ class StockDashboard {
 
         const sortedSectors = [...sectors].sort((a, b) => (b.avgChangePercent || 0) - (a.avgChangePercent || 0));
         
-        const html = sortedSectors.map(sector => {
+        const html = sortedSectors.map((sector, index) => {
             const stocks = sector.stocks || [];
             const avgChange = sector.avgChangePercent || 0;
             const changeClass = avgChange >= 0 ? 'positive' : 'negative';
             const changeText = avgChange >= 0 ? `+${avgChange.toFixed(2)}%` : `${avgChange.toFixed(2)}%`;
+            const changeIcon = avgChange >= 0 ? '▲' : '▼';
             
-            const stocksHtml = stocks.map(stock => {
+            const stocksRows = stocks.map(stock => {
                 const stockChange = stock.changePercent || 0;
                 const stockChangeClass = stockChange >= 0 ? 'positive' : 'negative';
                 const stockChangeText = stockChange >= 0 ? `+${stockChange.toFixed(2)}%` : `${stockChange.toFixed(2)}%`;
+                const stockChangeIcon = stockChange >= 0 ? '▲' : '▼';
+                const signalClass = stock.signal === 'buy' ? 'signal-buy' : stock.signal === 'sell' ? 'signal-sell' : 'signal-hold';
+                const signalText = stock.signal === 'buy' ? '매수' : stock.signal === 'sell' ? '매도' : '보유';
                 
                 return `
-                    <div class="sector-stock-item">
-                        <span class="stock-symbol">${stock.symbol}</span>
-                        <span class="stock-price">$${stock.currentPrice?.toFixed(2) || '0.00'}</span>
-                        <span class="stock-change ${stockChangeClass}">${stockChangeText}</span>
-                        <span class="stock-signal">${stock.signal || 'hold'}</span>
-                    </div>
+                    <tr class="sector-stock-row">
+                        <td class="stock-symbol-cell">
+                            <strong>${stock.symbol}</strong>
+                        </td>
+                        <td class="stock-price-cell">
+                            $${stock.currentPrice?.toFixed(2) || '0.00'}
+                        </td>
+                        <td class="stock-change-cell ${stockChangeClass}">
+                            <span class="change-icon">${stockChangeIcon}</span>
+                            ${stockChangeText}
+                        </td>
+                        <td class="stock-signal-cell">
+                            <span class="stock-signal ${signalClass}">${signalText}</span>
+                        </td>
+                    </tr>
                 `;
             }).join('');
 
+            const rankBadge = index < 3 ? `<span class="sector-rank-badge rank-${index + 1}">${index + 1}</span>` : '';
+
             return `
-                <div class="sector-comparison-item">
-                    <div class="sector-header">
-                        <h4 class="sector-name">${sector.sector}</h4>
-                        <span class="sector-avg-change ${changeClass}">${changeText}</span>
-                        <span class="sector-count">${sector.stockCount || 0}개 종목</span>
+                <div class="sector-table-card">
+                    <div class="sector-table-header">
+                        <div class="sector-title-group">
+                            ${rankBadge}
+                            <h4 class="sector-name">${sector.sector}</h4>
+                        </div>
+                        <div class="sector-stats">
+                            <span class="sector-avg-change ${changeClass}">
+                                <span class="change-icon">${changeIcon}</span>
+                                ${changeText}
+                            </span>
+                            <span class="sector-count">
+                                ${sector.stockCount || 0}개 종목
+                            </span>
+                        </div>
                     </div>
-                    <div class="sector-stocks-list">
-                        ${stocksHtml}
+                    <div class="sector-table-wrapper">
+                        <table class="sector-stocks-table">
+                            <thead>
+                                <tr>
+                                    <th>종목</th>
+                                    <th>현재가</th>
+                                    <th>변동률</th>
+                                    <th>신호</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${stocksRows}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             `;

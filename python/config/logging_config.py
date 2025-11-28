@@ -32,6 +32,7 @@ class StructuredLogger:
         self.logger = logging.getLogger(name)
         self.log_level = level or _get_log_level_from_env()
         self.logger.setLevel(self.log_level)
+        self.logger.propagate = False
         
         if not self.logger.handlers:
             self._setup_handlers(log_file)

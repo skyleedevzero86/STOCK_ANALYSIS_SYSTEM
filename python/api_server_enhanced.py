@@ -8,6 +8,7 @@ from typing import Protocol, TypedDict, List, Dict, Optional, Union, Any
 import asyncio
 import json
 import os
+import sys
 import smtplib
 import pandas as pd
 from datetime import datetime, timedelta
@@ -158,6 +159,20 @@ class NewsCollectorProtocol(Protocol):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if sys.platform == 'win32':
+        def ignore_connection_reset_error(loop, context):
+            exception = context.get('exception')
+            if isinstance(exception, ConnectionResetError):
+                return
+            if loop is not None and hasattr(loop, 'default_exception_handler'):
+                loop.default_exception_handler(context)
+        
+        try:
+            loop = asyncio.get_running_loop()
+            loop.set_exception_handler(ignore_connection_reset_error)
+        except RuntimeError:
+            pass
+    
     logger.info("애플리케이션 시작: 서비스 초기화 중", service="api_server")
     try:
         app.state.data_collector = PerformanceOptimizedCollector(
@@ -1312,24 +1327,48 @@ async def send_email_notification(
             raise HTTPException(status_code=500, detail=error_msg)
         
         try:
-            notification_service.send_email(
-                to_email=to_email,
-                subject=subject,
-                body=body
-            )
-            
-            NotificationLogger.log_notification(
-                user_email=to_email,
-                notification_type='email',
-                message=f"[API발송] {subject}\n{body}",
-                status="sent",
-                error_message=None
-            )
-            
-            return EmailNotificationResponse(
-                success=True,
-                message="이메일이 성공적으로 발송되었습니다."
-            )
+            import asyncio
+            try:
+                success = await asyncio.to_thread(
+                    notification_service.send_email,
+                    to_email=to_email,
+                    subject=subject,
+                    body=body
+                )
+                
+                if success:
+                    NotificationLogger.log_notification(
+                        user_email=to_email,
+                        notification_type='email',
+                        message=f"[API발송] {subject}\n{body}",
+                        status="sent",
+                        error_message=None
+                    )
+                    
+                    return EmailNotificationResponse(
+                        success=True,
+                        message="이메일이 성공적으로 발송되었습니다."
+                    )
+                else:
+                    error_msg = "이메일 발송에 실패했습니다."
+                    logger.error("이메일 발송 실패: success=False", to_email=to_email, subject=subject)
+                    NotificationLogger.log_notification(
+                        user_email=to_email,
+                        notification_type='email',
+                        message=f"[API발송] {subject}\n{body}",
+                        status="failed",
+                        error_message=error_msg
+                    )
+                    raise HTTPException(status_code=500, detail=error_msg)
+            except EmailNotificationError as e:
+                raise
+            except Exception as e:
+                logger.error("이메일 발송 중 예상치 못한 오류", exception=e, to_email=to_email, exc_info=True)
+                raise EmailNotificationError(
+                    f"이메일 발송 실패: {str(e)}",
+                    error_code="EMAIL_SEND_FAILED",
+                    cause=e
+                ) from e
         except EmailNotificationError as e:
             error_msg = f"이메일 발송 실패: {str(e)}"
             logger.error("이메일 발송 오류", exception=e, to_email=to_email, smtp_server=smtp_server, error_code=getattr(e, 'error_code', None))
@@ -1896,7 +1935,14 @@ async def get_sectors_analysis(
             "NFLX": "Communication Services"
         }
         
-        results = await api.get_all_symbols_analysis(basic_analyzer, enhanced_collector)
+        try:
+            results = await asyncio.wait_for(
+                api.get_all_symbols_analysis(basic_analyzer, enhanced_collector),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("섹터 분석 타임아웃: 전체 종목 분석이 30초를 초과했습니다. 더미 데이터를 반환합니다.")
+            results = []
         sectors = defaultdict(list)
         
         for result in results:

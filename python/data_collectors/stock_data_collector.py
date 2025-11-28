@@ -110,11 +110,11 @@ class StockDataCollector:
                 
                 self._wait_if_needed(source_name)
                 
-                logger.info("데이터 수집 시도", symbol=symbol, source=source_name, component="StockDataCollector")
+                logger.debug("데이터 수집 시도", symbol=symbol, source=source_name, component="StockDataCollector")
                 result = fetch_func(symbol)
                 
                 if result and result.get('price', 0) > 0:
-                    logger.info("데이터 수집 성공", symbol=symbol, source=source_name, price=result['price'], component="StockDataCollector")
+                    logger.debug("데이터 수집 성공", symbol=symbol, source=source_name, price=result['price'], component="StockDataCollector")
                     if source_name in self.rate_limit_backoff:
                         self.rate_limit_backoff[source_name] = 0
                     return result

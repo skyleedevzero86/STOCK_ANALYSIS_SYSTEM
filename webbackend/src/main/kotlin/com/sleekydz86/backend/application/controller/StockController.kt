@@ -210,7 +210,7 @@ class StockController(
         return circuitBreakerManager.executeFluxWithCircuitBreaker("allAnalysis") {
             pythonApiClient.getAllAnalysis()
         }
-            .timeout(Duration.ofSeconds(60))
+            .timeout(Duration.ofSeconds(70))
             .collectList()
             .doOnNext { analysisList ->
                 logger.info("최고 성과 종목 조회: {}개 분석 데이터 수신", analysisList.size)
@@ -294,13 +294,15 @@ class StockController(
         return circuitBreakerManager.executeWithCircuitBreaker("sectors") {
             pythonApiClient.getSectorsAnalysis()
         }
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(50))
             .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->
                         Mono.error(ExternalApiException("Service temporarily unavailable", error))
-                    is java.util.concurrent.TimeoutException ->
-                        Mono.error(ExternalApiException("Request timeout", error))
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("섹터 분석 타임아웃: 더미 데이터를 반환합니다.")
+                        Mono.just(emptyList<Map<String, Any>>())
+                    }
                     else ->
                         Mono.error(ExternalApiException("Failed to fetch sectors analysis", error))
                 }

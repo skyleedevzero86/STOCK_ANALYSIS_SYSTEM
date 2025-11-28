@@ -38,7 +38,7 @@ class StockAnalysisService(
         return stockRepository.getAllAnalysis()
             .withErrorHandling()
             .withLogging("Analysis")
-            .withTimeout()
+            .timeout(Duration.ofSeconds(90))
     }
 
     fun getStockHistoricalData(symbol: String, days: Int): Mono<HistoricalData> {
@@ -56,8 +56,23 @@ class StockAnalysisService(
     }
 
     fun getRealtimeAnalysisStream(): Flux<TechnicalAnalysis> {
+        val logger = org.slf4j.LoggerFactory.getLogger(StockAnalysisService::class.java)
         return Flux.interval(Duration.ofSeconds(5))
-            .flatMap { getAllStockAnalysis() }
+            .flatMap { 
+                getAllStockAnalysis()
+                    .onErrorResume { error ->
+                        when (error) {
+                            is java.util.concurrent.TimeoutException -> {
+                                logger.warn("개별 분석 스트림 타임아웃 (계속 진행): ${error.message}")
+                            }
+                            else -> {
+                                logger.warn("개별 분석 스트림 오류 (계속 진행): ${error.message}")
+                            }
+                        }
+                        Flux.empty()
+                    }
+            }
+            .onBackpressureLatest()
             .withErrorHandling()
             .withLogging("RealtimeStream")
     }

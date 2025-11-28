@@ -72,14 +72,41 @@ class NotificationService:
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
             
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.starttls()
-            server.login(user, password)
-            server.send_message(msg)
-            server.quit()
-            
-            logger.info("이메일 발송 성공", to_email=to_email, component="NotificationService")
-            return True
+            server = None
+            try:
+                logger.info("SMTP 서버 연결 시도", to_email=to_email, smtp_server=smtp_server, smtp_port=smtp_port, component="NotificationService")
+                server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                logger.info("SMTP 서버 연결 성공", to_email=to_email, component="NotificationService")
+                
+                logger.info("STARTTLS 시작", to_email=to_email, component="NotificationService")
+                server.starttls()
+                logger.info("STARTTLS 완료", to_email=to_email, component="NotificationService")
+                
+                logger.info("SMTP 로그인 시도", to_email=to_email, user=user, component="NotificationService")
+                server.login(user, password)
+                logger.info("SMTP 로그인 성공", to_email=to_email, component="NotificationService")
+                
+                logger.info("이메일 발송 시도", to_email=to_email, subject=subject, component="NotificationService")
+                failed_recipients = server.send_message(msg)
+                logger.info("send_message 반환값", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
+                
+                if failed_recipients:
+                    logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
+                    raise EmailNotificationError(
+                        f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
+                        error_code="EMAIL_SEND_FAILED",
+                        cause=None
+                    )
+                
+                logger.info("이메일 발송 성공 (SMTP 서버 응답 확인됨)", to_email=to_email, subject=subject, failed_recipients=failed_recipients, component="NotificationService")
+                return True
+            finally:
+                if server:
+                    try:
+                        server.quit()
+                        logger.debug("SMTP 서버 연결 종료", to_email=to_email, component="NotificationService")
+                    except Exception as e:
+                        logger.warning("SMTP 서버 종료 중 오류 발생 (무시됨)", exception=e, component="NotificationService")
             
         except smtplib.SMTPAuthenticationError as e:
             logger.error("이메일 인증 실패", to_email=to_email, exception=e, component="NotificationService")

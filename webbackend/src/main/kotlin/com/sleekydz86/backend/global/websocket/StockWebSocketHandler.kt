@@ -44,12 +44,16 @@ class StockWebSocketHandler(
 
                         Flux.interval(Duration.ofSeconds(5))
                             .map { createErrorMessage("Analysis stream error: ${error.message ?: error.javaClass.simpleName}") }
+                            .onBackpressureLatest()
+                            .take(Duration.ofHours(1))
                     }
             } catch (e: Exception) {
                 logger.error("분석 스트림 생성 실패: session=${session.id}", e)
 
                 Flux.interval(Duration.ofSeconds(10))
                     .map { createErrorMessage("Analysis service unavailable: ${e.message ?: e.javaClass.simpleName}") }
+                    .onBackpressureLatest()
+                    .take(Duration.ofHours(1))
             }
 
             val messageStream = Flux.concat(

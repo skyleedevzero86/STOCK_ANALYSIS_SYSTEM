@@ -3,7 +3,7 @@ if (!localStorage.getItem("adminToken")) {
 }
 
 let currentHistoryPage = 0;
-let historyPageSize = 100;
+let historyPageSize = 20;
 let historyTotalPages = 0;
 let historyTotalCount = 0;
 let subscriptionId = null;
@@ -24,8 +24,20 @@ document.addEventListener("DOMContentLoaded", function() {
         return;
     }
 
-    document.getElementById("userEmailDisplay").textContent = `이메일: ${userEmail}`;
-    document.getElementById("historyTitle").textContent = `${userEmail} - 이메일 발송 이력`;
+    const userEmailDisplay = document.getElementById("userEmailDisplay");
+    if (userEmailDisplay) {
+        userEmailDisplay.textContent = `이메일: ${userEmail}`;
+    }
+    
+    const historyTitle = document.getElementById("historyTitle");
+    if (historyTitle) {
+        historyTitle.textContent = `${userEmail} - 이메일 발송 이력`;
+    }
+    
+    const pageSizeSelect = document.getElementById("pageSizeSelect");
+    if (pageSizeSelect) {
+        pageSizeSelect.value = historyPageSize.toString();
+    }
     
     loadActualEmail();
     loadEmailHistory(0);
@@ -72,10 +84,14 @@ async function loadEmailHistory(page = 0) {
     }
 
     const content = document.getElementById("emailHistoryContent");
+    if (!content) {
+        console.error("emailHistoryContent 요소를 찾을 수 없습니다.");
+        return;
+    }
     content.innerHTML = '<div class="loading">데이터를 불러오는 중...</div>';
 
     try {
-        const response = await fetch(`/api/admin/subscriptions/${subscriptionId}/email-history?page=${page}&size=${Math.min(historyPageSize, 1000)}`, {
+        const response = await fetch(`/api/admin/subscriptions/${subscriptionId}/email-history?page=${page}&size=${historyPageSize}`, {
             headers: {
                 Authorization: adminToken,
             },
@@ -98,7 +114,7 @@ async function loadEmailHistory(page = 0) {
                 displayEmailHistory(result.data.logs);
                 updateHistoryPagination();
             } else {
-                content.innerHTML = '<div class="loading">발송 이력이 없습니다.</div>';
+                content.innerHTML = '<div class="loading">발송 이력이 없습니다.</div><div id="historyPagination"></div>';
                 updateHistoryPagination();
             }
         } else {
@@ -124,6 +140,10 @@ async function loadEmailHistory(page = 0) {
 
 function displayEmailHistory(logs) {
     const content = document.getElementById("emailHistoryContent");
+    if (!content) {
+        console.error("emailHistoryContent 요소를 찾을 수 없습니다.");
+        return;
+    }
 
     if (!logs || logs.length === 0) {
         content.innerHTML = '<div class="loading">발송 이력이 없습니다.</div>';
@@ -179,42 +199,44 @@ function updateHistoryPagination() {
     const pagination = document.getElementById("historyPagination");
     if (!pagination) return;
 
-    let paginationHTML = '<div class="pagination">';
+    let paginationHTML = '<div class="pagination" style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 20px; padding: 20px; flex-wrap: wrap;">';
     
     if (historyTotalPages <= 1) {
-        paginationHTML += `<span class="page-info">총 ${historyTotalCount}건</span>`;
+        paginationHTML += `<span class="page-info" style="margin-left: 16px; color: #666; font-size: 0.875rem;">총 ${historyTotalCount}건</span>`;
     } else {
         if (currentHistoryPage > 0) {
-            paginationHTML += `<button onclick="loadEmailHistory(${currentHistoryPage - 1})" class="page-btn">이전</button>`;
+            paginationHTML += `<button onclick="loadEmailHistory(${currentHistoryPage - 1})" class="page-btn" style="padding: 8px 16px; border: 1px solid #e0e0e0; background: #fff; color: #2f456e; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.3s ease;">이전</button>`;
         }
 
         const startPage = Math.max(0, currentHistoryPage - 2);
         const endPage = Math.min(historyTotalPages - 1, currentHistoryPage + 2);
 
         if (startPage > 0) {
-            paginationHTML += `<button onclick="loadEmailHistory(0)" class="page-btn">1</button>`;
+            paginationHTML += `<button onclick="loadEmailHistory(0)" class="page-btn" style="padding: 8px 16px; border: 1px solid #e0e0e0; background: #fff; color: #2f456e; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.3s ease;">1</button>`;
             if (startPage > 1) {
-                paginationHTML += `<span class="page-ellipsis">...</span>`;
+                paginationHTML += `<span class="page-ellipsis" style="padding: 8px 4px; color: #666;">...</span>`;
             }
         }
 
         for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === currentHistoryPage;
             paginationHTML += `<button onclick="loadEmailHistory(${i})" 
-                                       class="page-btn ${i === currentHistoryPage ? 'active' : ''}">${i + 1}</button>`;
+                                       class="page-btn ${isActive ? 'active' : ''}" 
+                                       style="padding: 8px 16px; border: 1px solid ${isActive ? '#2f456e' : '#e0e0e0'}; background: ${isActive ? '#2f456e' : '#fff'}; color: ${isActive ? '#fff' : '#2f456e'}; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.3s ease;">${i + 1}</button>`;
         }
 
         if (endPage < historyTotalPages - 1) {
             if (endPage < historyTotalPages - 2) {
-                paginationHTML += `<span class="page-ellipsis">...</span>`;
+                paginationHTML += `<span class="page-ellipsis" style="padding: 8px 4px; color: #666;">...</span>`;
             }
-            paginationHTML += `<button onclick="loadEmailHistory(${historyTotalPages - 1})" class="page-btn">${historyTotalPages}</button>`;
+            paginationHTML += `<button onclick="loadEmailHistory(${historyTotalPages - 1})" class="page-btn" style="padding: 8px 16px; border: 1px solid #e0e0e0; background: #fff; color: #2f456e; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.3s ease;">${historyTotalPages}</button>`;
         }
 
         if (currentHistoryPage < historyTotalPages - 1) {
-            paginationHTML += `<button onclick="loadEmailHistory(${currentHistoryPage + 1})" class="page-btn">다음</button>`;
+            paginationHTML += `<button onclick="loadEmailHistory(${currentHistoryPage + 1})" class="page-btn" style="padding: 8px 16px; border: 1px solid #e0e0e0; background: #fff; color: #2f456e; border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 500; transition: all 0.3s ease;">다음</button>`;
         }
 
-        paginationHTML += `<span class="page-info">총 ${historyTotalCount}건 (${currentHistoryPage + 1}/${historyTotalPages} 페이지)</span>`;
+        paginationHTML += `<span class="page-info" style="margin-left: 16px; color: #666; font-size: 0.875rem;">총 ${historyTotalCount}건 (${currentHistoryPage + 1}/${historyTotalPages} 페이지)</span>`;
     }
 
     paginationHTML += '</div>';
@@ -224,6 +246,10 @@ function updateHistoryPagination() {
 
 function showError(message) {
     const content = document.getElementById("emailHistoryContent");
+    if (!content) {
+        console.error("emailHistoryContent 요소를 찾을 수 없습니다.");
+        return;
+    }
     content.innerHTML = `<div class="error">${message}</div>`;
 }
 

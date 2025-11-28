@@ -17,13 +17,28 @@
         <div class="header-actions">
           <nav class="nav-menu">
             <a href="/" class="nav-item nav-link">홈</a>
-            <a href="/email-subscription.html" class="nav-item nav-link">구독신청</a>
+            <a href="/email-subscription.html" class="nav-item nav-link"
+              >구독신청</a
+            >
             <a href="/admin-login.html" class="nav-item nav-link">로그인</a>
-            <a href="/template-management.html" class="nav-item nav-link">템플릿보기</a>
+            <a href="/template-management.html" class="nav-item nav-link"
+              >템플릿보기</a
+            >
             <a href="/api-view.html" class="nav-item nav-link">API보기</a>
-            <a href="/admin-dashboard.html" class="nav-item nav-link">관리자대시보드</a>
-            <a href="/contact-inquiry-list.html" class="nav-item nav-link">문의사항</a>
-            <button class="icon-btn btn-logout-nav" onclick="logout()" title="로그아웃" style="display: none;">로그아웃</button>
+            <a href="/admin-dashboard.html" class="nav-item nav-link"
+              >관리자대시보드</a
+            >
+            <a href="/contact-inquiry-list.html" class="nav-item nav-link"
+              >문의사항</a
+            >
+            <button
+              class="icon-btn btn-logout-nav"
+              onclick="logout()"
+              title="로그아웃"
+              style="display: none"
+            >
+              로그아웃
+            </button>
           </nav>
         </div>
       </div>
@@ -45,9 +60,10 @@
                   font-size: 14px;
                 "
               >
-                <option value="20">20개씩</option>
-                <option value="100" selected>100개씩</option>
-                <option value="1000">1000개씩</option>
+                <option value="10">10개씩</option>
+                <option value="20" selected>20개씩</option>
+                <option value="50">50개씩</option>
+                <option value="100">100개씩</option>
               </select>
               <button
                 onclick="loadEmailHistory(currentHistoryPage)"
@@ -104,7 +120,10 @@
             </div>
           </div>
 
-          <div class="subscriptions-table" style="background: #fff; border-radius: 16px; padding: 24px;">
+          <div
+            class="subscriptions-table"
+            style="background: #fff; border-radius: 16px; padding: 24px"
+          >
             <div class="table-content">
               <div id="emailHistoryContent">
                 <div class="loading">데이터를 불러오는 중...</div>

@@ -363,20 +363,37 @@ class PythonApiClient(
             }
             .filter { it: TechnicalAnalysis? -> it != null }
             .map { it: TechnicalAnalysis? -> it as TechnicalAnalysis }
-            .timeout(java.time.Duration.ofSeconds(60))
+            .timeout(java.time.Duration.ofSeconds(90))
             .onErrorResume { error: Throwable ->
-                logger.error("Python API 전체 분석 조회 중 오류 발생: {}", error.message, error)
-                when (error) {
-                    is java.util.concurrent.TimeoutException -> {
-                        logger.error("Python API 전체 분석 조회 타임아웃")
+                val cause = error.cause
+                when {
+                    error is java.util.concurrent.TimeoutException -> {
+                        logger.warn("Python API 전체 분석 조회 타임아웃 (90초 초과): 빈 결과 반환")
                         Flux.empty<TechnicalAnalysis>()
                     }
-                    is com.sleekydz86.backend.global.exception.ExternalApiException -> {
-                        logger.error("Python API 전체 분석 조회 ExternalApiException: {}", error.message)
+                    error is com.sleekydz86.backend.global.exception.ExternalApiException -> {
+                        logger.warn("Python API 전체 분석 조회 ExternalApiException: {}", error.message)
+                        Flux.empty<TechnicalAnalysis>()
+                    }
+                    error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        when {
+                            cause is java.net.ConnectException || 
+                            error.message?.contains("Connection refused") == true -> {
+                                logger.debug("Python API 서버가 실행되지 않음 (연결 거부): 빈 결과 반환. Python API 서버를 시작하세요: python start_python_api.py")
+                                Flux.empty<TechnicalAnalysis>()
+                            }
+                            else -> {
+                                logger.warn("Python API 전체 분석 조회 네트워크 오류: {}", error.message)
+                                Flux.empty<TechnicalAnalysis>()
+                            }
+                        }
+                    }
+                    error is java.net.ConnectException -> {
+                        logger.debug("Python API 서버 연결 거부: 빈 결과 반환. Python API 서버를 시작하세요: python start_python_api.py")
                         Flux.empty<TechnicalAnalysis>()
                     }
                     else -> {
-                        logger.error("Python API 전체 분석 조회 예상치 못한 오류", error)
+                        logger.warn("Python API 전체 분석 조회 오류: {}", error.message)
                         Flux.empty<TechnicalAnalysis>()
                     }
                 }
@@ -439,7 +456,19 @@ class PythonApiClient(
     }
 
     fun sendEmail(toEmail: String, subject: String, content: String): Mono<Boolean> {
-        return webClient.post()
+        val emailHttpClient = HttpClient.create()
+            .responseTimeout(Duration.ofSeconds(90))
+            .doOnConnected { connection ->
+                connection.addHandlerLast(io.netty.handler.timeout.ReadTimeoutHandler(90))
+                connection.addHandlerLast(io.netty.handler.timeout.WriteTimeoutHandler(90))
+            }
+        
+        val emailWebClient = WebClient.builder()
+            .baseUrl(baseUrl)
+            .clientConnector(ReactorClientHttpConnector(emailHttpClient))
+            .build()
+        
+        return emailWebClient.post()
             .uri { uriBuilder ->
                 uriBuilder.path("/api/notifications/email")
                     .queryParam("to_email", toEmail)
@@ -461,6 +490,7 @@ class PythonApiClient(
                     }
             })
             .bodyToMono(Map::class.java)
+            .timeout(Duration.ofSeconds(90))
             .map { response ->
                 val success = response["success"] as? Boolean ?: false
                 if (success) {
@@ -471,8 +501,16 @@ class PythonApiClient(
                 success
             }
             .onErrorResume { error ->
-                logger.error("이메일 발송 중 오류 발생: toEmail={}, subject={}, error={}", 
-                    toEmail, subject, error.message, error)
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.error("이메일 발송 타임아웃: toEmail={}, subject={}, timeout=90초", 
+                            toEmail, subject, error)
+                    }
+                    else -> {
+                        logger.error("이메일 발송 중 오류 발생: toEmail={}, subject={}, error={}", 
+                            toEmail, subject, error.message, error)
+                    }
+                }
                 Mono.just(false)
             }
     }
@@ -959,9 +997,16 @@ class PythonApiClient(
             .bodyToFlux(Map::class.java)
             .map { it as Map<String, Any> }
             .collectList()
-            .timeout(java.time.Duration.ofSeconds(30))
+            .timeout(java.time.Duration.ofSeconds(50))
             .onErrorResume { error ->
-                logger.warn("섹터별 분석 조회 실패: {}", error.message)
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("섹터별 분석 조회 타임아웃: 더미 데이터를 반환합니다.")
+                    }
+                    else -> {
+                        logger.warn("섹터별 분석 조회 실패: {}", error.message)
+                    }
+                }
                 Mono.just(emptyList())
             }
     }

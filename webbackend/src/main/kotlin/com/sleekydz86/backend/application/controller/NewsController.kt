@@ -45,7 +45,7 @@ class NewsController(
         return circuitBreakerManager.executeWithCircuitBreaker("news") {
             pythonApiClient.getStockNews(symbol.uppercase(), includeKorean, false)
         }
-            .timeout(Duration.ofSeconds(20))
+            .timeout(Duration.ofSeconds(45))
             .flatMap { newsList ->
                 if (autoTranslate && deepLTranslationService.isAvailable() && newsList.isNotEmpty()) {
                     translateNewsWithDeepL(newsList)

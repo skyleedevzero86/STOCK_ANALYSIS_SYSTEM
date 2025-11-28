@@ -1519,6 +1519,10 @@ tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .sector-table-card {
+    min-width: 280px;
+  }
+
   .sector-table-header {
     flex-direction: column;
     gap: 10px;

@@ -11,6 +11,11 @@
 
 **Stock Analysis System**은 실시간 주식 데이터 수집, 고급 기술적 분석, AI 기반 인사이트 생성, 그리고 종합적인 알림 시스템을 제공하는 마이크로서비스 기반의 종합 투자 플랫폼입니다.
 
+## 화면 
+<img width="1888" height="951" alt="image" src="https://github.com/user-attachments/assets/eb7ac3d0-dcd4-4fa3-9ada-d07a06b2e06d" /><br/>
+<img width="1268" height="953" alt="image" src="https://github.com/user-attachments/assets/088e7d3d-f009-4006-81c2-2bbe06647323" /><br/>
+
+
 ### 핵심 특징
 
 - **실시간 데이터 처리**: Yahoo Finance, Alpha Vantage API를 통한 실시간 주가 데이터 수집

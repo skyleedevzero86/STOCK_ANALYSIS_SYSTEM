@@ -57,7 +57,8 @@ def get_sms_subscribers():
 def get_stock_analysis():
     try:
         python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-        response = requests.get(f'http://{python_api_host}:9000/api/analysis/all', timeout=30)
+        python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+        response = requests.get(f'http://{python_api_host}:{python_api_port}/api/analysis/all', timeout=30)
         if response.status_code == 200:
             data = response.json()
             logging.info(f"분석 데이터 조회 성공: {len(data)}개 종목")
@@ -81,46 +82,141 @@ def get_stock_analysis():
         return []
 
 def send_email_notification(to_email, subject, body, source="airflow"):
+    python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
+    python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+    backend_host = os.getenv('BACKEND_HOST', 'localhost')
+    
+    # 여러 포트 시도 (8001, 9000)
+    ports_to_try = [python_api_port, '9000', '8001']
+    if python_api_port in ports_to_try:
+        ports_to_try.remove(python_api_port)
+    ports_to_try.insert(0, python_api_port)
+    
+    last_error = None
+    for port in ports_to_try:
+        try:
+            url = f'http://{python_api_host}:{port}/api/notifications/email'
+            logging.info(f"이메일 발송 시도: {url} (수신자: {to_email})")
+            
+            response = requests.post(url, 
+                                   params={
+                                       'to_email': to_email,
+                                       'subject': subject,
+                                       'body': body
+                                   },
+                                   timeout=10)
+            
+            logging.info(f"Python API 응답: HTTP {response.status_code}")
+            
+            if response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    if response_data.get('success'):
+                        logging.info(f"이메일 발송 성공: {to_email}")
+                        
+                        # 백엔드에 로그 저장 시도
+                        try:
+                            log_response = requests.post(
+                                f'http://{backend_host}:8080/api/admin/save-notification-log',
+                                json={
+                                    'userEmail': to_email,
+                                    'subject': subject,
+                                    'message': body,
+                                    'status': 'sent',
+                                    'source': source,
+                                    'notificationType': 'email'
+                                },
+                                timeout=5
+                            )
+                            if log_response.status_code == 200:
+                                logging.info(f"이메일 발송 로그 저장 성공: {to_email}")
+                            else:
+                                logging.warning(f"이메일 발송 로그 저장 실패: HTTP {log_response.status_code}")
+                        except Exception as e:
+                            logging.warning(f"이메일 발송 로그 저장 실패: {str(e)}")
+                        
+                        return True
+                    else:
+                        error_msg = response_data.get('message', '알 수 없는 오류')
+                        logging.error(f"이메일 발송 실패 (API 응답): {error_msg}")
+                        last_error = error_msg
+                except json.JSONDecodeError:
+                    logging.error(f"이메일 발송 실패: 응답 파싱 오류 - {response.text[:200]}")
+                    last_error = "응답 파싱 오류"
+            else:
+                error_msg = f"HTTP {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('detail', error_data.get('message', error_msg))
+                except:
+                    error_msg = f"HTTP {response.status_code}: {response.text[:200]}"
+                
+                logging.error(f"이메일 발송 실패 ({to_email}): {error_msg}")
+                last_error = error_msg
+                
+                # 실패 로그도 백엔드에 저장 시도
+                try:
+                    requests.post(
+                        f'http://{backend_host}:8080/api/admin/save-notification-log',
+                        json={
+                            'userEmail': to_email,
+                            'subject': subject,
+                            'message': body,
+                            'status': 'failed',
+                            'source': source,
+                            'notificationType': 'email',
+                            'errorMessage': error_msg
+                        },
+                        timeout=5
+                    )
+                except:
+                    pass
+                
+        except requests.exceptions.ConnectionError as e:
+            logging.warning(f"Python API 서버 연결 실패 ({python_api_host}:{port}): {str(e)}")
+            last_error = f"연결 실패: {str(e)}"
+            continue
+        except requests.exceptions.Timeout as e:
+            logging.warning(f"Python API 서버 타임아웃 ({python_api_host}:{port}): {str(e)}")
+            last_error = f"타임아웃: {str(e)}"
+            continue
+        except Exception as e:
+            logging.error(f"이메일 발송 중 예상치 못한 오류 ({python_api_host}:{port}): {str(e)}")
+            import traceback
+            logging.error(traceback.format_exc())
+            last_error = f"예상치 못한 오류: {str(e)}"
+            continue
+    
+    # 모든 포트 시도 실패
+    logging.error(f"이메일 발송 완전 실패 ({to_email}): 모든 포트 시도 실패. 마지막 오류: {last_error}")
+    
+    # 실패 로그 저장 시도
     try:
-        python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-        backend_host = os.getenv('BACKEND_HOST', 'localhost')
-        
-        response = requests.post(f'http://{python_api_host}:9000/api/notifications/email', 
-                               params={
-                                   'to_email': to_email,
-                                   'subject': subject,
-                                   'body': body
-                               },
-                               timeout=10)
-        
-        if response.status_code == 200:
-            try:
-                requests.post(
-                    f'http://{backend_host}:8080/api/admin/save-notification-log',
-                    json={
-                        'userEmail': to_email,
-                        'subject': subject,
-                        'message': body,
-                        'status': 'sent',
-                        'source': source,
-                        'notificationType': 'email'
-                    },
-                    timeout=5
-                )
-            except Exception as e:
-                logging.warning(f"이메일 발송 로그 저장 실패: {str(e)}")
-        
-        return response.status_code == 200
-    except Exception as e:
-        logging.error(f"이메일 발송 실패 ({to_email}): {str(e)}")
-        return False
+        requests.post(
+            f'http://{backend_host}:8080/api/admin/save-notification-log',
+            json={
+                'userEmail': to_email,
+                'subject': subject,
+                'message': body,
+                'status': 'failed',
+                'source': source,
+                'notificationType': 'email',
+                'errorMessage': f"모든 포트 시도 실패: {last_error}"
+            },
+            timeout=5
+        )
+    except:
+        pass
+    
+    return False
 
 def send_sms_notification(to_phone, message, source="airflow", user_email=None):
     try:
         python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
+        python_api_port = os.getenv('PYTHON_API_PORT', '8001')
         backend_host = os.getenv('BACKEND_HOST', 'localhost')
         
-        response = requests.post(f'http://{python_api_host}:9000/api/notifications/sms', 
+        response = requests.post(f'http://{python_api_host}:{python_api_port}/api/notifications/sms', 
                                params={
                                    'to_phone': to_phone,
                                    'message': message
@@ -276,20 +372,52 @@ def check_daily_sms_sent_today(phone):
         return False
 
 def send_daily_analysis_emails():
+    logging.info("=" * 60)
     logging.info("일일 분석 이메일 발송 시작")
+    logging.info("=" * 60)
+    
+    current_time = datetime.now()
+    logging.info(f"현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    daily_email_hour = 9
+    daily_email_minute = 0
+    
+    if current_time.hour != daily_email_hour or current_time.minute != daily_email_minute:
+        logging.info(f"일일 분석 메일 발송 시간이 아닙니다. (현재: {current_time.hour}시 {current_time.minute}분, 발송 시간: {daily_email_hour}시 {daily_email_minute}분)")
+        return
+    
+    # 환경 변수 확인
+    python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
+    python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+    backend_host = os.getenv('BACKEND_HOST', 'localhost')
+    logging.info(f"Python API: {python_api_host}:{python_api_port}")
+    logging.info(f"Backend: {backend_host}:8080")
     
     subscribers = get_subscribers()
+    logging.info(f"구독자 수: {len(subscribers)}명")
+    
     if not subscribers:
-        logging.info("구독자가 없습니다.")
+        logging.warning("구독자가 없습니다. 이메일 발송을 중단합니다.")
+        return
+    
+    # 이메일 동의한 구독자 필터링
+    email_consent_subscribers = [s for s in subscribers if s.get('isEmailConsent', False)]
+    logging.info(f"이메일 동의한 구독자 수: {len(email_consent_subscribers)}명")
+    
+    if not email_consent_subscribers:
+        logging.warning("이메일 동의한 구독자가 없습니다. 이메일 발송을 중단합니다.")
         return
     
     analysis_data = get_stock_analysis()
+    logging.info(f"분석 데이터 수: {len(analysis_data)}개")
     
     if not analysis_data:
         logging.warning("분석 데이터가 없습니다. 일일 분석 메일을 발송하지 않습니다.")
         return
     
     valid_stocks = [s for s in analysis_data if s.get('currentPrice', 0) > 0]
+    logging.info(f"유효한 주식 데이터 수: {len(valid_stocks)}개")
+    
     if not valid_stocks:
         logging.warning("유효한 주식 데이터가 없습니다. 일일 분석 메일을 발송하지 않습니다.")
         return
@@ -302,14 +430,12 @@ def send_daily_analysis_emails():
     subject = f"주식 분석 리포트 - {datetime.now().strftime('%Y년 %m월 %d일')}"
     
     success_count = 0
-    for subscriber in subscribers:
-        is_email_consent = subscriber.get('isEmailConsent', False)
-        if not is_email_consent:
-            logging.info(f"이메일 동의하지 않은 구독자: {subscriber.get('email')}")
-            continue
-        
+    fail_count = 0
+    
+    for subscriber in email_consent_subscribers:
         email = subscriber.get('email')
         if not email:
+            logging.warning(f"이메일 주소가 없는 구독자: {subscriber.get('name', 'N/A')}")
             continue
         
         if check_daily_email_sent_today(email):
@@ -319,16 +445,28 @@ def send_daily_analysis_emails():
         name = subscriber.get('name', '고객')
         personalized_content = f"안녕하세요, {name}님!\n\n{email_content}"
         
+        logging.info(f"이메일 발송 시도: {email}")
         if send_email_notification(email, subject, personalized_content):
             success_count += 1
-            logging.info(f"이메일 발송 성공: {email}")
+            logging.info(f"✓ 이메일 발송 성공: {email}")
         else:
-            logging.error(f"이메일 발송 실패: {email}")
+            fail_count += 1
+            logging.error(f"✗ 이메일 발송 실패: {email}")
     
-    logging.info(f"이메일 발송 완료: {success_count}/{len(subscribers)}")
+    logging.info("=" * 60)
+    logging.info(f"이메일 발송 완료: 성공 {success_count}건, 실패 {fail_count}건 (전체 {len(email_consent_subscribers)}명)")
+    logging.info("=" * 60)
 
 def send_daily_analysis_sms():
     logging.info("일일 분석 SMS 발송 시작")
+    
+    current_time = datetime.now()
+    daily_sms_hour = 9
+    daily_sms_minute = 0
+    
+    if current_time.hour != daily_sms_hour or current_time.minute != daily_sms_minute:
+        logging.info(f"일일 분석 SMS 발송 시간이 아닙니다. (현재: {current_time.hour}시 {current_time.minute}분, 발송 시간: {daily_sms_hour}시 {daily_sms_minute}분)")
+        return
     
     subscribers = get_sms_subscribers()
     if not subscribers:

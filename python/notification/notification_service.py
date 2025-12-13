@@ -75,39 +75,39 @@ class NotificationService:
             
             last_error = None
             for attempt in range(1, max_retries + 1):
-                server = None
-                try:
+            server = None
+            try:
                     if attempt > 1:
                         delay = min(2 ** (attempt - 1), 10)
                         logger.info("이메일 발송 재시도", to_email=to_email, attempt=attempt, delay=delay, component="NotificationService")
                         time.sleep(delay)
                     
                     logger.info("SMTP 서버 연결 시도", to_email=to_email, smtp_server=smtp_server, smtp_port=smtp_port, attempt=attempt, component="NotificationService")
-                    server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
                     logger.info("SMTP 서버 연결 성공", to_email=to_email, attempt=attempt, component="NotificationService")
-                    
+                
                     logger.info("STARTTLS 시작", to_email=to_email, attempt=attempt, component="NotificationService")
-                    server.starttls()
+                server.starttls()
                     logger.info("STARTTLS 완료", to_email=to_email, attempt=attempt, component="NotificationService")
-                    
+                
                     logger.info("SMTP 로그인 시도", to_email=to_email, user=user, attempt=attempt, component="NotificationService")
-                    server.login(user, password)
+                server.login(user, password)
                     logger.info("SMTP 로그인 성공", to_email=to_email, attempt=attempt, component="NotificationService")
-                    
+                
                     logger.info("이메일 발송 시도", to_email=to_email, subject=subject, attempt=attempt, component="NotificationService")
-                    failed_recipients = server.send_message(msg)
+                failed_recipients = server.send_message(msg)
                     logger.info("send_message 반환값", to_email=to_email, failed_recipients=failed_recipients, attempt=attempt, component="NotificationService")
-                    
-                    if failed_recipients:
-                        logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
-                        raise EmailNotificationError(
-                            f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
-                            error_code="EMAIL_SEND_FAILED",
-                            cause=None
-                        )
-                    
+                
+                if failed_recipients:
+                    logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
+                    raise EmailNotificationError(
+                        f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
+                        error_code="EMAIL_SEND_FAILED",
+                        cause=None
+                    )
+                
                     logger.info("이메일 발송 성공", to_email=to_email, subject=subject, attempt=attempt, component="NotificationService")
-                    return True
+                return True
                 except smtplib.SMTPConnectError as e:
                     last_error = e
                     error_msg = str(e)
@@ -129,13 +129,13 @@ class NotificationService:
                             ) from e
                     else:
                         raise
-                finally:
-                    if server:
-                        try:
-                            server.quit()
+            finally:
+                if server:
+                    try:
+                        server.quit()
                             logger.debug("SMTP 서버 연결 종료", to_email=to_email, attempt=attempt, component="NotificationService")
-                        except Exception as e:
-                            logger.warning("SMTP 서버 종료 중 오류 발생 (무시됨)", exception=e, component="NotificationService")
+                    except Exception as e:
+                        logger.warning("SMTP 서버 종료 중 오류 발생 (무시됨)", exception=e, component="NotificationService")
             
             if last_error:
                 raise last_error

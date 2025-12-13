@@ -963,16 +963,21 @@ class StockDashboard {
         this.sectorSliderInitialized = true;
 
         let currentIndex = 0;
+        const wrapper = container.parentElement;
         const getCardWidth = () => {
-            if (cards.length === 0) return 474;
-            const firstCard = cards[0];
-            const computedStyle = window.getComputedStyle(firstCard);
-            const width = parseFloat(computedStyle.width) || 450;
+            if (!wrapper || cards.length === 0) return 474;
+            const wrapperWidth = wrapper.offsetWidth;
             const gap = 24;
-            return width + gap;
+            const buttonWidth = 48 + 12;
+            const availableWidth = wrapperWidth - (buttonWidth * 2) - gap;
+            return availableWidth + gap;
         };
         let cardWidth = getCardWidth();
         const maxIndex = cards.length - 1;
+        
+        cards.forEach((card, index) => {
+            card.style.width = `${cardWidth - 24}px`;
+        });
         
         const updateSlider = () => {
             const translateX = -currentIndex * cardWidth;
@@ -1010,6 +1015,9 @@ class StockDashboard {
             clearTimeout(resizeTimer);
             resizeTimer = setTimeout(() => {
                 cardWidth = getCardWidth();
+                cards.forEach((card) => {
+                    card.style.width = `${cardWidth - 24}px`;
+                });
                 updateSlider();
             }, 250);
         };

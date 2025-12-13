@@ -881,12 +881,16 @@ tr:hover {
   display: flex;
   gap: 24px;
   transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  overflow: hidden;
+  overflow: visible;
   flex: 1;
   user-select: none;
   order: 2;
   will-change: transform;
   min-width: 0;
+}
+
+.sector-stocks-comparison .sector-table-card {
+  flex-shrink: 0;
 }
 
 .sector-slider-btn {
@@ -940,7 +944,6 @@ tr:hover {
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-  width: 450px;
   flex-shrink: 0;
 }
 

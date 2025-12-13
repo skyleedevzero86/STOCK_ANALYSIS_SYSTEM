@@ -2,8 +2,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Quer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 from typing import Protocol, TypedDict, List, Dict, Optional, Union, Any
 import asyncio
 import json
@@ -261,6 +264,62 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+PUBLIC_PATHS = [
+    "/api/auth/login",
+    "/api/auth/logout"
+]
+
+class AuthenticationMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        if any(request.url.path.startswith(path) for path in PUBLIC_PATHS):
+            return await call_next(request)
+        
+        if request.url.path.startswith("/ws"):
+            return await call_next(request)
+        
+        token = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        else:
+            token = request.cookies.get("auth_token")
+        
+        host = request.headers.get("Host", "")
+        is_9090_port = ":9090" in host or host.endswith(":9090")
+        
+        if not token:
+            login_url = "http://localhost:8080/admin-login.html"
+            if is_9090_port:
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": "인증이 필요합니다",
+                        "message": "로그인 후 접근 가능합니다. http://localhost:8080/admin-login.html 에서 로그인해주세요.",
+                        "login_url": login_url
+                    }
+                )
+            return RedirectResponse(url=login_url, status_code=302)
+        
+        if hasattr(request.app.state, 'security_manager'):
+            security_manager = request.app.state.security_manager
+            payload = security_manager.verify_jwt_token(token)
+            if not payload:
+                login_url = "http://localhost:8080/admin-login.html"
+                if is_9090_port:
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "error": "인증 토큰이 유효하지 않습니다",
+                            "message": "로그인 후 접근 가능합니다. http://localhost:8080/admin-login.html 에서 로그인해주세요.",
+                            "login_url": login_url
+                        }
+                    )
+                return RedirectResponse(url=login_url, status_code=302)
+        
+        return await call_next(request)
+
+app.add_middleware(AuthenticationMiddleware)
 
 manager = ConnectionManager(enable_metadata=True)
 
@@ -913,6 +972,127 @@ async def root() -> Dict[str, Any]:
         ]
     }
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    success: bool
+    message: str
+    token: Optional[str] = None
+    expires_in: Optional[int] = None
+
+@app.post("/api/auth/login",
+         summary="로그인",
+         description="관리자 계정으로 로그인합니다.",
+         response_model=LoginResponse)
+async def login(
+    request: Request,
+    login_data: LoginRequest = Body(...)
+) -> LoginResponse:
+    try:
+        admin_username = settings.ADMIN_USERNAME
+        admin_password = settings.ADMIN_PASSWORD
+        
+        if login_data.username != admin_username:
+            security_manager = request.app.state.security_manager
+            client_ip = request.client.host
+            security_manager.record_failed_login(client_ip)
+            logger.warning("로그인 실패: 잘못된 사용자명", username=login_data.username, ip=client_ip)
+            raise HTTPException(
+                status_code=401,
+                detail="사용자명 또는 비밀번호가 올바르지 않습니다."
+            )
+        
+        security_manager = request.app.state.security_manager
+        
+        if login_data.password != admin_password:
+            client_ip = request.client.host
+            security_manager.record_failed_login(client_ip)
+            logger.warning("로그인 실패: 잘못된 비밀번호", username=login_data.username, ip=client_ip)
+            raise HTTPException(
+                status_code=401,
+                detail="사용자명 또는 비밀번호가 올바르지 않습니다."
+            )
+        
+        client_ip = request.client.host
+        can_login, attempts = security_manager.check_login_attempts(client_ip)
+        if not can_login:
+            logger.warning("로그인 차단: 너무 많은 실패 시도", username=login_data.username, ip=client_ip, attempts=attempts)
+            raise HTTPException(
+                status_code=403,
+                detail=f"너무 많은 로그인 시도로 인해 계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도해주세요."
+            )
+        
+        security_manager.reset_login_attempts(client_ip)
+        
+        token = security_manager.generate_jwt_token(
+            user_id=login_data.username,
+            role="admin"
+        )
+        
+        logger.info("로그인 성공", username=login_data.username, ip=client_ip)
+        
+        response = JSONResponse(content={
+            "success": True,
+            "message": "로그인 성공",
+            "token": token,
+            "expires_in": security_manager.config.jwt_expiry
+        })
+        
+        response.set_cookie(
+            key="auth_token",
+            value=token,
+            max_age=security_manager.config.jwt_expiry,
+            httponly=True,
+            secure=False,
+            samesite="lax"
+        )
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("로그인 처리 중 오류", exception=e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"로그인 처리 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@app.post("/api/auth/logout",
+         summary="로그아웃",
+         description="로그아웃합니다.")
+async def logout(request: Request) -> Dict[str, Any]:
+    try:
+        token = request.cookies.get("auth_token") or (
+            request.headers.get("Authorization", "").replace("Bearer ", "") if request.headers.get("Authorization") else None
+        )
+        
+        if token and hasattr(request.app.state, 'security_manager'):
+            security_manager = request.app.state.security_manager
+            payload = security_manager.verify_jwt_token(token)
+            if payload:
+                session_id = payload.get('session_id')
+                if session_id:
+                    security_manager.invalidate_session(session_id)
+        
+        response = JSONResponse(content={
+            "success": True,
+            "message": "로그아웃되었습니다."
+        })
+        response.delete_cookie(key="auth_token")
+        
+        logger.info("로그아웃 성공", ip=request.client.host)
+        return response
+        
+    except Exception as e:
+        logger.error("로그아웃 처리 중 오류", exception=e)
+        return {
+            "success": False,
+            "message": f"로그아웃 처리 중 오류가 발생했습니다: {str(e)}"
+        }
+
 @app.get("/api/health",
          summary="헬스 체크",
          description="API 서버의 상태를 확인합니다.")
@@ -1374,13 +1554,6 @@ async def send_email_notification(
                     )
                     raise HTTPException(status_code=500, detail=error_msg)
             except EmailNotificationError as e:
-                error_code = getattr(e, 'error_code', 'EMAIL_SEND_FAILED')
-                if error_code == 'EMAIL_RECIPIENT_NOT_EXISTS':
-                    logger.error("이메일 발송 실패: 수신자 이메일 주소가 존재하지 않음", 
-                               exception=e, to_email=to_email, error_code=error_code)
-                elif error_code == 'EMAIL_INVALID_ADDRESS':
-                    logger.error("이메일 발송 실패: 유효하지 않은 이메일 주소", 
-                               exception=e, to_email=to_email, error_code=error_code)
                 raise
             except Exception as e:
                 logger.error("이메일 발송 중 예상치 못한 오류", exception=e, to_email=to_email, exc_info=True)

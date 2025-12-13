@@ -30,15 +30,26 @@ class AIEmailController(
                 if (isValid) {
                     aiEmailService.sendAIEmailToSubscribers(templateId, symbol)
                         .map { result ->
-                            logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, result={}", templateId, symbol, result)
+                            logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, totalSubscribers={}", 
+                                templateId, symbol, result["totalSubscribers"])
                             ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                                 .body(result) as ResponseEntity<Map<String, Any>>
                         }
-                        .defaultIfEmpty(
-                            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                .body(mapOf("message" to "서비스에서 빈 응답을 반환했습니다.", "error" to "EmptyResponse")) as ResponseEntity<Map<String, Any>>
+                        .switchIfEmpty(
+                            Mono.defer {
+                                logger.error("AI 이메일 발송: 서비스에서 빈 응답 반환: templateId={}, symbol={}", templateId, symbol)
+                                Mono.just(
+                                    ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                        .body(mapOf(
+                                            "message" to "서비스에서 빈 응답을 반환했습니다.",
+                                            "error" to "EmptyResponse",
+                                            "templateId" to templateId,
+                                            "symbol" to symbol
+                                        )) as ResponseEntity<Map<String, Any>>
+                                )
+                            }
                         )
                         .onErrorResume { error ->
                             logger.error("AI 이메일 발송 중 오류 발생: templateId={}, symbol={}, error={}", 
@@ -47,7 +58,12 @@ class AIEmailController(
                             Mono.just(
                                 ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                    .body(mapOf("message" to errorMessage, "error" to error.javaClass.simpleName)) as ResponseEntity<Map<String, Any>>
+                                    .body(mapOf(
+                                        "message" to errorMessage,
+                                        "error" to error.javaClass.simpleName,
+                                        "templateId" to templateId,
+                                        "symbol" to symbol
+                                    )) as ResponseEntity<Map<String, Any>>
                             )
                         }
                 } else {

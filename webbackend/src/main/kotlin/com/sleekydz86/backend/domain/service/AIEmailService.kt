@@ -5,6 +5,7 @@ import com.sleekydz86.backend.domain.model.AIAnalysisResult
 import com.sleekydz86.backend.domain.model.EmailSubscription
 import com.sleekydz86.backend.domain.model.EmailTemplate
 import com.sleekydz86.backend.infrastructure.client.PythonApiClient
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
@@ -18,18 +19,30 @@ class AIEmailService(
     private val aiAnalysisService: AIAnalysisService,
     private val pythonApiClient: PythonApiClient
 ) {
+    private val logger = LoggerFactory.getLogger(AIEmailService::class.java)
 
     fun sendAIEmailToSubscribers(templateId: Long, symbol: String): Mono<Map<String, Any>> {
+        logger.info("AI 이메일 발송 시작: templateId={}, symbol={}", templateId, symbol)
         return emailTemplateService.getTemplateById(templateId)
+            .doOnNext { template -> logger.info("템플릿 조회 성공: templateId={}, name={}", templateId, template.name) }
+            .doOnError { error -> logger.error("템플릿 조회 실패: templateId={}, error={}", templateId, error.message, error) }
             .flatMap { template: EmailTemplate ->
                 emailSubscriptionService.getAllActiveSubscriptions()
+                    .doOnNext { subscribers -> logger.info("구독자 조회 성공: count={}", subscribers.size) }
+                    .doOnError { error -> logger.error("구독자 조회 실패: error={}", error.message, error) }
                     .flatMap { subscribers: List<EmailSubscription> ->
+                        logger.info("AI 분석 생성 시작: symbol={}", symbol)
                         aiAnalysisService.generateAIAnalysis(
                             AIAnalysisRequest(symbol = symbol)
-                        ).flatMap { aiResult: AIAnalysisResult ->
+                        )
+                        .doOnNext { aiResult -> logger.info("AI 분석 생성 성공: symbol={}, summary={}", symbol, aiResult.aiSummary?.take(50)) }
+                        .doOnError { error -> logger.error("AI 분석 생성 실패: symbol={}, error={}", symbol, error.message, error) }
+                        .flatMap { aiResult: AIAnalysisResult ->
                             val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
+                            logger.info("이메일 동의 구독자 수: total={}, emailConsent={}", subscribers.size, emailSubscribers.size)
                             
                             if (emailSubscribers.isEmpty()) {
+                                logger.warn("이메일 동의한 구독자가 없음: templateId={}, symbol={}", templateId, symbol)
                                 return@flatMap Mono.just(mapOf(
                                     "template" to template.name,
                                     "symbol" to symbol,
@@ -40,6 +53,7 @@ class AIEmailService(
                                 ))
                             }
                             
+                            logger.info("이메일 발송 시작: count={}", emailSubscribers.size)
                             Flux.fromIterable(emailSubscribers)
                                 .flatMap { subscriber: EmailSubscription ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
@@ -48,15 +62,22 @@ class AIEmailService(
                                     sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
                                         .map { success: Boolean ->
                                             if (success) {
+                                                logger.info("이메일 발송 성공: email={}", subscriber.email)
                                                 "성공 ${subscriber.email}"
                                             } else {
+                                                logger.warn("이메일 발송 실패: email={}", subscriber.email)
                                                 "실패 ${subscriber.email}"
                                             }
                                         }
-                                        .onErrorReturn("오류 ${subscriber.email}")
+                                        .onErrorResume { error ->
+                                            logger.error("이메일 발송 오류: email={}, error={}", subscriber.email, error.message, error)
+                                            Mono.just("오류 ${subscriber.email}: ${error.message}")
+                                        }
                                 }
                                 .collectList()
                                 .map { results: List<String> ->
+                                    logger.info("이메일 발송 완료: templateId={}, symbol={}, total={}, success={}", 
+                                        templateId, symbol, emailSubscribers.size, results.count { it.startsWith("성공") })
                                     mapOf(
                                         "template" to template.name,
                                         "symbol" to symbol,
@@ -67,37 +88,45 @@ class AIEmailService(
                                 }
                         }
                         .onErrorResume { error ->
+                            logger.error("AI 분석 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
                             Mono.just(mapOf(
                                 "template" to template.name,
                                 "symbol" to symbol,
                                 "totalSubscribers" to 0,
                                 "results" to emptyList<String>(),
                                 "aiAnalysis" to "분석 생성 중 오류 발생",
-                                "error" to (error.message ?: "알 수 없는 오류")
+                                "error" to (error.message ?: "알 수 없는 오류"),
+                                "errorType" to error.javaClass.simpleName
                             ))
                         }
                     }
                     .onErrorResume { error ->
+                        logger.error("구독자 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
                         Mono.just(mapOf(
                             "template" to "알 수 없음",
                             "symbol" to symbol,
                             "totalSubscribers" to 0,
                             "results" to emptyList<String>(),
                             "aiAnalysis" to "구독자 조회 중 오류 발생",
-                            "error" to (error.message ?: "알 수 없는 오류")
+                            "error" to (error.message ?: "알 수 없는 오류"),
+                            "errorType" to error.javaClass.simpleName
                         ))
                     }
             }
             .onErrorResume { error ->
+                logger.error("템플릿 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
                 Mono.just(mapOf(
                     "template" to "알 수 없음",
                     "symbol" to symbol,
                     "totalSubscribers" to 0,
                     "results" to emptyList<String>(),
                     "aiAnalysis" to "템플릿 조회 중 오류 발생",
-                    "error" to (error.message ?: "알 수 없는 오류")
+                    "error" to (error.message ?: "알 수 없는 오류"),
+                    "errorType" to error.javaClass.simpleName
                 ))
             }
+            .doOnNext { result -> logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, result={}", templateId, symbol, result) }
+            .doOnError { error -> logger.error("AI 이메일 발송 최종 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error) }
     }
 
     private fun createEmailVariables(

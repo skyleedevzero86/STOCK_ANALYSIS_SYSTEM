@@ -643,18 +643,50 @@ async function sendAIEmail() {
         }
 
         if (response.ok) {
-            const result = await response.json();
-            resultArea.textContent = `AI 분석 이메일 발송 완료!\n\n템플릿: ${
-                result.template
-            }\n종목: ${result.symbol}\n구독자 수: ${
-                result.totalSubscribers
-            }\n\nAI 분석 결과:\n${
-                result.aiAnalysis
-            }\n\n발송 결과:\n${result.results.join("\n")}`;
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await response.text();
+                console.error("AI 이메일 발송 응답 오류: JSON이 아닌 응답", text);
+                resultArea.textContent = `서버 응답 오류: 유효하지 않은 응답 형식입니다.`;
+                return;
+            }
+
+            try {
+                const text = await response.text();
+                if (!text || text.trim() === "") {
+                    console.error("AI 이메일 발송 응답 오류: 빈 응답");
+                    resultArea.textContent = `서버 응답 오류: 빈 응답을 받았습니다.`;
+                    return;
+                }
+
+                const result = JSON.parse(text);
+                resultArea.textContent = `AI 분석 이메일 발송 완료!\n\n템플릿: ${
+                    result.template || "N/A"
+                }\n종목: ${result.symbol || "N/A"}\n구독자 수: ${
+                    result.totalSubscribers || 0
+                }\n\nAI 분석 결과:\n${
+                    result.aiAnalysis || "분석 결과 없음"
+                }\n\n발송 결과:\n${(result.results || []).join("\n")}`;
+            } catch (jsonError) {
+                console.error("AI 이메일 발송 JSON 파싱 오류:", jsonError);
+                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다.`;
+            }
         } else {
-            const errorText = await response.text();
+            let errorText = "";
+            try {
+                errorText = await response.text();
+                if (errorText) {
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorText = errorJson.message || errorJson.detail || errorText;
+                    } catch (e) {
+                    }
+                }
+            } catch (e) {
+                errorText = `HTTP ${response.status}`;
+            }
             console.error("AI 이메일 발송 실패:", response.status, errorText);
-            resultArea.textContent = `AI 분석 이메일 발송에 실패했습니다. (${response.status})`;
+            resultArea.textContent = `AI 분석 이메일 발송에 실패했습니다. (${response.status})\n${errorText ? `\n오류: ${errorText}` : ""}`;
         }
     } catch (error) {
         console.error("AI 이메일 발송 오류:", error);
@@ -713,24 +745,56 @@ async function sendBulkAIEmail() {
         }
 
         if (response.ok) {
-            const result = await response.json();
-            resultArea.textContent = `대량 AI 분석 이메일 발송 완료!\n\n템플릿: ${
-                result.template
-            }\n종목들: ${result.symbols.join(", ")}\n구독자 수: ${
-                result.totalSubscribers
-            }\n\n발송 결과:\n${result.results
-                .map(
-                    (r) =>
-                        `${r.symbol}: ${r.subscriber} - ${
-                            r.success ? "성공" : "실패"
-                        }`
-                )
-                .join("\n")}`;
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await response.text();
+                console.error("대량 AI 이메일 발송 응답 오류: JSON이 아닌 응답", text);
+                resultArea.textContent = `서버 응답 오류: 유효하지 않은 응답 형식입니다.`;
+                return;
+            }
+
+            try {
+                const text = await response.text();
+                if (!text || text.trim() === "") {
+                    console.error("대량 AI 이메일 발송 응답 오류: 빈 응답");
+                    resultArea.textContent = `서버 응답 오류: 빈 응답을 받았습니다.`;
+                    return;
+                }
+
+                const result = JSON.parse(text);
+                resultArea.textContent = `대량 AI 분석 이메일 발송 완료!\n\n템플릿: ${
+                    result.template || "N/A"
+                }\n종목들: ${(result.symbols || []).join(", ")}\n구독자 수: ${
+                    result.totalSubscribers || 0
+                }\n\n발송 결과:\n${(result.results || [])
+                    .map(
+                        (r) =>
+                            `${r.symbol || "N/A"}: ${r.subscriber || "N/A"} - ${
+                                r.success ? "성공" : "실패"
+                            }`
+                    )
+                    .join("\n")}`;
+            } catch (jsonError) {
+                console.error("대량 AI 이메일 발송 JSON 파싱 오류:", jsonError);
+                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다.`;
+            }
         } else {
-            const errorText = await response.text();
+            let errorText = "";
+            try {
+                errorText = await response.text();
+                if (errorText) {
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorText = errorJson.message || errorJson.detail || errorText;
+                    } catch (e) {
+                    }
+                }
+            } catch (e) {
+                errorText = `HTTP ${response.status}`;
+            }
             console.error("대량 AI 이메일 발송 실패:", response.status, errorText);
             resultArea.textContent =
-                `대량 AI 분석 이메일 발송에 실패했습니다. (${response.status})`;
+                `대량 AI 분석 이메일 발송에 실패했습니다. (${response.status})\n${errorText ? `\n오류: ${errorText}` : ""}`;
         }
     } catch (error) {
         console.error("대량 AI 이메일 발송 오류:", error);

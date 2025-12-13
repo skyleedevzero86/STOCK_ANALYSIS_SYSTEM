@@ -173,12 +173,7 @@
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   background: #fff;
-  transition: all 0.3s ease;
   overflow: hidden;
-}
-
-.template-board-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .template-board-header {
@@ -189,11 +184,6 @@
   cursor: pointer;
   background: #f8f9fa;
   border-bottom: 1px solid #e0e0e0;
-  transition: background 0.3s ease;
-}
-
-.template-board-header:hover {
-  background: #f0f1f2;
 }
 
 .template-board-header.active {

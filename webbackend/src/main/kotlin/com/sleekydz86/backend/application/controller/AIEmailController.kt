@@ -3,7 +3,9 @@ package com.sleekydz86.backend.application.controller
 import com.sleekydz86.backend.domain.service.AdminService
 import com.sleekydz86.backend.domain.service.AIEmailService
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Mono
@@ -28,20 +30,30 @@ class AIEmailController(
                 if (isValid) {
                     aiEmailService.sendAIEmailToSubscribers(templateId, symbol)
                         .map { result ->
-                            logger.info("AI 이메일 발송 성공: templateId={}, symbol={}", templateId, symbol)
-                            ResponseEntity.ok(result) as ResponseEntity<Map<String, Any>>
+                            logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, result={}", templateId, symbol, result)
+                            ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .body(result) as ResponseEntity<Map<String, Any>>
                         }
+                        .defaultIfEmpty(
+                            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .body(mapOf("message" to "서비스에서 빈 응답을 반환했습니다.", "error" to "EmptyResponse")) as ResponseEntity<Map<String, Any>>
+                        )
                         .onErrorResume { error ->
                             logger.error("AI 이메일 발송 중 오류 발생: templateId={}, symbol={}, error={}", 
                                 templateId, symbol, error.message, error)
                             val errorMessage = error.message ?: "AI 이메일 발송 중 오류가 발생했습니다."
                             Mono.just(
                                 ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                                     .body(mapOf("message" to errorMessage, "error" to error.javaClass.simpleName)) as ResponseEntity<Map<String, Any>>
                             )
                         }
                 } else {
-                    Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("message" to "인증이 필요합니다.")) as ResponseEntity<Map<String, Any>>)
+                    Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .body(mapOf("message" to "인증이 필요합니다.")) as ResponseEntity<Map<String, Any>>)
                 }
             }
             .onErrorResume { error ->
@@ -49,6 +61,7 @@ class AIEmailController(
                     templateId, symbol, error.message, error)
                 Mono.just(
                     ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .body(mapOf("message" to (error.message ?: "서버 오류가 발생했습니다."), "error" to error.javaClass.simpleName)) as ResponseEntity<Map<String, Any>>
                 )
             }
@@ -66,20 +79,30 @@ class AIEmailController(
                 if (isValid) {
                     aiEmailService.sendBulkAIEmails(templateId, symbols)
                         .map { result ->
-                            logger.info("대량 AI 이메일 발송 성공: templateId={}, symbols={}", templateId, symbols)
-                            ResponseEntity.ok(result) as ResponseEntity<Map<String, Any>>
+                            logger.info("대량 AI 이메일 발송 완료: templateId={}, symbols={}, result={}", templateId, symbols, result)
+                            ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .body(result) as ResponseEntity<Map<String, Any>>
                         }
+                        .defaultIfEmpty(
+                            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .body(mapOf("message" to "서비스에서 빈 응답을 반환했습니다.", "error" to "EmptyResponse")) as ResponseEntity<Map<String, Any>>
+                        )
                         .onErrorResume { error ->
                             logger.error("대량 AI 이메일 발송 중 오류 발생: templateId={}, symbols={}, error={}", 
                                 templateId, symbols, error.message, error)
                             val errorMessage = error.message ?: "대량 AI 이메일 발송 중 오류가 발생했습니다."
                             Mono.just(
                                 ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                                     .body(mapOf("message" to errorMessage, "error" to error.javaClass.simpleName)) as ResponseEntity<Map<String, Any>>
                             )
                         }
                 } else {
-                    Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(mapOf("message" to "인증이 필요합니다.")) as ResponseEntity<Map<String, Any>>)
+                    Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .body(mapOf("message" to "인증이 필요합니다.")) as ResponseEntity<Map<String, Any>>)
                 }
             }
             .onErrorResume { error ->
@@ -87,6 +110,7 @@ class AIEmailController(
                     templateId, symbols, error.message, error)
                 Mono.just(
                     ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                         .body(mapOf("message" to (error.message ?: "서버 오류가 발생했습니다."), "error" to error.javaClass.simpleName)) as ResponseEntity<Map<String, Any>>
                 )
             }

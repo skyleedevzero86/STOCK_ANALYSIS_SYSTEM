@@ -643,14 +643,6 @@ async function sendAIEmail() {
         }
 
         if (response.ok) {
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                const text = await response.text();
-                console.error("AI 이메일 발송 응답 오류: JSON이 아닌 응답", text);
-                resultArea.textContent = `서버 응답 오류: 유효하지 않은 응답 형식입니다.`;
-                return;
-            }
-
             try {
                 const text = await response.text();
                 if (!text || text.trim() === "") {
@@ -669,7 +661,7 @@ async function sendAIEmail() {
                 }\n\n발송 결과:\n${(result.results || []).join("\n")}`;
             } catch (jsonError) {
                 console.error("AI 이메일 발송 JSON 파싱 오류:", jsonError);
-                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다.`;
+                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다. (${jsonError.message})`;
             }
         } else {
             let errorText = "";
@@ -745,14 +737,6 @@ async function sendBulkAIEmail() {
         }
 
         if (response.ok) {
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                const text = await response.text();
-                console.error("대량 AI 이메일 발송 응답 오류: JSON이 아닌 응답", text);
-                resultArea.textContent = `서버 응답 오류: 유효하지 않은 응답 형식입니다.`;
-                return;
-            }
-
             try {
                 const text = await response.text();
                 if (!text || text.trim() === "") {
@@ -776,7 +760,7 @@ async function sendBulkAIEmail() {
                     .join("\n")}`;
             } catch (jsonError) {
                 console.error("대량 AI 이메일 발송 JSON 파싱 오류:", jsonError);
-                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다.`;
+                resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다. (${jsonError.message})`;
             }
         } else {
             let errorText = "";

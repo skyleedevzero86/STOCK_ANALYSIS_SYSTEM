@@ -29,6 +29,17 @@ class AIEmailService(
                         ).flatMap { aiResult: AIAnalysisResult ->
                             val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
                             
+                            if (emailSubscribers.isEmpty()) {
+                                return@flatMap Mono.just(mapOf(
+                                    "template" to template.name,
+                                    "symbol" to symbol,
+                                    "totalSubscribers" to 0,
+                                    "results" to emptyList<String>(),
+                                    "aiAnalysis" to (aiResult.aiSummary ?: "분석 결과 없음"),
+                                    "message" to "이메일 동의한 구독자가 없습니다."
+                                ))
+                            }
+                            
                             Flux.fromIterable(emailSubscribers)
                                 .flatMap { subscriber: EmailSubscription ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
@@ -42,6 +53,7 @@ class AIEmailService(
                                                 "실패 ${subscriber.email}"
                                             }
                                         }
+                                        .onErrorReturn("오류 ${subscriber.email}")
                                 }
                                 .collectList()
                                 .map { results: List<String> ->
@@ -50,11 +62,41 @@ class AIEmailService(
                                         "symbol" to symbol,
                                         "totalSubscribers" to emailSubscribers.size,
                                         "results" to results,
-                                        "aiAnalysis" to aiResult.aiSummary
+                                        "aiAnalysis" to (aiResult.aiSummary ?: "분석 결과 없음")
                                     )
                                 }
                         }
+                        .onErrorResume { error ->
+                            Mono.just(mapOf(
+                                "template" to template.name,
+                                "symbol" to symbol,
+                                "totalSubscribers" to 0,
+                                "results" to emptyList<String>(),
+                                "aiAnalysis" to "분석 생성 중 오류 발생",
+                                "error" to (error.message ?: "알 수 없는 오류")
+                            ))
+                        }
                     }
+                    .onErrorResume { error ->
+                        Mono.just(mapOf(
+                            "template" to "알 수 없음",
+                            "symbol" to symbol,
+                            "totalSubscribers" to 0,
+                            "results" to emptyList<String>(),
+                            "aiAnalysis" to "구독자 조회 중 오류 발생",
+                            "error" to (error.message ?: "알 수 없는 오류")
+                        ))
+                    }
+            }
+            .onErrorResume { error ->
+                Mono.just(mapOf(
+                    "template" to "알 수 없음",
+                    "symbol" to symbol,
+                    "totalSubscribers" to 0,
+                    "results" to emptyList<String>(),
+                    "aiAnalysis" to "템플릿 조회 중 오류 발생",
+                    "error" to (error.message ?: "알 수 없는 오류")
+                ))
             }
     }
 

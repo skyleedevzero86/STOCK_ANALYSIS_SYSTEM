@@ -193,7 +193,7 @@ def analyze_email_sending_status():
     print("\n  예상 발송 동작:")
     print("    - 매 1분마다 DAG가 실행됩니다")
     print("    - 구독자가 있고 분석 데이터가 있으면 이메일을 발송합니다")
-        print("    - 중복 방지 로직이 비활성화되어 있어 같은 이메일을 여러 번 발송할 수 있습니다")
+    print("    - 중복 방지 로직이 비활성화되어 있어 같은 이메일을 여러 번 발송할 수 있습니다")
     
     now = datetime.now()
     next_minute = now.replace(second=0, microsecond=0) + timedelta(minutes=1)

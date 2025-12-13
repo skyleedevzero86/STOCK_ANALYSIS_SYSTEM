@@ -267,7 +267,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 PUBLIC_PATHS = [
     "/api/auth/login",
-    "/api/auth/logout"
+    "/api/auth/logout",
+    "/api/health"
 ]
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
@@ -2272,5 +2273,7 @@ if __name__ == "__main__":
         app, 
         host="0.0.0.0", 
         port=9000,
-        reload=reload_enabled
+        reload=reload_enabled,
+        timeout_keep_alive=75,
+        timeout_graceful_shutdown=10
     )

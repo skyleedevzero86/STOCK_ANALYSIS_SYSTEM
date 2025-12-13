@@ -160,7 +160,15 @@
             <a href="/" class="nav-item nav-link active">홈</a>
             <a href="/email-subscription.html" class="nav-item nav-link">구독신청</a>
             <a href="/admin-login.html" class="nav-item nav-link">로그인</a>
-            <a href="/template-management.html" class="nav-item nav-link">템플릿보기</a>
+            <div class="nav-dropdown">
+              <a href="/template-management.html" class="nav-item nav-link nav-dropdown-toggle">
+                템플릿보기 <span class="dropdown-arrow">▼</span>
+              </a>
+              <div class="nav-dropdown-menu">
+                <a href="/template-management.html#create-template" class="nav-dropdown-item" data-section="create-template">새 템플릿 생성</a>
+                <a href="/template-management.html#ai-email" class="nav-dropdown-item" data-section="ai-email">AI 분석 이메일 발송</a>
+              </div>
+            </div>
             <a href="/api-view.html" class="nav-item nav-link">API보기</a>
             <a href="/admin-dashboard.html" class="nav-item nav-link">관리자대시보드</a>
             <a href="/contact-inquiry-list.html" class="nav-item nav-link">문의사항</a>

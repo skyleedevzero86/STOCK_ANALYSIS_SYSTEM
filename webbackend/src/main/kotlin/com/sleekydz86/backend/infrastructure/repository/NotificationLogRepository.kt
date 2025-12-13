@@ -15,5 +15,11 @@ interface NotificationLogRepository : JpaRepository<NotificationLogEntity, Long>
 
     @Query("SELECT n FROM NotificationLogEntity n WHERE n.userEmail = :email ORDER BY n.sentAt DESC")
     fun findByUserEmail(email: String): List<NotificationLogEntity>
+
+    @Query("SELECT n FROM NotificationLogEntity n WHERE n.message LIKE CONCAT('%', :subject, '%') ORDER BY n.sentAt DESC")
+    fun findByMessageContainingSubject(subject: String, pageable: Pageable): Page<NotificationLogEntity>
+
+    @Query("SELECT n FROM NotificationLogEntity n WHERE n.message LIKE CONCAT('%', :subject, '%') ORDER BY n.sentAt DESC")
+    fun findByMessageContainingSubject(subject: String): List<NotificationLogEntity>
 }
 

@@ -1,4 +1,9 @@
 let templates = [];
+let currentPage = 0;
+let pageSize = 10;
+let totalPages = 0;
+let totalElements = 0;
+let searchKeyword = "";
 
 function getAuthToken() {
     const token = localStorage.getItem("adminToken");
@@ -35,8 +40,84 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!getAuthToken()) {
         return;
     }
+    initSectionNavigation();
     loadTemplates();
+    
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener("input", function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchKeyword = this.value.trim();
+                currentPage = 0;
+                loadTemplates();
+            }, 300);
+        });
+        
+        searchInput.addEventListener("keypress", function(e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                searchKeyword = this.value.trim();
+                currentPage = 0;
+                loadTemplates();
+            }
+        });
+    }
 });
+
+function initSectionNavigation() {
+    const hash = window.location.hash;
+    const dropdownItems = document.querySelectorAll(".nav-dropdown-item");
+
+    dropdownItems.forEach(item => {
+        item.addEventListener("click", function(e) {
+            e.preventDefault();
+            const section = this.getAttribute("data-section");
+            showSection(section);
+            
+            dropdownItems.forEach(i => i.classList.remove("active"));
+            this.classList.add("active");
+            
+            window.location.hash = section;
+        });
+    });
+
+    const createSection = document.getElementById("create-template-section");
+    const aiEmailSection = document.getElementById("ai-email-section");
+    
+    if (hash) {
+        const section = hash.substring(1);
+        showSection(section);
+        const activeItem = document.querySelector(`.nav-dropdown-item[data-section="${section}"]`);
+        if (activeItem) {
+            dropdownItems.forEach(i => i.classList.remove("active"));
+            activeItem.classList.add("active");
+        }
+    } else {
+        if (createSection) createSection.style.display = "block";
+        if (aiEmailSection) aiEmailSection.style.display = "none";
+        const firstItem = dropdownItems[0];
+        if (firstItem) {
+            dropdownItems.forEach(i => i.classList.remove("active"));
+            firstItem.classList.add("active");
+        }
+    }
+}
+
+function showSection(sectionName) {
+    const createSection = document.getElementById("create-template-section");
+    const aiEmailSection = document.getElementById("ai-email-section");
+
+    if (sectionName === "create-template") {
+        if (createSection) createSection.style.display = "block";
+        if (aiEmailSection) aiEmailSection.style.display = "none";
+        loadTemplates();
+    } else if (sectionName === "ai-email") {
+        if (createSection) createSection.style.display = "none";
+        if (aiEmailSection) aiEmailSection.style.display = "block";
+    }
+}
 
 let isEditMode = false;
 let editingTemplateId = null;
@@ -59,7 +140,12 @@ async function loadTemplates() {
     }
 
     try {
-        const response = await fetch("/api/templates", {
+        let url = `/api/templates?page=${currentPage}&size=${pageSize}`;
+        if (searchKeyword) {
+            url += `&keyword=${encodeURIComponent(searchKeyword)}`;
+        }
+        
+        const response = await fetch(url, {
             headers: headers
         });
 
@@ -69,8 +155,24 @@ async function loadTemplates() {
 
         if (response.ok) {
             const responseData = await response.json();
-            templates = Array.isArray(responseData) ? responseData : [];
+            console.log("템플릿 API 응답:", responseData);
+            if (responseData.templates) {
+                templates = Array.isArray(responseData.templates) ? responseData.templates : [];
+                totalPages = responseData.totalPages || 0;
+                totalElements = responseData.totalElements || 0;
+                currentPage = responseData.currentPage || 0;
+            } else if (Array.isArray(responseData)) {
+                templates = responseData;
+                totalPages = Math.ceil(responseData.length / pageSize);
+                totalElements = responseData.length;
+            } else {
+                templates = [];
+                totalPages = 0;
+                totalElements = 0;
+            }
+            console.log("페이징 정보:", { currentPage, totalPages, totalElements, templatesCount: templates.length });
             renderTemplates();
+            renderPagination();
         } else {
             const errorText = await response.text();
             console.error("템플릿 로드 실패:", response.status, errorText);
@@ -92,7 +194,10 @@ function renderTemplates() {
     }
 
     if (templates.length === 0) {
-        templateList.innerHTML = '<div class="no-templates">등록된 템플릿이 없습니다. 새 템플릿을 생성해주세요.</div>';
+        const message = searchKeyword 
+            ? `"${searchKeyword}"에 대한 검색 결과가 없습니다.` 
+            : "등록된 템플릿이 없습니다. 새 템플릿을 생성해주세요.";
+        templateList.innerHTML = `<div class="no-templates">${message}</div>`;
         return;
     }
 
@@ -105,29 +210,243 @@ function renderTemplates() {
         }
 
         const templateItem = document.createElement("div");
-        templateItem.className = "template-item";
+        templateItem.className = "template-board-item";
         templateItem.innerHTML = `
-      <div class="template-header">
-        <div class="template-name">${template.name}</div>
-        <div class="template-actions">
-          <button class="btn" onclick="editTemplate(${
-            template.id
-        })">수정</button>
-          <button class="btn btn-danger" onclick="deleteTemplate(${
-            template.id
-        })">삭제</button>
+      <div class="template-board-header" onclick="toggleTemplateDetails(${template.id})" data-template-id="${template.id}">
+        <div class="template-board-title">
+          <div class="template-board-title-name">${template.name}</div>
+          <div class="template-board-title-subject">${template.subject}</div>
+        </div>
+        <div class="template-board-actions">
+          <span class="template-board-toggle">▼</span>
+          <button class="btn" onclick="event.stopPropagation(); editTemplate(${template.id})">수정</button>
+          <button class="btn btn-danger" onclick="event.stopPropagation(); deleteTemplate(${template.id})">삭제</button>
         </div>
       </div>
-      <div class="template-content">
-        <strong>제목:</strong> ${template.subject}<br>
-        <strong>내용:</strong> ${template.content ? template.content.substring(0, 100) + "..." : "(내용 없음)"}
-      </div>
-      <div class="template-meta">
-        생성일: ${template.createdAt ? new Date(template.createdAt).toLocaleString() : "-"}
+      <div class="template-board-content" id="template-content-${template.id}">
+        <div class="template-board-details">
+          <div class="template-board-details-item">
+            <span class="template-board-details-label">이메일 제목:</span>
+            <span class="template-board-details-value">${template.subject}</span>
+          </div>
+          <div class="template-board-details-item">
+            <span class="template-board-details-label">이메일 내용:</span>
+            <div class="template-board-details-value" style="white-space: pre-wrap; margin-top: 8px;">${template.content || "(내용 없음)"}</div>
+          </div>
+          <div class="template-board-details-item">
+            <span class="template-board-details-label">생성일:</span>
+            <span class="template-board-details-value">${template.createdAt ? new Date(template.createdAt).toLocaleString() : "-"}</span>
+          </div>
+        </div>
+        <div class="template-board-history">
+          <div class="template-board-history-title">발송 내역</div>
+          <div class="template-board-history-list" id="template-history-${template.id}">
+            <div style="text-align: center; padding: 20px; color: #999;">로딩 중...</div>
+          </div>
+        </div>
       </div>
     `;
         templateList.appendChild(templateItem);
     });
+}
+
+function renderPagination() {
+    const pagination = document.getElementById("pagination");
+    if (!pagination) {
+        console.warn("pagination 요소를 찾을 수 없습니다");
+        return;
+    }
+    
+    if (totalPages <= 1 && totalElements === 0) {
+        pagination.innerHTML = "";
+        return;
+    }
+    
+    let paginationHTML = "";
+    
+    if (totalPages > 1) {
+        if (currentPage > 0) {
+            paginationHTML += `<button onclick="goToPage(${currentPage - 1})" style="
+                padding: 8px 16px;
+                border: 1px solid #ddd;
+                background: #fff;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 4px;
+            ">이전</button>`;
+        }
+        
+        const startPage = Math.max(0, currentPage - 2);
+        const endPage = Math.min(totalPages - 1, currentPage + 2);
+        
+        if (startPage > 0) {
+            paginationHTML += `<button onclick="goToPage(0)" style="
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                background: #fff;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 4px;
+            ">1</button>`;
+            if (startPage > 1) {
+                paginationHTML += `<span style="padding: 8px; margin-right: 4px;">...</span>`;
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            if (i === currentPage) {
+                paginationHTML += `<button style="
+                    padding: 8px 12px;
+                    border: 1px solid #2f456e;
+                    background: #2f456e;
+                    color: #fff;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    margin-right: 4px;
+                ">${i + 1}</button>`;
+            } else {
+                paginationHTML += `<button onclick="goToPage(${i})" style="
+                    padding: 8px 12px;
+                    border: 1px solid #ddd;
+                    background: #fff;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    margin-right: 4px;
+                ">${i + 1}</button>`;
+            }
+        }
+        
+        if (endPage < totalPages - 1) {
+            if (endPage < totalPages - 2) {
+                paginationHTML += `<span style="padding: 8px; margin-right: 4px;">...</span>`;
+            }
+            paginationHTML += `<button onclick="goToPage(${totalPages - 1})" style="
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                background: #fff;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 4px;
+            ">${totalPages}</button>`;
+        }
+        
+        if (currentPage < totalPages - 1) {
+            paginationHTML += `<button onclick="goToPage(${currentPage + 1})" style="
+                padding: 8px 16px;
+                border: 1px solid #ddd;
+                background: #fff;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 4px;
+            ">다음</button>`;
+        }
+    }
+    
+    paginationHTML += `<span style="margin-left: 20px; color: #666; font-size: 0.9rem;">총 ${totalElements}개`;
+    if (totalPages > 1) {
+        paginationHTML += ` (${currentPage + 1}/${totalPages} 페이지)`;
+    }
+    paginationHTML += `</span>`;
+    
+    pagination.innerHTML = paginationHTML;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadTemplates();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function toggleTemplateDetails(templateId) {
+    const header = document.querySelector(`[data-template-id="${templateId}"]`);
+    const content = document.getElementById(`template-content-${templateId}`);
+    const historyList = document.getElementById(`template-history-${templateId}`);
+    
+    if (!header || !content) return;
+    
+    const isExpanded = header.classList.contains("active");
+    
+    if (isExpanded) {
+        header.classList.remove("active");
+        content.classList.remove("expanded");
+    } else {
+        header.classList.add("active");
+        content.classList.add("expanded");
+        
+        if (historyList && historyList.innerHTML.includes("로딩 중")) {
+            await loadTemplateHistory(templateId);
+        }
+    }
+}
+
+async function loadTemplateHistory(templateId) {
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+    
+    const historyList = document.getElementById(`template-history-${templateId}`);
+    if (!historyList) return;
+    
+    const headers = getAuthHeaders();
+    if (!headers) return;
+    
+    try {
+        const response = await fetch(`/api/templates/${templateId}/email-history?page=0&size=50`, {
+            headers: headers
+        });
+        
+        if (handleAuthError(response)) {
+            return;
+        }
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.data) {
+                const logs = result.data.logs || [];
+                displayTemplateHistory(templateId, logs);
+            } else {
+                historyList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">발송 내역이 없습니다.</div>';
+            }
+        } else {
+            historyList.innerHTML = '<div style="text-align: center; padding: 20px; color: #e74c3c;">발송 내역을 불러올 수 없습니다.</div>';
+        }
+    } catch (error) {
+        console.error("발송 내역 로드 오류:", error);
+        historyList.innerHTML = '<div style="text-align: center; padding: 20px; color: #e74c3c;">오류가 발생했습니다.</div>';
+    }
+}
+
+function displayTemplateHistory(templateId, logs) {
+    const historyList = document.getElementById(`template-history-${templateId}`);
+    if (!historyList) return;
+    
+    if (!logs || logs.length === 0) {
+        historyList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">발송 내역이 없습니다.</div>';
+        return;
+    }
+    
+    historyList.innerHTML = logs.map(log => {
+        const statusClass = log.status === "SENT" ? "sent" : "failed";
+        const statusText = log.status === "SENT" ? "성공" : "실패";
+        const itemClass = log.status === "SENT" ? "" : "failed";
+        const sentDate = new Date(log.sentAt).toLocaleString();
+        const messagePreview = log.message ? (log.message.length > 100 ? log.message.substring(0, 100) + "..." : log.message) : "-";
+        
+        return `
+          <div class="template-board-history-item ${itemClass}">
+            <div class="template-board-history-header">
+              <span class="template-board-history-email">${log.userEmail}</span>
+              <span class="template-board-history-status ${statusClass}">${statusText}</span>
+            </div>
+            <div class="template-board-history-meta">
+              <span>발송일: ${sentDate}</span>
+              ${log.symbol ? `<span>종목: ${log.symbol}</span>` : ""}
+            </div>
+            <div class="template-board-history-message">${messagePreview}</div>
+            ${log.errorMessage ? `<div style="margin-top: 8px; color: #e74c3c; font-size: 0.75rem;">오류: ${log.errorMessage}</div>` : ""}
+          </div>
+        `;
+    }).join("");
 }
 
 async function createTemplate() {
@@ -163,6 +482,12 @@ async function createTemplate() {
             isEditMode = false;
             editingTemplateId = null;
             
+            currentPage = 0;
+            searchKeyword = "";
+            const searchInput = document.getElementById("searchInput");
+            if (searchInput) {
+                searchInput.value = "";
+            }
             loadTemplates();
         } else {
             const errorText = await response.text();
@@ -264,6 +589,9 @@ async function deleteTemplate(id) {
 
         if (response.ok) {
             alert("템플릿이 삭제되었습니다.");
+            if (templates.length === 1 && currentPage > 0) {
+                currentPage--;
+            }
             loadTemplates();
         } else {
             const errorText = await response.text();

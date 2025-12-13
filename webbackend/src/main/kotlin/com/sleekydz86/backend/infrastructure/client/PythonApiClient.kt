@@ -21,6 +21,7 @@ class PythonApiClient(
     
     private val httpClient = HttpClient.create()
         .responseTimeout(Duration.ofSeconds(60))
+        .keepAlive(true)
         .doOnConnected { connection ->
             connection.addHandlerLast(io.netty.handler.timeout.ReadTimeoutHandler(60))
             connection.addHandlerLast(io.netty.handler.timeout.WriteTimeoutHandler(60))
@@ -363,7 +364,66 @@ class PythonApiClient(
             }
             .filter { it: TechnicalAnalysis? -> it != null }
             .map { it: TechnicalAnalysis? -> it as TechnicalAnalysis }
+            .retryWhen(
+                Retry.backoff(2, Duration.ofSeconds(2))
+                    .filter { error ->
+                        val cause = error.cause
+                        when {
+                            error is reactor.netty.http.client.PrematureCloseException -> true
+                            error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException || 
+                                cause is java.net.ConnectException ||
+                                error.message?.contains("Connection prematurely closed") == true ||
+                                error.message?.contains("Connection refused") == true
+                            }
+                            error is org.springframework.web.reactive.function.client.WebClientException -> {
+                                cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException
+                            }
+                            error is java.net.ConnectException -> true
+                            error is java.util.concurrent.TimeoutException -> true
+                            else -> false
+                        }
+                    }
+                    .doBeforeRetry { retrySignal ->
+                        val failure = retrySignal.failure()
+                        logger.info("전체 분석 조회 재시도: 시도 횟수={}, 오류={}, 원인={}", 
+                            retrySignal.totalRetries() + 1, 
+                            failure.message,
+                            failure.cause?.message ?: "없음")
+                    }
+            )
             .timeout(java.time.Duration.ofSeconds(90))
+            .doOnError { error ->
+                when (error) {
+                    is java.util.concurrent.TimeoutException -> {
+                        logger.warn("Python API 전체 분석 조회 타임아웃 (90초 초과): baseUrl={}", baseUrl)
+                    }
+                    is java.net.ConnectException -> {
+                        logger.warn("Python API 연결 실패: baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", baseUrl)
+                    }
+                    is reactor.netty.http.client.PrematureCloseException -> {
+                        logger.warn("Python API 연결 조기 종료: baseUrl={}. Python API 서버 상태를 확인하세요.", baseUrl)
+                    }
+                    is org.springframework.web.reactive.function.client.WebClientRequestException -> {
+                        val cause = error.cause
+                        when {
+                            cause is java.net.ConnectException -> {
+                                logger.warn("Python API 연결 실패: baseUrl={}. Python API 서버를 시작하세요: python start_python_api.py 또는 python api_server_enhanced.py", baseUrl)
+                            }
+                            cause is reactor.netty.http.client.PrematureCloseException -> {
+                                logger.warn("Python API 연결 조기 종료: baseUrl={}. Python API 서버 상태를 확인하세요.", baseUrl)
+                            }
+                            else -> {
+                                logger.warn("WebClient 오류: baseUrl={}, error={}", baseUrl, error.message)
+                            }
+                        }
+                    }
+                    else -> {
+                        logger.warn("Python API 전체 분석 조회 오류: baseUrl={}, error={}", baseUrl, error.message)
+                    }
+                }
+            }
             .onErrorResume { error: Throwable ->
                 val cause = error.cause
                 when {
@@ -375,11 +435,23 @@ class PythonApiClient(
                         logger.warn("Python API 전체 분석 조회 ExternalApiException: {}", error.message)
                         Flux.empty<TechnicalAnalysis>()
                     }
+                    error is reactor.netty.http.client.PrematureCloseException -> {
+                        logger.warn("Python API 전체 분석 조회 연결 조기 종료: 빈 결과 반환. Python API 서버 상태를 확인하세요.")
+                        Flux.empty<TechnicalAnalysis>()
+                    }
                     error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
                         when {
+                            cause is reactor.netty.http.client.PrematureCloseException -> {
+                                logger.warn("Python API 전체 분석 조회 연결 조기 종료: 빈 결과 반환. Python API 서버 상태를 확인하세요.")
+                                Flux.empty<TechnicalAnalysis>()
+                            }
                             cause is java.net.ConnectException || 
                             error.message?.contains("Connection refused") == true -> {
                                 logger.debug("Python API 서버가 실행되지 않음 (연결 거부): 빈 결과 반환. Python API 서버를 시작하세요: python start_python_api.py")
+                                Flux.empty<TechnicalAnalysis>()
+                            }
+                            error.message?.contains("Connection prematurely closed") == true -> {
+                                logger.warn("Python API 전체 분석 조회 연결 조기 종료: 빈 결과 반환. Python API 서버 상태를 확인하세요.")
                                 Flux.empty<TechnicalAnalysis>()
                             }
                             else -> {

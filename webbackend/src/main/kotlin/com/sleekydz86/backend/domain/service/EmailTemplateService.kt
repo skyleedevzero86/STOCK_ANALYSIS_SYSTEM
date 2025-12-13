@@ -4,6 +4,9 @@ import com.sleekydz86.backend.domain.model.EmailTemplate
 import com.sleekydz86.backend.domain.model.TemplateRequest
 import com.sleekydz86.backend.infrastructure.entity.EmailTemplateEntity
 import com.sleekydz86.backend.infrastructure.repository.EmailTemplateRepository
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
 import java.time.LocalDateTime
@@ -30,6 +33,27 @@ class EmailTemplateService(
     fun getAllTemplates(): Mono<List<EmailTemplate>> {
         return Mono.just(emailTemplateRepository.findAllByIsActiveTrue()
             .map { entity: EmailTemplateEntity -> entity.toDomain() })
+    }
+    
+    fun getTemplates(page: Int, size: Int, keyword: String?): Mono<Map<String, Any>> {
+        return Mono.fromCallable {
+            val pageable: Pageable = PageRequest.of(page, size)
+            val result: Page<EmailTemplateEntity> = if (keyword.isNullOrBlank()) {
+                emailTemplateRepository.findAllActive(pageable)
+            } else {
+                emailTemplateRepository.findAllActiveByKeyword(keyword.trim(), pageable)
+            }
+            
+            mapOf(
+                "templates" to result.content.map { it.toDomain() },
+                "totalElements" to result.totalElements,
+                "totalPages" to result.totalPages,
+                "currentPage" to result.number,
+                "pageSize" to result.size,
+                "hasNext" to result.hasNext(),
+                "hasPrevious" to result.hasPrevious()
+            )
+        }
     }
 
     fun getTemplateById(id: Long): Mono<EmailTemplate> {

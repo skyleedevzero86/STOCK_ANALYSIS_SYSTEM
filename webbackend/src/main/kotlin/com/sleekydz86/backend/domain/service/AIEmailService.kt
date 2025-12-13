@@ -32,7 +32,7 @@ class AIEmailService(
                             Flux.fromIterable(emailSubscribers)
                                 .flatMap { subscriber: EmailSubscription ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
-                                    val renderedContent = emailTemplateService.renderTemplate(template, variables)
+                                    val renderedContent = buildEmailContent(template, variables, aiResult)
                                     
                                     sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
                                         .map { success: Boolean ->
@@ -84,6 +84,86 @@ class AIEmailService(
         )
     }
 
+    private fun buildEmailContent(template: EmailTemplate, variables: Map<String, String>, aiResult: AIAnalysisResult): String {
+        var templateContent = template.content
+        
+        val personalizedContent = personalizeTemplateContent(templateContent, variables)
+        
+        val aiAnalysisSection = buildAIAnalysisSection(aiResult, variables)
+        
+        return "$personalizedContent\n\n$aiAnalysisSection"
+    }
+    
+    private fun personalizeTemplateContent(content: String, variables: Map<String, String>): String {
+        var personalized = content
+        
+        val name = variables["name"] ?: "고객"
+        val symbol = variables["symbol"] ?: ""
+        val date = variables["date"] ?: ""
+        
+        personalized = personalized.replace("{name}", name)
+        personalized = personalized.replace("{email}", variables["email"] ?: "")
+        personalized = personalized.replace("{symbol}", symbol)
+        personalized = personalized.replace("{date}", date)
+        
+        personalized = personalized.replace("{ai_analysis}", "")
+        personalized = personalized.replace("{current_price}", variables["current_price"] ?: "")
+        personalized = personalized.replace("{change_percent}", variables["change_percent"] ?: "")
+        personalized = personalized.replace("{rsi}", variables["rsi"] ?: "")
+        personalized = personalized.replace("{macd}", variables["macd"] ?: "")
+        personalized = personalized.replace("{trend}", variables["trend"] ?: "")
+        personalized = personalized.replace("{market_sentiment}", variables["market_sentiment"] ?: "")
+        personalized = personalized.replace("{risk_level}", variables["risk_level"] ?: "")
+        personalized = personalized.replace("{recommendation}", variables["recommendation"] ?: "")
+        personalized = personalized.replace("{confidence_score}", variables["confidence_score"] ?: "")
+        
+        return personalized.trim()
+    }
+    
+    private fun buildAIAnalysisSection(aiResult: AIAnalysisResult, variables: Map<String, String>): String {
+        val sb = StringBuilder()
+        sb.append("# 주식 분석 내용\n\n")
+        
+        if (aiResult.aiSummary != null && aiResult.aiSummary.isNotBlank()) {
+            sb.append(aiResult.aiSummary)
+            sb.append("\n\n")
+        }
+        
+        val technicalAnalysis = aiResult.technicalAnalysis
+        if (technicalAnalysis != null && technicalAnalysis.isNotEmpty()) {
+            sb.append("## 기술적 분석\n\n")
+            technicalAnalysis.forEach { (key, value) ->
+                sb.append("- $key: $value\n")
+            }
+            sb.append("\n")
+        }
+        
+        val symbol = variables["symbol"] ?: ""
+        if (symbol.isNotBlank()) {
+            sb.append("**종목**: $symbol\n")
+        }
+        
+        val date = variables["date"] ?: ""
+        if (date.isNotBlank()) {
+            sb.append("**분석 일자**: $date\n")
+        }
+        
+        if (aiResult.marketSentiment != null && aiResult.marketSentiment.isNotBlank()) {
+            sb.append("**시장 심리**: ${aiResult.marketSentiment}\n")
+        }
+        if (aiResult.riskLevel != null && aiResult.riskLevel.isNotBlank()) {
+            sb.append("**리스크 레벨**: ${aiResult.riskLevel}\n")
+        }
+        if (aiResult.recommendation != null && aiResult.recommendation.isNotBlank()) {
+            sb.append("**투자 추천**: ${aiResult.recommendation}\n")
+        }
+        if (aiResult.confidenceScore != null) {
+            sb.append("**신뢰도**: ${"%.1f".format(aiResult.confidenceScore * 100)}%\n")
+        }
+        
+        return sb.toString().trim()
+    }
+
     private fun sendEmailViaPythonAPI(toEmail: String, subject: String, content: String): Mono<Boolean> {
         return pythonApiClient.sendEmail(toEmail, subject, content)
     }
@@ -103,7 +183,7 @@ class AIEmailService(
                                     Flux.fromIterable(emailSubscribers)
                                         .flatMap { subscriber: EmailSubscription ->
                                             val variables = createEmailVariables(subscriber, aiResult, symbol)
-                                            val renderedContent = emailTemplateService.renderTemplate(template, variables)
+                                            val renderedContent = buildEmailContent(template, variables, aiResult)
                                             
                                             sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
                                                 .map { success: Boolean ->

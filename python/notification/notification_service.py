@@ -1,5 +1,6 @@
 import smtplib
 import requests
+import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from email.mime.text import MIMEText
@@ -51,7 +52,7 @@ class NotificationService:
         else:
             self.message_service = None
         
-    def send_email(self, to_email: str, subject: str, body: str) -> bool:
+    def send_email(self, to_email: str, subject: str, body: str, max_retries: int = 3) -> bool:
         try:
             if not self.email_config:
                 logger.warning("이메일 설정이 없습니다", component="NotificationService")
@@ -72,41 +73,72 @@ class NotificationService:
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain', 'utf-8'))
             
-            server = None
-            try:
-                logger.info("SMTP 서버 연결 시도", to_email=to_email, smtp_server=smtp_server, smtp_port=smtp_port, component="NotificationService")
-                server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
-                logger.info("SMTP 서버 연결 성공", to_email=to_email, component="NotificationService")
-                
-                logger.info("STARTTLS 시작", to_email=to_email, component="NotificationService")
-                server.starttls()
-                logger.info("STARTTLS 완료", to_email=to_email, component="NotificationService")
-                
-                logger.info("SMTP 로그인 시도", to_email=to_email, user=user, component="NotificationService")
-                server.login(user, password)
-                logger.info("SMTP 로그인 성공", to_email=to_email, component="NotificationService")
-                
-                logger.info("이메일 발송 시도", to_email=to_email, subject=subject, component="NotificationService")
-                failed_recipients = server.send_message(msg)
-                logger.info("send_message 반환값", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
-                
-                if failed_recipients:
-                    logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
-                    raise EmailNotificationError(
-                        f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
-                        error_code="EMAIL_SEND_FAILED",
-                        cause=None
-                    )
-                
-                logger.info("이메일 발송 성공 (SMTP 서버 응답 확인됨)", to_email=to_email, subject=subject, failed_recipients=failed_recipients, component="NotificationService")
-                return True
-            finally:
-                if server:
-                    try:
-                        server.quit()
-                        logger.debug("SMTP 서버 연결 종료", to_email=to_email, component="NotificationService")
-                    except Exception as e:
-                        logger.warning("SMTP 서버 종료 중 오류 발생 (무시됨)", exception=e, component="NotificationService")
+            last_error = None
+            for attempt in range(1, max_retries + 1):
+                server = None
+                try:
+                    if attempt > 1:
+                        delay = min(2 ** (attempt - 1), 10)
+                        logger.info("이메일 발송 재시도", to_email=to_email, attempt=attempt, delay=delay, component="NotificationService")
+                        time.sleep(delay)
+                    
+                    logger.info("SMTP 서버 연결 시도", to_email=to_email, smtp_server=smtp_server, smtp_port=smtp_port, attempt=attempt, component="NotificationService")
+                    server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                    logger.info("SMTP 서버 연결 성공", to_email=to_email, attempt=attempt, component="NotificationService")
+                    
+                    logger.info("STARTTLS 시작", to_email=to_email, attempt=attempt, component="NotificationService")
+                    server.starttls()
+                    logger.info("STARTTLS 완료", to_email=to_email, attempt=attempt, component="NotificationService")
+                    
+                    logger.info("SMTP 로그인 시도", to_email=to_email, user=user, attempt=attempt, component="NotificationService")
+                    server.login(user, password)
+                    logger.info("SMTP 로그인 성공", to_email=to_email, attempt=attempt, component="NotificationService")
+                    
+                    logger.info("이메일 발송 시도", to_email=to_email, subject=subject, attempt=attempt, component="NotificationService")
+                    failed_recipients = server.send_message(msg)
+                    logger.info("send_message 반환값", to_email=to_email, failed_recipients=failed_recipients, attempt=attempt, component="NotificationService")
+                    
+                    if failed_recipients:
+                        logger.error("이메일 발송 실패: 일부 수신자에게 발송 실패", to_email=to_email, failed_recipients=failed_recipients, component="NotificationService")
+                        raise EmailNotificationError(
+                            f"이메일 발송 실패: 수신자에게 발송할 수 없습니다. {failed_recipients}",
+                            error_code="EMAIL_SEND_FAILED",
+                            cause=None
+                        )
+                    
+                    logger.info("이메일 발송 성공", to_email=to_email, subject=subject, attempt=attempt, component="NotificationService")
+                    return True
+                except smtplib.SMTPConnectError as e:
+                    last_error = e
+                    error_msg = str(e)
+                    if "Too many concurrent connection" in error_msg or "421" in error_msg:
+                        if attempt < max_retries:
+                            logger.warning("SMTP 동시 연결 제한 오류, 재시도 예정", to_email=to_email, attempt=attempt, error=error_msg, component="NotificationService")
+                            if server:
+                                try:
+                                    server.quit()
+                                except:
+                                    pass
+                            continue
+                        else:
+                            logger.error("SMTP 동시 연결 제한 오류, 재시도 한도 초과", to_email=to_email, attempt=attempt, error=error_msg, component="NotificationService")
+                            raise EmailNotificationError(
+                                f"이메일 SMTP 오류: {error_msg}",
+                                error_code="EMAIL_SMTP_ERROR",
+                                cause=e
+                            ) from e
+                    else:
+                        raise
+                finally:
+                    if server:
+                        try:
+                            server.quit()
+                            logger.debug("SMTP 서버 연결 종료", to_email=to_email, attempt=attempt, component="NotificationService")
+                        except Exception as e:
+                            logger.warning("SMTP 서버 종료 중 오류 발생 (무시됨)", exception=e, component="NotificationService")
+            
+            if last_error:
+                raise last_error
             
         except smtplib.SMTPAuthenticationError as e:
             logger.error("이메일 인증 실패", to_email=to_email, exception=e, component="NotificationService")

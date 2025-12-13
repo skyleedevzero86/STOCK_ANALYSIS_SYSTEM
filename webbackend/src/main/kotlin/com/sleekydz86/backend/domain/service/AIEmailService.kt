@@ -88,7 +88,7 @@ class AIEmailService(
                             
                             logger.info("이메일 발송 시작: count={}", emailSubscribers.size)
                             Flux.fromIterable(emailSubscribers)
-                                .flatMap { subscriber: EmailSubscription ->
+                                .concatMap { subscriber: EmailSubscription ->
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
                                     val renderedContent = buildEmailContent(template, variables, aiResult)
                                     
@@ -127,10 +127,10 @@ class AIEmailService(
                                                 logger.error("이메일 발송 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
                                             }
                                             .map {
-                                                if (success) {
-                                                    "성공 ${subscriber.email}"
-                                                } else {
-                                                    "실패 ${subscriber.email}"
+                                            if (success) {
+                                                "성공 ${subscriber.email}"
+                                            } else {
+                                                "실패 ${subscriber.email}"
                                                 }
                                             }
                                         }
@@ -178,8 +178,8 @@ class AIEmailService(
                                         "error" to (error.message ?: "이메일 발송 중 오류 발생"),
                                         "errorType" to error.javaClass.simpleName
                                     ))
-                                }
-                        }
+                    }
+            }
                     }
             }
             .onErrorResume { error ->
@@ -352,12 +352,12 @@ class AIEmailService(
                                                         logger.error("대량 이메일 발송 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
                                                     }
                                                     .map {
-                                                        mapOf(
-                                                            "symbol" to symbol,
-                                                            "subscriber" to subscriber.email,
-                                                            "success" to success,
-                                                            "aiSummary" to aiResult.aiSummary
-                                                        )
+                                                        mapOf<String, Any>(
+                                                        "symbol" to symbol,
+                                                        "subscriber" to subscriber.email,
+                                                        "success" to success,
+                                                            "aiSummary" to (aiResult.aiSummary ?: "")
+                                                    )
                                                     }
                                                 }
                                                 .onErrorResume { error ->
@@ -383,7 +383,7 @@ class AIEmailService(
                                                             "success" to false,
                                                             "aiSummary" to (aiResult.aiSummary ?: ""),
                                                             "error" to errorMessage
-                                                        )
+                                                        ) as Map<String, Any>
                                                     }
                                                 }
                                         }

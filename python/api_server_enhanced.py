@@ -268,12 +268,15 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 PUBLIC_PATHS = [
     "/api/auth/login",
     "/api/auth/logout",
-    "/api/health"
+    "/api/health",
+    "/api/notifications/email",
+    "/api/notifications/realtime-email",
+    "/api/analysis"
 ]
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: StarletteRequest, call_next):
-        if any(request.url.path.startswith(path) for path in PUBLIC_PATHS):
+        if request.url.path in PUBLIC_PATHS or any(request.url.path.startswith(path) for path in PUBLIC_PATHS):
             return await call_next(request)
         
         if request.url.path.startswith("/ws"):

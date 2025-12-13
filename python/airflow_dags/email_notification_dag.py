@@ -57,7 +57,7 @@ def get_sms_subscribers():
 def get_stock_analysis():
     try:
         python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-        python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+        python_api_port = os.getenv('PYTHON_API_PORT', '9000')
         response = requests.get(f'http://{python_api_host}:{python_api_port}/api/analysis/all', timeout=30)
         if response.status_code == 200:
             data = response.json()
@@ -83,14 +83,15 @@ def get_stock_analysis():
 
 def send_email_notification(to_email, subject, body, source="airflow"):
     python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-    python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+    python_api_port = os.getenv('PYTHON_API_PORT', '9000')
     backend_host = os.getenv('BACKEND_HOST', 'localhost')
     
-    # 여러 포트 시도 (8001, 9000)
-    ports_to_try = [python_api_port, '9000', '8001']
-    if python_api_port in ports_to_try:
-        ports_to_try.remove(python_api_port)
-    ports_to_try.insert(0, python_api_port)
+    ports_to_try = []
+    if python_api_port:
+        ports_to_try.append(python_api_port)
+    for port in ['9000', '8001']:
+        if port not in ports_to_try:
+            ports_to_try.append(port)
     
     last_error = None
     for port in ports_to_try:
@@ -114,7 +115,6 @@ def send_email_notification(to_email, subject, body, source="airflow"):
                     if response_data.get('success'):
                         logging.info(f"이메일 발송 성공: {to_email}")
                         
-                        # 백엔드에 로그 저장 시도
                         try:
                             log_response = requests.post(
                                 f'http://{backend_host}:8080/api/admin/save-notification-log',
@@ -154,7 +154,6 @@ def send_email_notification(to_email, subject, body, source="airflow"):
                 logging.error(f"이메일 발송 실패 ({to_email}): {error_msg}")
                 last_error = error_msg
                 
-                # 실패 로그도 백엔드에 저장 시도
                 try:
                     requests.post(
                         f'http://{backend_host}:8080/api/admin/save-notification-log',
@@ -187,10 +186,8 @@ def send_email_notification(to_email, subject, body, source="airflow"):
             last_error = f"예상치 못한 오류: {str(e)}"
             continue
     
-    # 모든 포트 시도 실패
     logging.error(f"이메일 발송 완전 실패 ({to_email}): 모든 포트 시도 실패. 마지막 오류: {last_error}")
     
-    # 실패 로그 저장 시도
     try:
         requests.post(
             f'http://{backend_host}:8080/api/admin/save-notification-log',
@@ -213,7 +210,7 @@ def send_email_notification(to_email, subject, body, source="airflow"):
 def send_sms_notification(to_phone, message, source="airflow", user_email=None):
     try:
         python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-        python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+        python_api_port = os.getenv('PYTHON_API_PORT', '9000')
         backend_host = os.getenv('BACKEND_HOST', 'localhost')
         
         response = requests.post(f'http://{python_api_host}:{python_api_port}/api/notifications/sms', 
@@ -386,9 +383,8 @@ def send_daily_analysis_emails():
         logging.info(f"일일 분석 메일 발송 시간이 아닙니다. (현재: {current_time.hour}시 {current_time.minute}분, 발송 시간: {daily_email_hour}시 {daily_email_minute}분)")
         return
     
-    # 환경 변수 확인
     python_api_host = os.getenv('PYTHON_API_HOST', 'localhost')
-    python_api_port = os.getenv('PYTHON_API_PORT', '8001')
+    python_api_port = os.getenv('PYTHON_API_PORT', '9000')
     backend_host = os.getenv('BACKEND_HOST', 'localhost')
     logging.info(f"Python API: {python_api_host}:{python_api_port}")
     logging.info(f"Backend: {backend_host}:8080")
@@ -400,7 +396,6 @@ def send_daily_analysis_emails():
         logging.warning("구독자가 없습니다. 이메일 발송을 중단합니다.")
         return
     
-    # 이메일 동의한 구독자 필터링
     email_consent_subscribers = [s for s in subscribers if s.get('isEmailConsent', False)]
     logging.info(f"이메일 동의한 구독자 수: {len(email_consent_subscribers)}명")
     

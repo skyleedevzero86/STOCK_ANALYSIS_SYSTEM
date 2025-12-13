@@ -22,7 +22,7 @@ class PrintFormatter:
     
     @staticmethod
     def status_icon(success: bool) -> str:
-        return "✓" if success else "✗"
+        return "[OK]" if success else "[FAIL]"
     
     @staticmethod
     def print_header(title: str):
@@ -39,7 +39,7 @@ class PrintFormatter:
     
     @staticmethod
     def print_error(service_name: str, error: str):
-        print(f"✗ {service_name}: {error}")
+        print(f"[FAIL] {service_name}: {error}")
     
     @staticmethod
     def print_summary(results: dict):

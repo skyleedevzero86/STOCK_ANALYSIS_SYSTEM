@@ -15,9 +15,9 @@ def install_translation_modules():
         print(f"\n{description} 설치 중: {module}")
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", module])
-            print(f"✓ {module} 설치 완료")
+            print(f"[OK] {module} 설치 완료")
         except subprocess.CalledProcessError as e:
-            print(f"✗ {module} 설치 실패: {e}")
+            print(f"[FAIL] {module} 설치 실패: {e}")
     
     print("\n" + "=" * 50)
     print("설치 완료! 서버를 재시작하세요.")

@@ -652,13 +652,38 @@ async function sendAIEmail() {
                 }
 
                 const result = JSON.parse(text);
-                resultArea.textContent = `AI 분석 이메일 발송 완료!\n\n템플릿: ${
-                    result.template || "N/A"
-                }\n종목: ${result.symbol || "N/A"}\n구독자 수: ${
-                    result.totalSubscribers || 0
-                }\n\nAI 분석 결과:\n${
-                    result.aiAnalysis || "분석 결과 없음"
-                }\n\n발송 결과:\n${(result.results || []).join("\n")}`;
+                const results = result.results || [];
+                const successCount = results.filter(r => typeof r === 'string' && r.startsWith('성공')).length;
+                const failCount = results.filter(r => typeof r === 'string' && (r.startsWith('실패') || r.startsWith('오류'))).length;
+                
+                resultArea.innerHTML = `
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="color: #2f456e; margin-bottom: 10px;">AI 분석 이메일 발송 완료</h4>
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                            <div><strong>템플릿:</strong> ${result.template || "N/A"}</div>
+                            <div><strong>종목:</strong> ${result.symbol || "N/A"}</div>
+                            <div><strong>구독자 수:</strong> ${result.totalSubscribers || 0}명</div>
+                            <div style="margin-top: 8px;">
+                                <span style="color: #27ae60; font-weight: bold;">성공: ${successCount}건</span>
+                                <span style="margin-left: 15px; color: #e74c3c; font-weight: bold;">실패: ${failCount}건</span>
+                            </div>
+                        </div>
+                        <div style="background: #e8f4f8; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                            <strong>AI 분석 결과:</strong>
+                            <div style="margin-top: 8px; white-space: pre-wrap; font-size: 0.9rem;">${result.aiAnalysis || "분석 결과 없음"}</div>
+                        </div>
+                        <div>
+                            <strong>발송 상세 결과:</strong>
+                            <div style="margin-top: 8px; max-height: 300px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">
+                                ${results.length > 0 ? results.map(r => {
+                                    const isSuccess = typeof r === 'string' && r.startsWith('성공');
+                                    const color = isSuccess ? '#27ae60' : '#e74c3c';
+                                    return `<div style="color: ${color}; margin-bottom: 4px;">${r}</div>`;
+                                }).join('') : '<div style="color: #999;">발송 결과가 없습니다.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
             } catch (jsonError) {
                 console.error("AI 이메일 발송 JSON 파싱 오류:", jsonError);
                 resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다. (${jsonError.message})`;
@@ -746,18 +771,35 @@ async function sendBulkAIEmail() {
                 }
 
                 const result = JSON.parse(text);
-                resultArea.textContent = `대량 AI 분석 이메일 발송 완료!\n\n템플릿: ${
-                    result.template || "N/A"
-                }\n종목들: ${(result.symbols || []).join(", ")}\n구독자 수: ${
-                    result.totalSubscribers || 0
-                }\n\n발송 결과:\n${(result.results || [])
-                    .map(
-                        (r) =>
-                            `${r.symbol || "N/A"}: ${r.subscriber || "N/A"} - ${
-                                r.success ? "성공" : "실패"
-                            }`
-                    )
-                    .join("\n")}`;
+                const results = result.results || [];
+                const successCount = results.filter(r => r.success === true).length;
+                const failCount = results.filter(r => r.success === false).length;
+                
+                resultArea.innerHTML = `
+                    <div style="margin-bottom: 15px;">
+                        <h4 style="color: #2f456e; margin-bottom: 10px;">대량 AI 분석 이메일 발송 완료</h4>
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+                            <div><strong>템플릿:</strong> ${result.template || "N/A"}</div>
+                            <div><strong>종목들:</strong> ${(result.symbols || []).join(", ")}</div>
+                            <div><strong>구독자 수:</strong> ${result.totalSubscribers || 0}명</div>
+                            <div style="margin-top: 8px;">
+                                <span style="color: #27ae60; font-weight: bold;">성공: ${successCount}건</span>
+                                <span style="margin-left: 15px; color: #e74c3c; font-weight: bold;">실패: ${failCount}건</span>
+                            </div>
+                        </div>
+                        <div>
+                            <strong>발송 상세 결과:</strong>
+                            <div style="margin-top: 8px; max-height: 300px; overflow-y: auto; background: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ddd;">
+                                ${results.length > 0 ? results.map(r => {
+                                    const isSuccess = r.success === true;
+                                    const color = isSuccess ? '#27ae60' : '#e74c3c';
+                                    const status = isSuccess ? '성공' : '실패';
+                                    return `<div style="color: ${color}; margin-bottom: 4px;">${r.symbol || "N/A"}: ${r.subscriber || "N/A"} - ${status}${r.error ? ` (${r.error})` : ''}</div>`;
+                                }).join('') : '<div style="color: #999;">발송 결과가 없습니다.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
             } catch (jsonError) {
                 console.error("대량 AI 이메일 발송 JSON 파싱 오류:", jsonError);
                 resultArea.textContent = `응답 파싱 오류: 서버 응답을 처리할 수 없습니다. (${jsonError.message})`;

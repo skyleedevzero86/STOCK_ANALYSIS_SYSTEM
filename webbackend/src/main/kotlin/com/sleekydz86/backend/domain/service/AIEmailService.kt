@@ -17,7 +17,8 @@ class AIEmailService(
     private val emailTemplateService: EmailTemplateService,
     private val emailSubscriptionService: EmailSubscriptionService,
     private val aiAnalysisService: AIAnalysisService,
-    private val pythonApiClient: PythonApiClient
+    private val pythonApiClient: PythonApiClient,
+    private val notificationLogService: NotificationLogService
 ) {
     private val logger = LoggerFactory.getLogger(AIEmailService::class.java)
 
@@ -37,6 +38,38 @@ class AIEmailService(
                         )
                         .doOnNext { aiResult -> logger.info("AI 분석 생성 성공: symbol={}, summary={}", symbol, aiResult.aiSummary?.take(50)) }
                         .doOnError { error -> logger.error("AI 분석 생성 실패: symbol={}, error={}", symbol, error.message, error) }
+                        .switchIfEmpty(
+                            Mono.defer {
+                                logger.warn("AI 분석 생성: 빈 결과 반환, 기본값 사용: symbol={}", symbol)
+                                Mono.just(
+                                    AIAnalysisResult(
+                                        symbol = symbol,
+                                        analysisType = "default",
+                                        aiSummary = "분석 데이터를 가져올 수 없습니다.",
+                                        technicalAnalysis = emptyMap(),
+                                        marketSentiment = "알 수 없음",
+                                        riskLevel = "알 수 없음",
+                                        recommendation = "데이터 부족",
+                                        confidenceScore = 0.0
+                                    )
+                                )
+                            }
+                        )
+                        .onErrorResume { error ->
+                            logger.error("AI 분석 생성 중 예외 발생: symbol={}, error={}", symbol, error.message, error)
+                            Mono.just(
+                                AIAnalysisResult(
+                                    symbol = symbol,
+                                    analysisType = "error",
+                                    aiSummary = "분석 생성 중 오류 발생: ${error.message}",
+                                    technicalAnalysis = emptyMap(),
+                                    marketSentiment = "알 수 없음",
+                                    riskLevel = "알 수 없음",
+                                    recommendation = "오류 발생",
+                                    confidenceScore = 0.0
+                                )
+                            )
+                        }
                         .flatMap { aiResult: AIAnalysisResult ->
                             val emailSubscribers = subscribers.filter { subscription: EmailSubscription -> subscription.isEmailConsent }
                             logger.info("이메일 동의 구독자 수: total={}, emailConsent={}", subscribers.size, emailSubscribers.size)
@@ -59,19 +92,67 @@ class AIEmailService(
                                     val variables = createEmailVariables(subscriber, aiResult, symbol)
                                     val renderedContent = buildEmailContent(template, variables, aiResult)
                                     
+                                    logger.info("이메일 발송 시도: email={}, subject={}", subscriber.email, template.subject)
                                     sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                        .map { success: Boolean ->
-                                            if (success) {
-                                                logger.info("이메일 발송 성공: email={}", subscriber.email)
-                                                "성공 ${subscriber.email}"
-                                            } else {
-                                                logger.warn("이메일 발송 실패: email={}", subscriber.email)
-                                                "실패 ${subscriber.email}"
+                                        .doOnNext { success -> 
+                                            logger.info("이메일 발송 결과 수신: email={}, success={}", subscriber.email, success)
+                                        }
+                                        .doOnError { error ->
+                                            logger.error("이메일 발송 API 호출 오류: email={}, error={}, errorType={}", 
+                                                subscriber.email, error.message, error.javaClass.simpleName, error)
+                                        }
+                                        .flatMap { success: Boolean ->
+                                            logger.info("이메일 발송 결과 처리 시작: email={}, success={}", subscriber.email, success)
+                                            val status = if (success) "sent" else "failed"
+                                            val errorMsg = if (success) null else "이메일 발송에 실패했습니다."
+                                            
+                                            notificationLogService.saveEmailLog(
+                                                userEmail = subscriber.email,
+                                                subject = template.subject,
+                                                message = renderedContent,
+                                                status = status,
+                                                errorMessage = errorMsg,
+                                                source = "ai_email",
+                                                notificationType = "email",
+                                                symbol = symbol
+                                            )
+                                            .doOnSuccess {
+                                                if (success) {
+                                                    logger.info("이메일 발송 성공 및 로그 저장 완료: email={}", subscriber.email)
+                                                } else {
+                                                    logger.warn("이메일 발송 실패 및 로그 저장 완료: email={}", subscriber.email)
+                                                }
+                                            }
+                                            .doOnError { logError ->
+                                                logger.error("이메일 발송 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
+                                            }
+                                            .map {
+                                                if (success) {
+                                                    "성공 ${subscriber.email}"
+                                                } else {
+                                                    "실패 ${subscriber.email}"
+                                                }
                                             }
                                         }
                                         .onErrorResume { error ->
-                                            logger.error("이메일 발송 오류: email={}, error={}", subscriber.email, error.message, error)
-                                            Mono.just("오류 ${subscriber.email}: ${error.message}")
+                                            logger.error("이메일 발송 오류: email={}, error={}, errorType={}", 
+                                                subscriber.email, error.message, error.javaClass.simpleName, error)
+                                            notificationLogService.saveEmailLog(
+                                                userEmail = subscriber.email,
+                                                subject = template.subject,
+                                                message = renderedContent,
+                                                status = "failed",
+                                                errorMessage = error.message,
+                                                source = "ai_email",
+                                                notificationType = "email",
+                                                symbol = symbol
+                                            )
+                                            .doOnError { logError ->
+                                                logger.error("이메일 발송 오류 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
+                                            }
+                                            .map {
+                                                "오류 ${subscriber.email}: ${error.message}"
+                                            }
                                         }
                                 }
                                 .collectList()
@@ -86,47 +167,43 @@ class AIEmailService(
                                         "aiAnalysis" to (aiResult.aiSummary ?: "분석 결과 없음")
                                     )
                                 }
+                                .onErrorResume { error ->
+                                    logger.error("이메일 발송 수집 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
+                                    Mono.just(mapOf(
+                                        "template" to template.name,
+                                        "symbol" to symbol,
+                                        "totalSubscribers" to emailSubscribers.size,
+                                        "results" to emptyList<String>(),
+                                        "aiAnalysis" to (aiResult.aiSummary ?: "분석 결과 없음"),
+                                        "error" to (error.message ?: "이메일 발송 중 오류 발생"),
+                                        "errorType" to error.javaClass.simpleName
+                                    ))
+                                }
                         }
-                        .onErrorResume { error ->
-                            logger.error("AI 분석 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
-                            Mono.just(mapOf(
-                                "template" to template.name,
-                                "symbol" to symbol,
-                                "totalSubscribers" to 0,
-                                "results" to emptyList<String>(),
-                                "aiAnalysis" to "분석 생성 중 오류 발생",
-                                "error" to (error.message ?: "알 수 없는 오류"),
-                                "errorType" to error.javaClass.simpleName
-                            ))
-                        }
-                    }
-                    .onErrorResume { error ->
-                        logger.error("구독자 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
-                        Mono.just(mapOf(
-                            "template" to "알 수 없음",
-                            "symbol" to symbol,
-                            "totalSubscribers" to 0,
-                            "results" to emptyList<String>(),
-                            "aiAnalysis" to "구독자 조회 중 오류 발생",
-                            "error" to (error.message ?: "알 수 없는 오류"),
-                            "errorType" to error.javaClass.simpleName
-                        ))
                     }
             }
             .onErrorResume { error ->
-                logger.error("템플릿 처리 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
+                logger.error("AI 이메일 발송 중 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error)
+                val errorMessage = when {
+                    error.message?.contains("Template not found") == true -> "템플릿을 찾을 수 없습니다."
+                    error.message?.contains("구독자") == true -> "구독자 조회 중 오류 발생"
+                    error.message?.contains("분석") == true -> "AI 분석 생성 중 오류 발생"
+                    else -> error.message ?: "알 수 없는 오류"
+                }
                 Mono.just(mapOf(
                     "template" to "알 수 없음",
                     "symbol" to symbol,
                     "totalSubscribers" to 0,
                     "results" to emptyList<String>(),
-                    "aiAnalysis" to "템플릿 조회 중 오류 발생",
-                    "error" to (error.message ?: "알 수 없는 오류"),
+                    "aiAnalysis" to "오류 발생",
+                    "error" to errorMessage,
                     "errorType" to error.javaClass.simpleName
                 ))
             }
-            .doOnNext { result -> logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, result={}", templateId, symbol, result) }
-            .doOnError { error -> logger.error("AI 이메일 발송 최종 오류: templateId={}, symbol={}, error={}", templateId, symbol, error.message, error) }
+            .doOnNext { result -> logger.info("AI 이메일 발송 완료: templateId={}, symbol={}, totalSubscribers={}", 
+                templateId, symbol, result["totalSubscribers"]) }
+            .doOnError { error -> logger.error("AI 이메일 발송 최종 오류: templateId={}, symbol={}, error={}", 
+                templateId, symbol, error.message, error) }
     }
 
     private fun createEmailVariables(
@@ -257,13 +334,57 @@ class AIEmailService(
                                             val renderedContent = buildEmailContent(template, variables, aiResult)
                                             
                                             sendEmailViaPythonAPI(subscriber.email, template.subject, renderedContent)
-                                                .map { success: Boolean ->
-                                                    mapOf(
-                                                        "symbol" to symbol,
-                                                        "subscriber" to subscriber.email,
-                                                        "success" to success,
-                                                        "aiSummary" to aiResult.aiSummary
+                                                .flatMap { success: Boolean ->
+                                                    val status = if (success) "sent" else "failed"
+                                                    val errorMsg = if (success) null else "이메일 발송에 실패했습니다."
+                                                    
+                                                    notificationLogService.saveEmailLog(
+                                                        userEmail = subscriber.email,
+                                                        subject = template.subject,
+                                                        message = renderedContent,
+                                                        status = status,
+                                                        errorMessage = errorMsg,
+                                                        source = "ai_email_bulk",
+                                                        notificationType = "email",
+                                                        symbol = symbol
                                                     )
+                                                    .doOnError { logError ->
+                                                        logger.error("대량 이메일 발송 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
+                                                    }
+                                                    .map {
+                                                        mapOf(
+                                                            "symbol" to symbol,
+                                                            "subscriber" to subscriber.email,
+                                                            "success" to success,
+                                                            "aiSummary" to aiResult.aiSummary
+                                                        )
+                                                    }
+                                                }
+                                                .onErrorResume { error ->
+                                                    logger.error("대량 이메일 발송 오류: email={}, error={}", subscriber.email, error.message, error)
+                                                    val errorMessage = error.message ?: "알 수 없는 오류"
+                                                    notificationLogService.saveEmailLog(
+                                                        userEmail = subscriber.email,
+                                                        subject = template.subject,
+                                                        message = renderedContent,
+                                                        status = "failed",
+                                                        errorMessage = errorMessage,
+                                                        source = "ai_email_bulk",
+                                                        notificationType = "email",
+                                                        symbol = symbol
+                                                    )
+                                                    .doOnError { logError ->
+                                                        logger.error("대량 이메일 발송 오류 로그 저장 실패: email={}, error={}", subscriber.email, logError.message)
+                                                    }
+                                                    .map {
+                                                        mapOf<String, Any>(
+                                                            "symbol" to symbol,
+                                                            "subscriber" to subscriber.email,
+                                                            "success" to false,
+                                                            "aiSummary" to (aiResult.aiSummary ?: ""),
+                                                            "error" to errorMessage
+                                                        )
+                                                    }
                                                 }
                                         }
                                 }

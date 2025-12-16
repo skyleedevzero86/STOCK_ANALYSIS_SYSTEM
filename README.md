@@ -11,10 +11,10 @@
 
 **Stock Analysis System**은 실시간 주식 데이터 수집, 고급 기술적 분석, AI 기반 인사이트 생성, 그리고 종합적인 알림 시스템을 제공하는 마이크로서비스 기반의 종합 투자 플랫폼입니다.
 
-## 화면 
+## 화면
+
 <img width="1888" height="951" alt="image" src="https://github.com/user-attachments/assets/eb7ac3d0-dcd4-4fa3-9ada-d07a06b2e06d" /><br/>
 <img width="1268" height="953" alt="image" src="https://github.com/user-attachments/assets/088e7d3d-f009-4006-81c2-2bbe06647323" /><br/>
-
 
 ### 핵심 특징
 
@@ -90,6 +90,7 @@ graph TB
 - **성능 최적화**: 비동기 처리, 캐싱, Rate Limiting
 - **데이터 품질 관리**: 자동 검증 및 품질 점수 계산
 - **Fallback 메커니즘**: API 장애 시 자동 대체 수집
+- **뉴스 데이터 수집**: 주식 관련 뉴스 자동 수집 및 분석
 
 ### 2. 고급 기술적 분석
 
@@ -123,7 +124,23 @@ graph TB
 - **개인정보 보호**: 이메일/전화번호 마스킹 처리
 - **발송 이력 관리**: 이메일 발송 로그 및 통계 확인
 
-### 6. 보안 및 모니터링
+### 6. 뉴스 수집 및 분석
+
+- **다중 뉴스 소스**: NewsAPI, Alpha Vantage, Yahoo Finance, Google News RSS, Naver 뉴스
+- **자동 번역**: 한국어 뉴스 자동 번역 지원
+- **뉴스 검색**: 키워드 기반 뉴스 검색 기능
+- **캐싱**: 뉴스 데이터 캐싱으로 성능 최적화
+- **실시간 수집**: 주식 심볼별 관련 뉴스 실시간 수집
+
+### 7. 고객 문의 관리
+
+- **문의 작성**: 사용자 문의 작성 및 제출
+- **문의 목록**: 문의 내역 조회 및 관리
+- **관리자 답변**: 관리자 답변 작성 및 발송
+- **이메일 알림**: 문의 등록 및 답변 시 이메일 알림
+- **상태 관리**: 문의 상태 추적 (대기/처리중/완료)
+
+### 8. 보안 및 모니터링
 
 - **JWT 인증**: 토큰 기반 인증 시스템 (Spring Boot, Enhanced API)
 - **Rate Limiting**: API 호출 제한 및 IP 차단
@@ -131,72 +148,213 @@ graph TB
 - **보안 관리**: 비밀번호 암호화, XSS/SQL Injection 방어
 - **세션 관리**: 세션 타임아웃 및 IP 검증
 - **로깅 시스템**: 종합적인 로그 관리 및 오류 추적
+- **사용자 관리**: 역할 기반 접근 제어 (RBAC)
+- **권한 관리**: 세밀한 권한 관리 시스템
 
 ## 폴더 구조
 
 ```
 StockAnalysisSystem/
-├── data_collectors/          # 데이터 수집 모듈
-│   ├── stock_data_collector.py
-│   └── performance_optimized_collector.py
-├── analysis_engine/          # 분석 엔진
-│   ├── technical_analyzer.py
-│   └── advanced_analyzer.py
+├── python/                  # Python 백엔드 서비스
+│   ├── data_collectors/     # 데이터 수집 모듈
+│   │   ├── stock_data_collector.py
+│   │   ├── performance_optimized_collector.py
+│   │   └── news_collector.py
+│   ├── analysis_engine/     # 분석 엔진
+│   │   ├── technical_analyzer.py
+│   │   └── advanced_analyzer.py
+│   ├── airflow_dags/        # Airflow DAG들
+│   │   ├── stock_analysis_dag.py
+│   │   └── email_notification_dag.py
+│   ├── notification/        # 알림 서비스
+│   │   └── notification_service.py
+│   ├── database/            # DB 스키마
+│   │   ├── schema.sql
+│   │   └── sample_notification_settings.sql
+│   ├── config/              # 설정 파일
+│   │   ├── settings.py
+│   │   └── logging_config.py
+│   ├── security/            # 보안 모듈
+│   │   └── security_manager.py
+│   ├── error_handling/      # 오류 처리
+│   │   └── error_manager.py
+│   ├── utils/               # 유틸리티 모듈
+│   │   ├── data_formatter.py
+│   │   ├── db_checker.py
+│   │   ├── http_client.py
+│   │   ├── notification_logger.py
+│   │   ├── print_utils.py
+│   │   ├── retry_handler.py
+│   │   └── service_checker.py
+│   ├── tests/               # 테스트 코드
+│   │   ├── test_api_server.py
+│   │   ├── test_api_server_enhanced.py
+│   │   ├── test_technical_analyzer.py
+│   │   ├── test_advanced_analyzer.py
+│   │   ├── test_notification_service.py
+│   │   ├── test_stock_data_collector.py
+│   │   ├── test_performance_optimized_collector.py
+│   │   ├── test_security_manager.py
+│   │   ├── test_error_manager.py
+│   │   ├── test_integration.py
+│   │   ├── test_e2e.py
+│   │   └── test_performance.py
+│   ├── docs/                # 문서
+│   │   ├── SYSTEM_ARCHITECTURE.md
+│   │   ├── API_DOCUMENTATION.md
+│   │   ├── INTEGRATION_GUIDE.md
+│   │   ├── TECHNICAL_INDICATORS_GUIDE.md
+│   │   ├── TESTING_GUIDE.md
+│   │   ├── openapi.yaml
+│   │   └── adr/             # 아키텍처 결정 기록
+│   │       ├── 001-microservices-architecture.md
+│   │       ├── 002-data-collection-strategy.md
+│   │       ├── 003-technical-analysis-engine.md
+│   │       ├── 004-real-time-data-streaming.md
+│   │       ├── 005-database-strategy.md
+│   │       ├── 006-notification-system.md
+│   │       └── 007-ai-analysis-integration.md
+│   ├── api_server_enhanced.py  # 향상된 Python API 서버 (Port 8001)
+│   ├── api_common.py        # 공통 API 유틸리티
+│   ├── main.py              # 메인 실행 파일
+│   ├── start_python_api.py  # Python API 서버 실행 스크립트
+│   ├── requirements.txt     # Python 의존성
+│   ├── pytest.ini           # pytest 설정
+│   ├── env_example.txt      # 환경 변수 예제
+│   ├── exceptions.py        # 커스텀 예외 클래스
+│   ├── check_python_api.py  # Python API 상태 확인
+│   ├── check_services.py    # 서비스 상태 확인
+│   ├── check_airflow_email.py      # Airflow 이메일 확인
+│   ├── check_auto_email.py         # 자동 이메일 확인
+│   ├── diagnose_email_sending.py  # 이메일 발송 진단
+│   ├── test_email_send.py         # 이메일 발송 테스트
+│   ├── test_airflow_connection.py # Airflow 연결 테스트
+│   ├── install_translation_modules.py  # 번역 모듈 설치
+│   └── run_dashboard.py     # 대시보드 실행
 ├── webbackend/              # Spring Boot 백엔드
 │   ├── src/main/kotlin/com/sleekydz86/backend/
-│   │   ├── application/        # 애플리케이션 계층
-│   │   │   ├── controller/      # REST 컨트롤러
-│   │   │   ├── service/         # 비즈니스 서비스
-│   │   │   └── config/          # 설정 클래스
-│   │   ├── domain/            # 도메인 계층
-│   │   │   ├── model/          # 도메인 모델
-│   │   │   ├── service/        # 도메인 서비스
-│   │   │   └── repository/     # 리포지토리 인터페이스
-│   │   └── infrastructure/     # 인프라 계층
-│   │       ├── client/         # 외부 API 클라이언트
-│   │       ├── repository/     # 리포지토리 구현
-│   │       └── security/       # 보안 설정
-│   └── src/main/resources/static/
-│       ├── index.html          # 메인 대시보드
-│       ├── email-subscription.html  # 이메일 구독 페이지
-│       ├── admin-dashboard.html     # 관리자 대시보드
-│       └── admin-login.html         # 관리자 로그인
-├── airflow_dags/           # Airflow DAG들
-│   ├── stock_analysis_dag.py
-│   └── email_notification_dag.py
-├── notification/           # 알림 서비스
-│   └── notification_service.py
-├── database/               # DB 스키마
-│   ├── schema.sql
-│   └── sample_notification_settings.sql
-├── config/                 # 설정 파일
-│   └── settings.py
-├── security/              # 보안 모듈
-│   └── security_manager.py
-├── error_handling/         # 오류 처리
-│   └── error_manager.py
-├── tests/                  # 테스트 코드
-│   ├── test_api_server.py
-│   ├── test_technical_analyzer.py
-│   ├── test_notification_service.py
-│   └── test_advanced_analyzer.py
-├── docs/                   # 문서
-│   ├── SYSTEM_ARCHITECTURE.md
-│   ├── API_DOCUMENTATION.md
-│   ├── INTEGRATION_GUIDE.md
-│   └── adr/                # 아키텍처 결정 기록
-├── api_server.py           # Python FastAPI 서버 (Port 9000)
-├── api_server_enhanced.py  # 향상된 Python API 서버 (Port 8001)
-├── main.py                 # 메인 실행 파일
-├── start_python_api.py     # Python API 서버 실행 스크립트
-├── requirements.txt        # Python 의존성
-├── start_spring_boot.sh    # Spring Boot 실행 스크립트 (Linux/Mac)
-├── start_spring_boot.bat   # Spring Boot 실행 스크립트 (Windows)
-├── check_python_api.py     # Python API 상태 확인
-├── check_email_*.py        # 이메일 발송 디버깅 도구
-├── test_airflow_connection.py  # Airflow 연결 테스트
-├── env_example.txt         # 환경 변수 예제
-└── docker-compose.airflow.yml  # Airflow Docker Compose 설정
+│   │   ├── application/     # 애플리케이션 계층
+│   │   │   ├── command/     # CQRS Command 핸들러
+│   │   │   │   ├── StockCommandHandler.kt
+│   │   │   │   ├── AnalyzeStockCommandHandler.kt
+│   │   │   │   ├── GenerateTradingSignalCommandHandler.kt
+│   │   │   │   └── UpdateStockPriceCommandHandler.kt
+│   │   │   ├── controller/  # REST 컨트롤러
+│   │   │   │   ├── StockController.kt
+│   │   │   │   ├── AdminController.kt
+│   │   │   │   ├── AuthController.kt
+│   │   │   │   ├── EmailSubscriptionController.kt
+│   │   │   │   ├── EmailTemplateController.kt
+│   │   │   │   ├── AIAnalysisController.kt
+│   │   │   │   ├── AIEmailController.kt
+│   │   │   │   ├── NewsController.kt
+│   │   │   │   ├── ContactInquiryController.kt
+│   │   │   │   ├── UserManagementController.kt
+│   │   │   │   ├── RoleManagementController.kt
+│   │   │   │   ├── PermissionManagementController.kt
+│   │   │   │   ├── ProfileController.kt
+│   │   │   │   ├── CacheController.kt
+│   │   │   │   ├── HealthController.kt
+│   │   │   │   ├── PublicController.kt
+│   │   │   │   └── WebController.kt
+│   │   │   ├── dto/         # 데이터 전송 객체
+│   │   │   │   ├── ApiResponse.kt
+│   │   │   │   ├── AuthDto.kt
+│   │   │   │   ├── UserDto.kt
+│   │   │   │   ├── RoleDto.kt
+│   │   │   │   └── PermissionDto.kt
+│   │   │   ├── mapper/      # DTO 매퍼
+│   │   │   │   ├── UserMapper.kt
+│   │   │   │   ├── RoleMapper.kt
+│   │   │   │   ├── PermissionMapper.kt
+│   │   │   │   └── EmailSubscriptionMapper.kt
+│   │   │   └── service/     # 애플리케이션 서비스
+│   │   │       └── CachedStockAnalysisService.kt
+│   │   ├── domain/          # 도메인 계층
+│   │   │   ├── model/       # 도메인 모델
+│   │   │   │   ├── StockData.kt
+│   │   │   │   ├── TechnicalAnalysis.kt
+│   │   │   │   ├── TradingSignals.kt
+│   │   │   │   ├── AIAnalysisResult.kt
+│   │   │   │   ├── EmailSubscription.kt
+│   │   │   │   ├── EmailTemplate.kt
+│   │   │   │   ├── User.kt
+│   │   │   │   ├── Role.kt
+│   │   │   │   ├── Permission.kt
+│   │   │   │   ├── News.kt
+│   │   │   │   └── ContactInquiry.kt
+│   │   │   ├── service/     # 도메인 서비스
+│   │   │   ├── repository/  # 리포지토리 인터페이스
+│   │   │   ├── cqrs/        # CQRS 패턴
+│   │   │   │   ├── command/
+│   │   │   │   ├── query/
+│   │   │   │   └── event/
+│   │   │   └── functional/  # 함수형 유틸리티
+│   │   ├── infrastructure/  # 인프라 계층
+│   │   │   ├── client/      # 외부 API 클라이언트
+│   │   │   ├── repository/  # 리포지토리 구현
+│   │   │   ├── entity/      # JPA 엔티티
+│   │   │   ├── cache/       # 캐시 구현
+│   │   │   ├── service/     # 인프라 서비스
+│   │   │   └── event/       # 이벤트 처리
+│   │   ├── global/          # 전역 설정 및 유틸리티
+│   │   │   ├── config/      # 설정 클래스
+│   │   │   ├── security/    # 보안 설정
+│   │   │   ├── exception/   # 예외 처리
+│   │   │   ├── handler/     # 예외 핸들러
+│   │   │   ├── circuitbreaker/  # Circuit Breaker
+│   │   │   ├── query/       # Query 핸들러
+│   │   │   ├── router/      # 라우터 설정
+│   │   │   └── websocket/   # WebSocket 설정
+│   │   └── WebbackendApplication.kt  # 메인 애플리케이션
+│   └── src/main/resources/
+│       ├── application.yml   # 애플리케이션 설정
+│       ├── application-cache.yml  # 캐시 설정
+│       ├── docker-compose.yml  # Docker Compose 설정
+│       └── static/          # 정적 리소스
+│           ├── index.html   # 메인 대시보드
+│           ├── email-subscription.html  # 이메일 구독 페이지
+│           ├── admin-dashboard.html     # 관리자 대시보드
+│           ├── admin-login.html         # 관리자 로그인
+│           ├── api-view.html            # API 테스트 페이지
+│           ├── template-management.html # 템플릿 관리 페이지
+│           ├── email-history.html       # 이메일 발송 이력
+│           ├── company.html             # 회사 소개
+│           ├── contact.html             # 문의하기
+│           ├── contact-inquiry-list.html    # 문의 목록
+│           ├── contact-inquiry-detail.html  # 문의 상세
+│           ├── news-detail.html         # 뉴스 상세
+│           ├── privacy.html             # 개인정보 처리방침
+│           ├── terms.html               # 이용약관
+│           ├── css/                    # 스타일시트
+│           │   ├── dashboard.css
+│           │   ├── admin-dashboard.css
+│           │   ├── admin-login.css
+│           │   ├── email-subscription.css
+│           │   ├── template-management.css
+│           │   ├── api-view.css
+│           │   ├── company.css
+│           │   ├── contact.css
+│           │   ├── news-detail.css
+│           │   ├── privacy.css
+│           │   ├── terms.css
+│           │   └── common.css
+│           └── js/                      # JavaScript 파일
+│               ├── dashboard.js
+│               ├── admin-dashboard.js
+│               ├── admin-login.js
+│               ├── email-subscription.js
+│               ├── template-management.js
+│               ├── email-history.js
+│               ├── api-view.js
+│               ├── contact.js
+│               ├── contact-inquiry-list.js
+│               ├── contact-inquiry-detail.js
+│               ├── news.js
+│               ├── news-detail.js
+│               ├── auth-menu.js
+│               └── url-utils.js
+└── README.md                # 프로젝트 문서
 ```
 
 ## 빠른 시작
@@ -220,11 +378,11 @@ pip install -r requirements.txt
 
 ```bash
 # MySQL 데이터베이스 생성
-mysql -u root -p < database/schema.sql
+mysql -u root -p < python/database/schema.sql
 
 # 환경 변수 설정
-cp env_example.txt .env
-# .env 파일에서 실제 값들 설정
+cp python/env_example.txt python/.env
+# python/.env 파일에서 실제 값들 설정
 ```
 
 ### 3. 서버 실행
@@ -247,20 +405,23 @@ cd webbackend
 #### Python API 서버 (터미널 2)
 
 ```bash
+cd python
+
 # 기본 API 서버 (Port 9000)
 python start_python_api.py
-# 또는
-python api_server.py
 
 # 향상된 API 서버 (Port 8001)
 python api_server_enhanced.py
 ```
 
-# 또는 로컬에서 직접 실행
+#### Airflow 서버 (터미널 3)
 
+```bash
+# Airflow 웹서버
 airflow webserver --port 8081
-airflow scheduler
 
+# Airflow 스케줄러 (터미널 4)
+airflow scheduler
 ```
 
 > **참고**: 실행 순서는 Spring Boot → Python API → Airflow 순서입니다. 자세한 내용은 [AIRFLOW_DOCKER_SETUP.md](AIRFLOW_DOCKER_SETUP.md)를 참조하세요.
@@ -269,8 +430,19 @@ airflow scheduler
 
 #### 웹 인터페이스 (Spring Boot - Port 8080)
 
+**사용자 페이지:**
+
 - **메인 대시보드**: http://localhost:8080
 - **이메일 구독**: http://localhost:8080/email-subscription.html
+- **회사 소개**: http://localhost:8080/company.html
+- **문의하기**: http://localhost:8080/contact.html
+- **문의 목록**: http://localhost:8080/contact-inquiry-list.html
+- **뉴스 상세**: http://localhost:8080/news-detail.html
+- **개인정보 처리방침**: http://localhost:8080/privacy.html
+- **이용약관**: http://localhost:8080/terms.html
+
+**관리자 페이지:**
+
 - **관리자 로그인**: http://localhost:8080/admin-login.html
 - **관리자 대시보드**: http://localhost:8080/admin-dashboard.html
 - **API 테스트**: http://localhost:8080/api-view.html
@@ -309,7 +481,6 @@ airflow scheduler
 - **로깅 시스템**: 종합적인 로그 관리 및 오류 추적
 - **디버깅 도구**: 시스템 상태 확인 및 진단 스크립트
 
-
 ## 성능 지표
 
 - **데이터 수집**: 8개 종목 동시 처리 (평균 2초)
@@ -324,8 +495,20 @@ airflow scheduler
 
 ### 웹 인터페이스 (Spring Boot - Port 8080)
 
+#### 사용자 페이지
+
 - **메인 대시보드** (`/index.html`): 실시간 주식 분석 차트
 - **이메일 구독** (`/email-subscription.html`): 사용자 구독 신청 페이지
+- **회사 소개** (`/company.html`): 회사 정보 및 서비스 소개
+- **문의하기** (`/contact.html`): 고객 문의 작성 페이지
+- **문의 목록** (`/contact-inquiry-list.html`): 문의 내역 조회
+- **문의 상세** (`/contact-inquiry-detail.html`): 문의 상세 보기
+- **뉴스 상세** (`/news-detail.html`): 주식 관련 뉴스 상세 보기
+- **개인정보 처리방침** (`/privacy.html`): 개인정보 보호 정책
+- **이용약관** (`/terms.html`): 서비스 이용약관
+
+#### 관리자 페이지
+
 - **관리자 로그인** (`/admin-login.html`): 관리자 인증 페이지
 - **관리자 대시보드** (`/admin-dashboard.html`): 구독자 관리 및 통계
 - **API 테스트** (`/api-view.html`): API 엔드포인트 테스트 도구
@@ -368,4 +551,7 @@ airflow scheduler
 - [Spring Boot](https://spring.io/projects/spring-boot) - 엔터프라이즈 Java 프레임워크
 
 ---
+
+```
+
 ```

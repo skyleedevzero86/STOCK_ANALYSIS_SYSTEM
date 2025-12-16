@@ -2,11 +2,21 @@ window.addEventListener('unhandledrejection', function(event) {
     const error = event.reason;
     const errorMessage = error?.message || '';
     const errorStack = error?.stack || '';
+    const errorString = String(error);
+    const errorName = error?.name || '';
     
     if (errorMessage.includes('ERR_CONNECTION_REFUSED') || 
         errorMessage.includes('Failed to fetch') ||
-        errorStack.includes('/api/health')) {
-        event.preventDefault(); // 콘솔에 오류 표시 방지
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('Connection refused') ||
+        errorStack.includes('/api/health') ||
+        errorStack.includes('checkSystemHealth') ||
+        errorString.includes('ERR_CONNECTION_REFUSED') ||
+        errorString.includes('/api/health') ||
+        errorName === 'TypeError' ||
+        errorName === 'NetworkError') {
+        event.preventDefault();
+        return;
     }
 });
 
@@ -25,6 +35,8 @@ class StockDashboard {
         this.wsMessageCount = 0;
         this.lastUpdateTime = null;
         this.lastResponseTime = null;
+        this.sectorSliderCurrentIndex = 0;
+        this.sectorSliderHandlers = null;
         this.init();
     }
 
@@ -508,15 +520,17 @@ class StockDashboard {
                 const timeoutId = setTimeout(() => controller.abort(), 5000);
                 
                 let response = null;
+                let fetchError = null;
                 try {
                     response = await fetch(`${this.pythonApiUrl}/api/health`, {
                         method: 'GET',
                         signal: controller.signal,
                         cache: 'no-cache',
                         mode: 'cors'
-                    });
-                } catch (fetchError) {
+                    }).catch(() => null);
+                } catch (error) {
                     clearTimeout(timeoutId);
+                    fetchError = error;
                     response = null;
                 }
                 
@@ -533,15 +547,20 @@ class StockDashboard {
                     pythonApiSuccess = false;
                 }
             } catch (error) {
-                const errorCode = error.code || error.response?.status;
                 const errorMessage = error.message || '';
+                const isConnectionRefused = 
+                    errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+                    errorMessage.includes('Failed to fetch') ||
+                    errorMessage.includes('NetworkError');
                 const isTimeout =
-                    errorCode === 'ECONNABORTED' ||
                     errorMessage.includes('timeout') ||
-                    errorMessage.includes('Timeout');
+                    errorMessage.includes('Timeout') ||
+                    errorMessage.includes('aborted');
 
                 if (isTimeout) {
                     this.updatePythonApiStatus("타임아웃", "warning");
+                } else if (isConnectionRefused) {
+                    this.updatePythonApiStatus("서버 미실행", "warning");
                 } else {
                     this.updatePythonApiStatus("연결 실패", "warning");
                 }
@@ -559,10 +578,7 @@ class StockDashboard {
             }
             
             return pythonApiSuccess;
-        } catch (error) {
-            if (error.code !== 'ECONNREFUSED' && error.code !== 'ERR_CONNECTION_REFUSED') {
-                console.error("시스템 헬스 체크 중 오류:", error);
-            }
+        } catch {
             if (checkButton) {
                 checkButton.textContent = "체크 실패";
                 checkButton.style.backgroundColor = "#e74c3c";
@@ -896,13 +912,10 @@ class StockDashboard {
                 `;
             }).join('');
 
-            const rankBadge = index < 3 ? `<span class="sector-rank-badge rank-${index + 1}">${index + 1}</span>` : '';
-
             return `
                 <div class="sector-table-card">
                     <div class="sector-table-header">
                         <div class="sector-title-group">
-                            ${rankBadge}
                             <h4 class="sector-name">${sector.sector}</h4>
                         </div>
                         <div class="sector-stats">
@@ -957,61 +970,147 @@ class StockDashboard {
             return;
         }
 
-        if (this.sectorSliderInitialized) {
-            this.sectorSliderInitialized = false;
+        if (this.sectorSliderHandlers) {
+            prevBtn.removeEventListener('click', this.sectorSliderHandlers.handlePrevClick);
+            nextBtn.removeEventListener('click', this.sectorSliderHandlers.handleNextClick);
+            window.removeEventListener('resize', this.sectorSliderHandlers.handleResize);
+            if (this.sectorSliderHandlers.autoSlideInterval) {
+                clearInterval(this.sectorSliderHandlers.autoSlideInterval);
+            }
         }
-        this.sectorSliderInitialized = true;
 
-        let currentIndex = 0;
+        this.sectorSliderCurrentIndex = 0;
+        
         const wrapper = container.parentElement;
+        if (!wrapper) {
+            console.warn('슬라이더 wrapper를 찾을 수 없습니다.');
+            return;
+        }
+        
         const getCardWidth = () => {
-            if (!wrapper || cards.length === 0) return 474;
-            const wrapperWidth = wrapper.offsetWidth;
-            const buttonWidth = 48;
+            const wrapperWidth = wrapper.offsetWidth || wrapper.clientWidth || 800;
+            const buttonWidth = 44;
             const gap = 12;
             const availableWidth = wrapperWidth - (buttonWidth * 2) - (gap * 2);
-            return availableWidth;
+            return Math.max(400, availableWidth);
         };
+        
         let cardWidth = getCardWidth();
         const maxIndex = cards.length - 1;
         
-        cards.forEach((card, index) => {
+        cards.forEach((card) => {
             card.style.width = `${cardWidth}px`;
+            card.style.minWidth = `${cardWidth}px`;
+            card.style.maxWidth = `${cardWidth}px`;
+            card.style.flexShrink = '0';
+            card.style.flexGrow = '0';
         });
         
+        const containerWidth = cardWidth * cards.length;
+        container.style.display = 'flex';
+        container.style.width = `${containerWidth}px`;
+        container.style.height = '100%';
+        container.style.flexShrink = '0';
+        container.style.flexGrow = '0';
+        container.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        container.style.transform = 'translateX(0px)';
+        container.style.position = 'relative';
+        container.style.isolation = 'isolate';
+        
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.position = 'relative';
+        wrapper.style.isolation = 'isolate';
+        
+        const comparisonWidth = wrapper.offsetWidth - (44 * 2) - (12 * 2);
+        container.style.maxWidth = `${containerWidth}px`;
+        
+        const containerParent = container.parentElement;
+        if (containerParent && containerParent !== wrapper) {
+            containerParent.style.overflow = 'hidden';
+        }
+        
         const updateSlider = () => {
-            const translateX = -currentIndex * (cardWidth + 0);
+            const translateX = -this.sectorSliderCurrentIndex * cardWidth;
             container.style.transform = `translateX(${translateX}px)`;
+            container.style.willChange = 'transform';
             
-            prevBtn.disabled = currentIndex === 0;
-            nextBtn.disabled = currentIndex >= maxIndex;
+            prevBtn.disabled = this.sectorSliderCurrentIndex === 0;
+            nextBtn.disabled = this.sectorSliderCurrentIndex >= maxIndex;
             
-            prevBtn.style.opacity = currentIndex === 0 ? '0.3' : '1';
-            prevBtn.style.pointerEvents = currentIndex === 0 ? 'none' : 'auto';
+            prevBtn.style.opacity = this.sectorSliderCurrentIndex === 0 ? '0.3' : '1';
+            prevBtn.style.pointerEvents = this.sectorSliderCurrentIndex === 0 ? 'none' : 'auto';
             
-            nextBtn.style.opacity = currentIndex >= maxIndex ? '0.3' : '1';
-            nextBtn.style.pointerEvents = currentIndex >= maxIndex ? 'none' : 'auto';
+            nextBtn.style.opacity = this.sectorSliderCurrentIndex >= maxIndex ? '0.3' : '1';
+            nextBtn.style.pointerEvents = this.sectorSliderCurrentIndex >= maxIndex ? 'none' : 'auto';
+            
+            cards.forEach((card, index) => {
+                if (index === this.sectorSliderCurrentIndex) {
+                    card.style.visibility = 'visible';
+                } else {
+                    card.style.visibility = 'hidden';
+                }
+            });
         };
 
         const handlePrevClick = () => {
-            if (currentIndex > 0) {
-                currentIndex--;
+            if (this.sectorSliderCurrentIndex > 0) {
+                this.sectorSliderCurrentIndex--;
                 updateSlider();
             }
         };
 
         const handleNextClick = () => {
-            if (currentIndex < maxIndex) {
-                currentIndex++;
+            if (this.sectorSliderCurrentIndex < maxIndex) {
+                this.sectorSliderCurrentIndex++;
                 updateSlider();
             }
         };
 
-        prevBtn.removeEventListener('click', handlePrevClick);
-        nextBtn.removeEventListener('click', handleNextClick);
+        const startAutoSlide = () => {
+            if (this.sectorSliderHandlers.autoSlideInterval) {
+                clearInterval(this.sectorSliderHandlers.autoSlideInterval);
+            }
+            this.sectorSliderHandlers.autoSlideInterval = setInterval(() => {
+                if (this.sectorSliderCurrentIndex < maxIndex) {
+                    this.sectorSliderCurrentIndex++;
+                } else {
+                    this.sectorSliderCurrentIndex = 0;
+                }
+                updateSlider();
+            }, 5000);
+        };
+
+        const stopAutoSlide = () => {
+            if (this.sectorSliderHandlers.autoSlideInterval) {
+                clearInterval(this.sectorSliderHandlers.autoSlideInterval);
+                this.sectorSliderHandlers.autoSlideInterval = null;
+            }
+        };
+
+        const handlePrevClickWithAuto = () => {
+            stopAutoSlide();
+            handlePrevClick();
+            setTimeout(startAutoSlide, 3000);
+        };
+
+        const handleNextClickWithAuto = () => {
+            stopAutoSlide();
+            handleNextClick();
+            setTimeout(startAutoSlide, 3000);
+        };
+
+        this.sectorSliderHandlers = {
+            handlePrevClick: handlePrevClickWithAuto,
+            handleNextClick: handleNextClickWithAuto,
+            handleResize: null,
+            autoSlideInterval: null
+        };
         
-        prevBtn.addEventListener('click', handlePrevClick);
-        nextBtn.addEventListener('click', handleNextClick);
+        prevBtn.addEventListener('click', handlePrevClickWithAuto);
+        nextBtn.addEventListener('click', handleNextClickWithAuto);
+
+        wrapper.addEventListener('mouseenter', stopAutoSlide);
+        wrapper.addEventListener('mouseleave', startAutoSlide);
         
         let resizeTimer;
         const handleResize = () => {
@@ -1020,47 +1119,62 @@ class StockDashboard {
                 cardWidth = getCardWidth();
                 cards.forEach((card) => {
                     card.style.width = `${cardWidth}px`;
+                    card.style.minWidth = `${cardWidth}px`;
+                    card.style.maxWidth = `${cardWidth}px`;
                 });
+                const containerWidth = cardWidth * cards.length;
+                container.style.width = `${containerWidth}px`;
+                container.style.height = '100%';
+                container.style.flexShrink = '0';
+                container.style.flexGrow = '0';
+                container.style.maxWidth = `${containerWidth}px`;
+                wrapper.style.overflow = 'hidden';
+                wrapper.style.position = 'relative';
+                wrapper.style.isolation = 'isolate';
                 updateSlider();
             }, 250);
         };
         
-        window.removeEventListener('resize', handleResize);
+        this.sectorSliderHandlers.handleResize = handleResize;
         window.addEventListener('resize', handleResize);
 
         let isDragging = false;
         let startX = 0;
         let scrollLeft = 0;
 
-        container.addEventListener('mousedown', (e) => {
+        const handleMouseDown = (e) => {
             isDragging = true;
             startX = e.pageX - container.offsetLeft;
-            scrollLeft = currentIndex * cardWidth;
+            scrollLeft = this.sectorSliderCurrentIndex * cardWidth;
             container.style.cursor = 'grabbing';
-        });
+        };
 
-        container.addEventListener('mouseleave', () => {
+        const handleMouseLeave = () => {
             isDragging = false;
             container.style.cursor = 'grab';
-        });
+        };
 
-        container.addEventListener('mouseup', () => {
+        const handleMouseUp = () => {
             isDragging = false;
             container.style.cursor = 'grab';
-        });
+        };
 
-        container.addEventListener('mousemove', (e) => {
+        const handleMouseMove = (e) => {
             if (!isDragging) return;
             e.preventDefault();
             const x = e.pageX - container.offsetLeft;
             const walk = (x - startX) * 2;
             const newIndex = Math.round((scrollLeft - walk) / cardWidth);
-            if (newIndex >= 0 && newIndex <= maxIndex && newIndex !== currentIndex) {
-                currentIndex = newIndex;
+            if (newIndex >= 0 && newIndex <= maxIndex && newIndex !== this.sectorSliderCurrentIndex) {
+                this.sectorSliderCurrentIndex = newIndex;
                 updateSlider();
             }
-        });
+        };
 
+        container.addEventListener('mousedown', handleMouseDown);
+        container.addEventListener('mouseleave', handleMouseLeave);
+        container.addEventListener('mouseup', handleMouseUp);
+        container.addEventListener('mousemove', handleMouseMove);
         container.style.cursor = 'grab';
 
         let touchStartX = 0;
@@ -1081,10 +1195,10 @@ class StockDashboard {
             const diffY = touchStartY - touchEndY;
             
             if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-                if (diffX > 0 && currentIndex < maxIndex) {
-                    currentIndex++;
-                } else if (diffX < 0 && currentIndex > 0) {
-                    currentIndex--;
+                if (diffX > 0 && this.sectorSliderCurrentIndex < maxIndex) {
+                    this.sectorSliderCurrentIndex++;
+                } else if (diffX < 0 && this.sectorSliderCurrentIndex > 0) {
+                    this.sectorSliderCurrentIndex--;
                 }
                 updateSlider();
             }
@@ -1094,6 +1208,10 @@ class StockDashboard {
         }, { passive: true });
 
         updateSlider();
+        
+        if (cards.length > 1) {
+            startAutoSlide();
+        }
     }
 
     showSectorStocks(sector) {
@@ -1155,9 +1273,7 @@ class StockDashboard {
         state.lastCheckTime = now;
         
         try {
-            const success = await this.checkSystemHealth().catch((error) => {
-                return false;
-            });
+            const success = await this.checkSystemHealth().catch(() => false);
             
             if (success) {
                 state.consecutiveFailures = 0;
@@ -1173,7 +1289,7 @@ class StockDashboard {
                     state.checkInterval = Math.min(30000 + (state.consecutiveFailures * 30000), 120000);
                 }
             }
-        } catch (error) {
+        } catch {
             state.consecutiveFailures++;
             state.checkInterval = Math.min(30000 + (state.consecutiveFailures * 30000), 120000);
         } finally {

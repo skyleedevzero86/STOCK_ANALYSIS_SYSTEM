@@ -141,7 +141,7 @@ class StockController(
         return circuitBreakerManager.executeFluxWithCircuitBreaker("allAnalysis") {
             pythonApiClient.getAllAnalysis()
         }
-            .timeout(Duration.ofSeconds(45))
+            .timeout(Duration.ofSeconds(120))
             .onErrorResume { error: Throwable ->
                 when (error) {
                     is CircuitBreakerOpenException ->

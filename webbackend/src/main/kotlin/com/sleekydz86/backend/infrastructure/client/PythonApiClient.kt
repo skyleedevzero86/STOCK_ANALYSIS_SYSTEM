@@ -20,10 +20,10 @@ class PythonApiClient(
     private val logger = org.slf4j.LoggerFactory.getLogger(PythonApiClient::class.java)
     
     private val httpClient = HttpClient.create()
-        .responseTimeout(Duration.ofSeconds(60))
+        .responseTimeout(Duration.ofSeconds(120))
         .keepAlive(true)
         .doOnConnected { connection ->
-            connection.addHandlerLast(io.netty.handler.timeout.ReadTimeoutHandler(60))
+            connection.addHandlerLast(io.netty.handler.timeout.ReadTimeoutHandler(120))
             connection.addHandlerLast(io.netty.handler.timeout.WriteTimeoutHandler(60))
         }
     
@@ -369,19 +369,24 @@ class PythonApiClient(
                     .filter { error ->
                         val cause = error.cause
                         when {
+                            error is java.util.concurrent.TimeoutException -> false
+                            error is io.netty.handler.timeout.ReadTimeoutException -> false
                             error is reactor.netty.http.client.PrematureCloseException -> true
                             error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
-                                cause is reactor.netty.http.client.PrematureCloseException || 
+                                (cause is reactor.netty.http.client.PrematureCloseException || 
                                 cause is java.net.ConnectException ||
                                 error.message?.contains("Connection prematurely closed") == true ||
-                                error.message?.contains("Connection refused") == true
+                                error.message?.contains("Connection refused") == true) && 
+                                cause !is java.util.concurrent.TimeoutException &&
+                                cause !is io.netty.handler.timeout.ReadTimeoutException
                             }
                             error is org.springframework.web.reactive.function.client.WebClientException -> {
-                                cause is reactor.netty.http.client.PrematureCloseException ||
-                                cause is java.net.ConnectException
+                                (cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException) && 
+                                cause !is java.util.concurrent.TimeoutException &&
+                                cause !is io.netty.handler.timeout.ReadTimeoutException
                             }
                             error is java.net.ConnectException -> true
-                            error is java.util.concurrent.TimeoutException -> true
                             else -> false
                         }
                     }
@@ -393,11 +398,11 @@ class PythonApiClient(
                             failure.cause?.message ?: "없음")
                     }
             )
-            .timeout(java.time.Duration.ofSeconds(90))
+            .timeout(java.time.Duration.ofSeconds(120))
             .doOnError { error ->
                 when (error) {
-                    is java.util.concurrent.TimeoutException -> {
-                        logger.warn("Python API 전체 분석 조회 타임아웃 (90초 초과): baseUrl={}", baseUrl)
+                    is java.util.concurrent.TimeoutException, is io.netty.handler.timeout.ReadTimeoutException -> {
+                        logger.warn("Python API 전체 분석 조회 타임아웃 (120초 초과): baseUrl={}", baseUrl)
                     }
                     is java.net.ConnectException -> {
                         logger.warn("Python API 연결 실패: baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", baseUrl)
@@ -427,8 +432,8 @@ class PythonApiClient(
             .onErrorResume { error: Throwable ->
                 val cause = error.cause
                 when {
-                    error is java.util.concurrent.TimeoutException -> {
-                        logger.warn("Python API 전체 분석 조회 타임아웃 (90초 초과): 빈 결과 반환")
+                    error is java.util.concurrent.TimeoutException || error is io.netty.handler.timeout.ReadTimeoutException -> {
+                        logger.warn("Python API 전체 분석 조회 타임아웃 (120초 초과): 빈 결과 반환")
                         Flux.empty<TechnicalAnalysis>()
                     }
                     error is com.sleekydz86.backend.global.exception.ExternalApiException -> {
@@ -441,6 +446,10 @@ class PythonApiClient(
                     }
                     error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
                         when {
+                            cause is io.netty.handler.timeout.ReadTimeoutException || cause is java.util.concurrent.TimeoutException -> {
+                                logger.warn("Python API 전체 분석 조회 타임아웃: 빈 결과 반환")
+                                Flux.empty<TechnicalAnalysis>()
+                            }
                             cause is reactor.netty.http.client.PrematureCloseException -> {
                                 logger.warn("Python API 전체 분석 조회 연결 조기 종료: 빈 결과 반환. Python API 서버 상태를 확인하세요.")
                                 Flux.empty<TechnicalAnalysis>()
@@ -465,7 +474,11 @@ class PythonApiClient(
                         Flux.empty<TechnicalAnalysis>()
                     }
                     else -> {
-                        logger.warn("Python API 전체 분석 조회 오류: {}", error.message)
+                        if (error is io.netty.handler.timeout.ReadTimeoutException || error.cause is io.netty.handler.timeout.ReadTimeoutException) {
+                            logger.warn("Python API 전체 분석 조회 타임아웃: 빈 결과 반환")
+                        } else {
+                            logger.warn("Python API 전체 분석 조회 오류: {}", error.message)
+                        }
                         Flux.empty<TechnicalAnalysis>()
                     }
                 }
@@ -663,19 +676,19 @@ class PythonApiClient(
                     .filter { error ->
                         val cause = error.cause
                         when {
+                            error is java.util.concurrent.TimeoutException -> false
                             error is reactor.netty.http.client.PrematureCloseException -> true
                             error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
                                 cause is reactor.netty.http.client.PrematureCloseException || 
-                                cause is java.net.ConnectException ||
+                                (cause is java.net.ConnectException && cause !is java.util.concurrent.TimeoutException) ||
                                 error.message?.contains("Connection prematurely closed") == true ||
-                                error.message?.contains("Connection refused") == true
+                                (error.message?.contains("Connection refused") == true && error !is java.util.concurrent.TimeoutException)
                             }
                             error is org.springframework.web.reactive.function.client.WebClientException -> {
-                                cause is reactor.netty.http.client.PrematureCloseException ||
-                                cause is java.net.ConnectException
+                                (cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException) && cause !is java.util.concurrent.TimeoutException
                             }
                             error is java.net.ConnectException -> true
-                            error is java.util.concurrent.TimeoutException -> true
                             else -> false
                         }
                     }
@@ -688,11 +701,11 @@ class PythonApiClient(
                             failure.cause?.message ?: "없음")
                     }
             )
-            .timeout(java.time.Duration.ofSeconds(20))
+            .timeout(java.time.Duration.ofSeconds(45))
             .doOnError { error ->
                 when (error) {
                     is java.util.concurrent.TimeoutException -> {
-                        logger.warn("뉴스 조회 타임아웃: symbol={}, timeout=25초, baseUrl={}", symbol, baseUrl)
+                        logger.warn("뉴스 조회 타임아웃: symbol={}, timeout=45초, baseUrl={}", symbol, baseUrl)
                     }
                     is java.net.ConnectException -> {
                         logger.warn("Python API 연결 실패: symbol={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", symbol, baseUrl)
@@ -753,7 +766,7 @@ class PythonApiClient(
                         Mono.just(emptyList())
                     }
                     error is java.util.concurrent.TimeoutException -> {
-                        logger.warn("종목 {} 뉴스 조회 타임아웃: 25초 후 타임아웃. 빈 목록을 반환합니다.", symbol)
+                        logger.warn("종목 {} 뉴스 조회 타임아웃: 45초 후 타임아웃. 빈 목록을 반환합니다.", symbol)
                         Mono.just(emptyList())
                     }
                     else -> {
@@ -968,19 +981,19 @@ class PythonApiClient(
                     .filter { error ->
                         val cause = error.cause
                         when {
+                            error is java.util.concurrent.TimeoutException -> false
                             error is reactor.netty.http.client.PrematureCloseException -> true
                             error is org.springframework.web.reactive.function.client.WebClientRequestException -> {
                                 cause is reactor.netty.http.client.PrematureCloseException || 
-                                cause is java.net.ConnectException ||
-                                error.message?.contains("Connection prematurely closed") == true ||
-                                error.message?.contains("Connection refused") == true
+                                (cause is java.net.ConnectException && cause !is java.util.concurrent.TimeoutException) ||
+                                (error.message?.contains("Connection prematurely closed") == true && error !is java.util.concurrent.TimeoutException) ||
+                                (error.message?.contains("Connection refused") == true && error !is java.util.concurrent.TimeoutException)
                             }
                             error is org.springframework.web.reactive.function.client.WebClientException -> {
-                                cause is reactor.netty.http.client.PrematureCloseException ||
-                                cause is java.net.ConnectException
+                                (cause is reactor.netty.http.client.PrematureCloseException ||
+                                cause is java.net.ConnectException) && cause !is java.util.concurrent.TimeoutException
                             }
                             error is java.net.ConnectException -> true
-                            error is java.util.concurrent.TimeoutException -> true
                             else -> false
                         }
                     }
@@ -993,11 +1006,11 @@ class PythonApiClient(
                             failure.cause?.message ?: "없음")
                     }
             )
-            .timeout(java.time.Duration.ofSeconds(20))
+            .timeout(java.time.Duration.ofSeconds(60))
             .doOnError { error ->
                 when (error) {
                     is java.util.concurrent.TimeoutException -> {
-                        logger.warn("다중 종목 뉴스 조회 타임아웃: symbols={}, timeout=20초, baseUrl={}", symbolsParam, baseUrl)
+                        logger.warn("다중 종목 뉴스 조회 타임아웃: symbols={}, timeout=60초, baseUrl={}", symbolsParam, baseUrl)
                     }
                     is java.net.ConnectException -> {
                         logger.warn("Python API 연결 실패: symbols={}, baseUrl={}. Python API 서버가 실행 중인지 확인하세요.", symbolsParam, baseUrl)
@@ -1034,7 +1047,7 @@ class PythonApiClient(
                         Mono.just(emptyMap())
                     }
                     error is java.util.concurrent.TimeoutException -> {
-                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 타임아웃. 빈 맵을 반환합니다.", symbolsParam)
+                        logger.warn("다중 종목 뉴스 조회 실패: 종목={}, 60초 타임아웃. 빈 맵을 반환합니다.", symbolsParam)
                         Mono.just(emptyMap())
                     }
                     error is org.springframework.web.reactive.function.client.WebClientException -> {

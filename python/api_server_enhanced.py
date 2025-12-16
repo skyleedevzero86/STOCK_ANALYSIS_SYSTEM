@@ -271,6 +271,12 @@ PUBLIC_PATHS = [
     "/api/health",
     "/api/notifications/email",
     "/api/notifications/realtime-email",
+    "/api/news",
+    "/api/symbols",
+    "/api/realtime",
+    "/api/analysis",
+    "/api/historical",
+    "/api/sectors",
     "/api/analysis"
 ]
 

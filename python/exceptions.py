@@ -67,9 +67,11 @@ class TimeoutError(NetworkError):
 class RateLimitError(NetworkError):
     
     def __init__(self, message: str, retry_after: Optional[int] = None,
-                 error_code: Optional[str] = None, cause: Optional[Exception] = None):
+                 error_code: Optional[str] = None, cause: Optional[Exception] = None,
+                 service_name: Optional[str] = None):
         super().__init__(message, error_code=error_code, cause=cause)
         self.retry_after = retry_after
+        self.service_name = service_name
 
 
 class HTTPError(NetworkError):

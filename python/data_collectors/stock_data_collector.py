@@ -199,8 +199,8 @@ class StockDataCollector:
             if '429' in error_str or 'Too Many Requests' in error_str:
                 raise RateLimitError(
                     f"Yahoo Finance API rate limit exceeded for {symbol}",
-                    service_name="Yahoo Finance",
-                    retry_after=60
+                    retry_after=60,
+                    service_name="Yahoo Finance"
                 )
             raise YahooFinanceError(
                 f"Yahoo Finance에서 {symbol} 정보를 가져오는 중 오류 발생: {error_str}",
@@ -298,8 +298,8 @@ class StockDataCollector:
             logger.warning(f"Yahoo Finance rate limit (429), {retry_after}초 대기 필요", symbol=symbol, component="StockDataCollector")
             raise RateLimitError(
                 f"Yahoo Finance API rate limit exceeded for {symbol}",
-                service_name="Yahoo Finance",
-                retry_after=retry_after
+                retry_after=retry_after,
+                service_name="Yahoo Finance"
             )
         
         response.raise_for_status()

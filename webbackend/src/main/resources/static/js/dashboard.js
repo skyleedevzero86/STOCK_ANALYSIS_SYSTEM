@@ -967,21 +967,24 @@ class StockDashboard {
         const getCardWidth = () => {
             if (!wrapper || cards.length === 0) return 474;
             const wrapperWidth = wrapper.offsetWidth;
-            const gap = 24;
-            const buttonWidth = 48 + 12;
-            const availableWidth = wrapperWidth - (buttonWidth * 2) - gap;
-            return availableWidth + gap;
+            const buttonWidth = 48;
+            const gap = 12;
+            const availableWidth = wrapperWidth - (buttonWidth * 2) - (gap * 2);
+            return availableWidth;
         };
         let cardWidth = getCardWidth();
         const maxIndex = cards.length - 1;
         
         cards.forEach((card, index) => {
-            card.style.width = `${cardWidth - 24}px`;
+            card.style.width = `${cardWidth}px`;
         });
         
         const updateSlider = () => {
-            const translateX = -currentIndex * cardWidth;
+            const translateX = -currentIndex * (cardWidth + 0);
             container.style.transform = `translateX(${translateX}px)`;
+            
+            prevBtn.disabled = currentIndex === 0;
+            nextBtn.disabled = currentIndex >= maxIndex;
             
             prevBtn.style.opacity = currentIndex === 0 ? '0.3' : '1';
             prevBtn.style.pointerEvents = currentIndex === 0 ? 'none' : 'auto';
@@ -1016,7 +1019,7 @@ class StockDashboard {
             resizeTimer = setTimeout(() => {
                 cardWidth = getCardWidth();
                 cards.forEach((card) => {
-                    card.style.width = `${cardWidth - 24}px`;
+                    card.style.width = `${cardWidth}px`;
                 });
                 updateSlider();
             }, 250);
